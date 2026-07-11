@@ -1,0 +1,1 @@
+{"timestamp":1783756399,"template_id":"basic-info-disclosure","template_name":"Basic Information Disclosure / SSRF Test","template_severity":"Medium","target":"https://httpbin.org","payload":"/get?test_param=marble_engine"}
