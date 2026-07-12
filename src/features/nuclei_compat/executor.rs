@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
-use crate::nuclei::matchers::evaluate_words_stream;
-use crate::nuclei::parser::NucleiTemplate;
-use crate::protocols::http::StealthHttpClient;
+use crate::network::http::StealthHttpClient;
+use super::matchers::evaluate_words_stream;
+use super::parser::NucleiTemplate;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -36,6 +36,7 @@ impl NucleiExecutor {
                         &req_rule.method,
                         &resolved_path,
                         req_rule.headers.as_ref(),
+                        None,
                     )
                     .await
                 else {
@@ -52,7 +53,7 @@ impl NucleiExecutor {
                 } else {
                     // matchers-condition is AND or OR
                     let is_and = req_rule.matchers_condition.to_lowercase() == "and";
-                    
+
                     let mut all_match = true;
                     let mut any_match = false;
 

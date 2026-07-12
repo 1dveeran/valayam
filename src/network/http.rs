@@ -17,12 +17,21 @@ impl StealthHttpClient {
         Ok(Self { client })
     }
 
+    /// Sends an HTTP request with optional body and custom headers.
+    ///
+    /// # Arguments
+    /// * `base_url` — The base URL of the target (e.g., `https://example.com`).
+    /// * `method_str` — HTTP method string (GET, POST, PUT, etc.).
+    /// * `resolved_path_or_url` — Either a relative path or full URL.
+    /// * `custom_headers` — Optional headers from the template.
+    /// * `body` — Optional request body for POST/PUT requests.
     pub async fn send_request(
         &self,
         base_url: &str,
         method_str: &str,
         resolved_path_or_url: &str,
         custom_headers: Option<&HashMap<String, String>>,
+        body: Option<&str>,
     ) -> Result<reqwest::Response, crate::core::error::ScannerError> {
         let Ok(method) = Method::from_bytes(method_str.as_bytes()) else {
             return Err(crate::core::error::ScannerError::InvalidHttpMethod(method_str.to_string()));
@@ -45,6 +54,10 @@ impl StealthHttpClient {
             for (key, val) in headers {
                 req_builder = req_builder.header(key, val);
             }
+        }
+
+        if let Some(body_str) = body {
+            req_builder = req_builder.body(body_str.to_string());
         }
 
         let response = req_builder.send().await?;

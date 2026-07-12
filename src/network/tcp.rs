@@ -1,8 +1,16 @@
 use futures::future::join_all;
 use std::collections::HashSet;
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+
+/// Result of a TCP port scan, including optional banner data.
+#[derive(Debug, Clone)]
+pub struct PortResult {
+    pub port: u16,
+    pub banner: Option<String>,
+}
 
 /// Parses a list of port strings, expanding ranges into individual port numbers.
 /// E.g., ["80", "443", "8000-8080"] -> {80, 443, 8000, 8001, ..., 8080}
@@ -39,24 +47,47 @@ fn parse_ports(ports: &[String]) -> Result<HashSet<u16>, String> {
 }
 
 /// Performs a concurrent TCP connect scan on a list of ports for a given host.
-/// Returns a vector of ports that were found to be open.
-pub async fn scan_ports(host: &str, ports: &[String]) -> Vec<u16> {
+/// Returns a vector of `PortResult` for ports that were found to be open.
+///
+/// If `banner_timeout_ms` is provided, attempts to read the initial service
+/// banner from each open port (e.g., SSH version strings, FTP greetings).
+pub async fn scan_ports(
+    host: &str,
+    ports: &[String],
+    banner_timeout_ms: Option<u64>,
+) -> Vec<PortResult> {
     let Ok(parsed_ports) = parse_ports(ports) else {
-        // In a real app, we'd propagate this error. For now, let's print and return empty.
         eprintln!("[!] Invalid port format provided.");
         return Vec::new();
     };
 
     let scan_futures = parsed_ports.into_iter().map(|port| {
         let host = host.to_string();
+        let banner_ms = banner_timeout_ms;
         tokio::spawn(async move {
             let address = format!("{}:{}", host, port);
-            let timeout_duration = Duration::from_secs(2);
+            let connect_timeout = Duration::from_secs(2);
 
-            match timeout(timeout_duration, TcpStream::connect(&address)).await {
-                Ok(Ok(_)) => Some(port),
-                _ => None,
-            }
+            let mut stream = match timeout(connect_timeout, TcpStream::connect(&address)).await {
+                Ok(Ok(s)) => s,
+                _ => return None,
+            };
+
+            // Port is open — optionally grab the banner
+            let banner = if let Some(ms) = banner_ms {
+                let banner_timeout = Duration::from_millis(ms);
+                let mut buf = vec![0u8; 1024];
+                match timeout(banner_timeout, stream.read(&mut buf)).await {
+                    Ok(Ok(n)) if n > 0 => {
+                        Some(String::from_utf8_lossy(&buf[..n]).to_string())
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            Some(PortResult { port, banner })
         })
     });
 

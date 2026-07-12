@@ -1,8 +1,8 @@
 mod core;
-mod matchers;
-mod protocols;
-mod templates;
-mod nuclei;
+mod features;
+mod network;
+mod stealth;
+mod template;
 
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -12,11 +12,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::core::executor::ScanExecutor;
-use crate::nuclei::executor::NucleiExecutor;
-use crate::nuclei::parser::NucleiTemplate;
-use crate::protocols::http::StealthHttpClient;
-use crate::templates::parser::VulnerabilityTemplate;
+use crate::core::rate_limiter::RateLimiter;
+
+use crate::features::nuclei_compat::executor::NucleiExecutor;
+use crate::features::nuclei_compat::parser::NucleiTemplate;
+use crate::network::http::StealthHttpClient;
+use crate::template::loader::execute_template;
+use crate::template::schema::VulnerabilityTemplate;
 use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
@@ -68,6 +70,15 @@ struct Args {
 
     #[arg(short = 'o', long, help = "Path to write JSON output to")]
     output: Option<String>,
+
+    #[arg(short = 'r', long, help = "Max requests per second (global rate limit)")]
+    rate_limit: Option<u32>,
+
+    #[arg(long, help = "Rotate User-Agent header randomly per request")]
+    random_agent: bool,
+
+    #[arg(long, help = "Path to proxy list file (one proxy per line)")]
+    proxy_file: Option<String>,
 }
 
 #[tokio::main]
@@ -130,8 +141,13 @@ network:
 
     // 1. Initialize Stealth Core
     let http_client = Arc::new(StealthHttpClient::new()?);
-    let executor_native = ScanExecutor::new(Arc::clone(&http_client));
     let executor_nuclei = NucleiExecutor::new(Arc::clone(&http_client));
+
+    // Initialize rate limiter if configured
+    let rate_limiter = args.rate_limit.map(|rps| {
+        println!("[+] Rate limiting enabled: {} requests/second", rps);
+        Arc::new(RateLimiter::new(rps))
+    });
 
     // 2. Discover Templates
     let mut template_files = Vec::new();
@@ -172,9 +188,10 @@ network:
     // 3. Dispatch Tasks Concurrently
     let mut handles = Vec::new();
     for file_path in template_files {
-        let exec_native = executor_native.clone();
+        let client = Arc::clone(&http_client);
         let exec_nuclei = executor_nuclei.clone();
         let target = args.target.clone();
+        let rl = rate_limiter.clone();
 
         handles.push(tokio::spawn(async move {
             let path_str = file_path.to_string_lossy().to_string();
@@ -196,7 +213,7 @@ network:
                         return None;
                     }
                 };
-                exec_native.execute_scan(&target, template).await
+                execute_template(&client, &target, template, rl.as_ref().map(|r| r.as_ref())).await
             }
       }));
     }
