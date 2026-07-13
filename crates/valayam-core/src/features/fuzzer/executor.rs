@@ -1,0 +1,143 @@
+use crate::core::result::ScanResult;
+use crate::network::http::StealthHttpClient;
+use crate::template::schema::TemplateInfo;
+use super::parser::FuzzTemplate;
+use chrono::Utc;
+use url::Url;
+
+fn mutate_query_url(
+    base_url: &Url,
+    query_params: &[(String, String)],
+    target_key: &str,
+    payload: &str,
+) -> String {
+    let mut mutated_url = base_url.clone();
+    {
+        let mut query_serializer = mutated_url.query_pairs_mut();
+        query_serializer.clear();
+        for (k, v) in query_params {
+            if k == target_key {
+                query_serializer.append_pair(k, payload);
+            } else {
+                query_serializer.append_pair(k, v);
+            }
+        }
+    }
+    mutated_url.to_string()
+}
+
+/// Mutates and executes requests based on configured fuzzer template keys and payloads.
+pub async fn execute(
+    client: &StealthHttpClient,
+    target_url: &str,
+    fuzz_rules: &[FuzzTemplate],
+    template_id: &str,
+    template_info: &TemplateInfo,
+) -> Option<ScanResult> {
+    let Ok(base_url) = Url::parse(target_url) else {
+        return None;
+    };
+
+    for rule in fuzz_rules {
+        if rule.part == "query" {
+            // Collect existing query parameters
+            let query_params: Vec<(String, String)> = base_url.query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            if query_params.is_empty() {
+                continue;
+            }
+
+            for (key, _) in &query_params {
+                // If keys list is not empty, restrict fuzzing targets to designated keys
+                if !rule.keys.is_empty() && !rule.keys.contains(key) {
+                    continue;
+                }
+
+                for payload in &rule.payloads {
+                    // Mutate query parameters cleanly in helper
+                    let url_str = mutate_query_url(&base_url, &query_params, key, payload);
+
+                    // Send mutated request
+                    if let Ok(resp) = client.send_request("", "GET", &url_str, None, None).await {
+                        let status_code = resp.status().as_u16();
+                        let body_text = resp.text().await.unwrap_or_default();
+
+                        // Evaluate matchers
+                        for matcher in &rule.matchers {
+                            if matcher.r#type == "status" {
+                                if let Some(ref statuses) = matcher.status {
+                                    if statuses.contains(&status_code) {
+                                        return Some(ScanResult {
+                                            timestamp: Utc::now(),
+                                            template_id: template_id.to_string(),
+                                            template_name: template_info.name.clone(),
+                                            template_severity: template_info.severity.clone(),
+                                            target: target_url.to_string(),
+                                            payload: format!("Fuzz matched status {} on query key '{}' with payload '{}'", status_code, key, payload),
+                                        });
+                                    }
+                                }
+                            } else if matcher.r#type == "regex" && matcher.part == "body" {
+                                for pattern in &matcher.regex {
+                                    if let Ok(re) = regex::Regex::new(pattern) {
+                                        if re.is_match(&body_text) {
+                                            return Some(ScanResult {
+                                                timestamp: Utc::now(),
+                                                template_id: template_id.to_string(),
+                                                template_name: template_info.name.clone(),
+                                                template_severity: template_info.severity.clone(),
+                                                target: target_url.to_string(),
+                                                payload: format!("Fuzz matched regex '{}' on query key '{}' with payload '{}'", pattern, key, payload),
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::matcher::ResponseMatcher;
+
+    #[tokio::test]
+    async fn test_fuzz_query_mutation() {
+        let client = StealthHttpClient::new(false, None).unwrap();
+        let rule = FuzzTemplate {
+            part: "query".to_string(),
+            keys: vec!["q".to_string()],
+            payloads: vec!["' OR 1=1--".to_string()],
+            matchers: vec![ResponseMatcher {
+                r#type: "status".to_string(),
+                part: "status".to_string(),
+                regex: vec![],
+                status: Some(vec![500]),
+            }],
+        };
+
+        let info = TemplateInfo {
+            name: "Fuzz Test".to_string(),
+            severity: "High".to_string(),
+            description: None,
+        };
+
+        // Mutation check: executing against a target with matching query param triggers requests
+        let res = execute(
+            &client,
+            "https://httpbin.org/get?q=test&limit=10",
+            &[rule],
+            "fuzz-test",
+            &info,
+        ).await;
+
+        // httpbin will return 200, so our status 500 matcher remains unmatched (returns None)
+        assert!(res.is_none());
+    }
+}

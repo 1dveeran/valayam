@@ -74,7 +74,7 @@ pub async fn scan_ports(
             };
 
             // Port is open — optionally grab the banner
-            let banner = if let Some(ms) = banner_ms {
+            let mut banner = if let Some(ms) = banner_ms {
                 let banner_timeout = Duration::from_millis(ms);
                 let mut buf = vec![0u8; 1024];
                 match timeout(banner_timeout, stream.read(&mut buf)).await {
@@ -86,6 +86,20 @@ pub async fn scan_ports(
             } else {
                 None
             };
+
+            // Active probe fallback: if no banner was sent automatically, try prompting with an HTTP GET request
+            if banner.is_none() && banner_ms.is_some() {
+                use tokio::io::AsyncWriteExt;
+                if stream.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await.is_ok() {
+                    let mut buf = vec![0u8; 1024];
+                    let probe_timeout = Duration::from_millis(1000);
+                    if let Ok(Ok(n)) = timeout(probe_timeout, stream.read(&mut buf)).await {
+                        if n > 0 {
+                            banner = Some(String::from_utf8_lossy(&buf[..n]).to_string());
+                        }
+                    }
+                }
+            }
 
             Some(PortResult { port, banner })
         })

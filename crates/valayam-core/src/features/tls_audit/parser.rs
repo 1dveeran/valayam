@@ -8,6 +8,8 @@ pub struct TlsAuditTemplate {
     #[serde(default = "default_tls_port")]
     pub port: u16,
     #[serde(default)]
+    pub min_version: Option<String>,
+    #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
 }
 

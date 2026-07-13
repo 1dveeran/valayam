@@ -34,7 +34,7 @@
 ### 5. TCP/UDP Network Scanning (`features/network_scan/`)
 - **Port Discovery**: Concurrent TCP Connect scanning via `tokio::net::TcpStream`.
 - **Port Range Syntax**: Supports comma-separated and range syntax (`80,443,8000-8100`).
-- **Banner Grabbing**: Reads initial bytes from open TCP connections with configurable timeouts.
+- **Banner Grabbing**: Reads initial bytes from open TCP connections with configurable timeouts. Integrates an active **HTTP GET probe fallback** to query version details from silent web services.
 - **Banner Matching**: Regex matchers evaluate against captured banners (e.g., detect SSH, FTP, HTTP server versions).
 - **UDP Probes**: Basic UDP packet send/receive for service detection on UDP ports.
 - **Dynamic Targets**: Host variables (`{{Hostname}}`) are automatically injected.
@@ -66,7 +66,7 @@
 - **HTTP Builtins**: `http_get(url)`, `http_post(url, body)` return structured response maps with status, body, and headers.
 - **Regex Builtins**: `regex_match(text, pattern)`, `regex_capture(text, pattern)` for pattern matching and extraction.
 - **TCP Builtins**: `tcp_connect(host, port)`, `tcp_send(handle, data)`, `tcp_recv(handle, timeout_ms)` for raw socket scripting.
-- **Crypto Builtins**: `base64_encode(text)`, `base64_decode(text)`, `hmac_sha256(key, data)` for API signature computation.
+- **Crypto Builtins**: `base64_encode(text)`, `base64_decode(text)`, `hmac_sha256(key, data)`, `jwt_encode(header, payload, secret)`, and `jwt_decode(token)` for custom token forging and claim inspection.
 - **Data Builtins**: `json_parse(text)` returns a Rhai Map for structured response parsing.
 - **Variable Bridge**: `set_variable(name, value)` and `get_variable(name)` allow scripts to read/write the shared extractor context.
 - **Thread Safety**: HTTP client orchestration safely bridges async and sync boundaries across dedicated threads.
@@ -108,3 +108,30 @@
   - **WASM Extractor**: Scrapes compiled WebAssembly binary files for hardcoded endpoints.
   - **OpenAPI/Swagger Decoder**: Parses API JSON schemas directly to extract routes and endpoints instantly.
 - **Framework Discovery Probes**: Embedded active wordlists to discover Spring Boot Actuator endpoints (like `/actuator/mappings`), J2EE configuration files (`WEB-INF/web.xml`), GraphQL endpoints (`/graphql`), and SOAP services (`?wsdl`).
+
+## Phase 6: Offensive Tooling & Active Scanning
+
+### 16. Active Parameter Fuzzing Engine (`features/fuzzer/`)
+- **Query Mutation**: Automatically parses existing URL query parameters and injects user-specified payloads (SQL injection, XSS vectors, path traversal) into each parameter position.
+- **Targeted Key Selection**: Fuzzes only designated parameter keys or all detected keys when no restriction is set.
+- **Anomaly Detection**: Evaluates mutated responses against status code matchers (e.g., 500 for errors) and regex body matchers (e.g., database error strings, reflected payloads).
+- **Thread-Safe Execution**: URL mutation logic is isolated from async boundaries to ensure `Send`-safe task spawning.
+
+### 17. SSL/TLS Cipher Suite Auditor (`features/tls_audit/`)
+- **Minimum Version Enforcement**: Configurable `min_version` field (e.g. `TLSv1.2`) flags servers negotiating deprecated protocol versions.
+- **Version Ranking Engine**: Ranks negotiated TLS versions (TLSv1.0 → TLSv1.3) and compares against policy constraints.
+- **Raw ClientHello Probes**: Sends custom SSLv3/TLSv1.0/TLSv1.1 ClientHello handshake bytes to detect legacy protocol support even when modern libraries refuse to negotiate them.
+- **Weak Cipher Detection**: Flags CBC, RC4, 3DES, and null cipher suites.
+
+### 18. WebSocket Scripting Builtins (`features/scripting/`)
+- **`ws_connect(url)`**: Establishes a WebSocket connection handle as a Rhai Map with inbox queue.
+- **`ws_send(handle, msg)`**: Sends a text frame to the WebSocket server.
+- **`ws_recv(handle)`**: Reads the next message from the connection's inbox buffer.
+- **Mock-Safe Design**: WebSocket builtins use inbox queues enabling deterministic unit testing without external server dependencies.
+
+### 19. WAF Detection & Fingerprinting (`features/waf_detect/`)
+- **Header Fingerprinting**: Scans response headers for known WAF signatures (Cloudflare `cf-ray`, Imperva `x-iinfo`, Akamai `x-akamai-transformed`, AWS CloudFront `x-amz-cf-id`, Azure `x-azure-ref`, and more).
+- **Body Signature Matching**: Inspects HTML block pages for WAF-specific strings (Cloudflare challenge pages, Incapsula deny pages, ModSecurity error messages, PerimeterX/HUMAN challenges).
+- **Active Trigger Probes**: Sends non-destructive XSS/SQLi payloads to provoke WAF blocking responses, then fingerprints the block page.
+- **Server Header Analysis**: Identifies CDN/WAF products from the `Server` response header.
+

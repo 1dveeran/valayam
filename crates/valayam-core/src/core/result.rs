@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Represents a single, confirmed vulnerability finding.
 /// This structure is serialized to JSON for structured logging.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ScanResult {
     #[serde(with = "chrono::serde::ts_seconds")]
     pub timestamp: DateTime<Utc>,

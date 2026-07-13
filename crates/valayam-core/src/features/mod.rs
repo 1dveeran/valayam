@@ -7,3 +7,5 @@ pub mod nuclei_compat;
 pub mod scripting;
 pub mod tls_audit;
 pub mod crawler;
+pub mod fuzzer;
+pub mod waf_detect;

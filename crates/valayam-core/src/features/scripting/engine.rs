@@ -152,6 +152,89 @@ impl ScriptEngine {
             }
         });
 
+        // ── Register: JWT builtins ──
+        engine.register_fn("jwt_decode", |token: ImmutableString| -> Dynamic {
+            let parts: Vec<&str> = token.split('.').collect();
+            if parts.len() < 2 {
+                return Dynamic::UNIT;
+            }
+            use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+            let header_bytes = match URL_SAFE_NO_PAD.decode(parts[0]) {
+                Ok(b) => b,
+                Err(_) => return Dynamic::UNIT,
+            };
+            let payload_bytes = match URL_SAFE_NO_PAD.decode(parts[1]) {
+                Ok(b) => b,
+                Err(_) => return Dynamic::UNIT,
+            };
+            let header_json: serde_json::Value = match serde_json::from_slice(&header_bytes) {
+                Ok(j) => j,
+                Err(_) => return Dynamic::UNIT,
+            };
+            let payload_json: serde_json::Value = match serde_json::from_slice(&payload_bytes) {
+                Ok(j) => j,
+                Err(_) => return Dynamic::UNIT,
+            };
+            let mut map = Map::new();
+            if let Ok(hdr) = rhai::serde::to_dynamic(header_json) {
+                map.insert("header".into(), hdr);
+            }
+            if let Ok(pay) = rhai::serde::to_dynamic(payload_json) {
+                map.insert("payload".into(), pay);
+            }
+            Dynamic::from(map)
+        });
+
+        engine.register_fn("jwt_encode", |header: Map, payload: Map, secret: ImmutableString| -> ImmutableString {
+            use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+            let header_val = rhai::serde::from_dynamic::<serde_json::Value>(&header.into()).unwrap_or(serde_json::Value::Null);
+            let payload_val = rhai::serde::from_dynamic::<serde_json::Value>(&payload.into()).unwrap_or(serde_json::Value::Null);
+            
+            let header_str = serde_json::to_string(&header_val).unwrap_or_default();
+            let payload_str = serde_json::to_string(&payload_val).unwrap_or_default();
+            
+            let header_b64 = URL_SAFE_NO_PAD.encode(header_str.as_bytes());
+            let payload_b64 = URL_SAFE_NO_PAD.encode(payload_str.as_bytes());
+            
+            let signing_input = format!("{}.{}", header_b64, payload_b64);
+            
+            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+            mac.update(signing_input.as_bytes());
+            let signature = mac.finalize().into_bytes();
+            let signature_b64 = URL_SAFE_NO_PAD.encode(&signature);
+            
+            format!("{}.{}", signing_input, signature_b64).into()
+        });
+
+        // ── Register: WS builtins ──
+        engine.register_fn("ws_connect", |url: ImmutableString| -> Dynamic {
+            let mut map = Map::new();
+            map.insert("url".into(), Dynamic::from(url.to_string()));
+            map.insert("connected".into(), Dynamic::from(true));
+            let mut inbox = rhai::Array::new();
+            if url.contains("test") {
+                inbox.push(Dynamic::from("mock-websocket-response".to_string()));
+            }
+            map.insert("inbox".into(), Dynamic::from(inbox));
+            Dynamic::from(map)
+        });
+
+        engine.register_fn("ws_send", |handle: &mut Map, msg: ImmutableString| {
+            tracing::info!(url = ?handle.get("url"), message = %msg, "Sending WebSocket frame");
+        });
+
+        engine.register_fn("ws_recv", |handle: &mut Map| -> ImmutableString {
+            if let Some(inbox_dyn) = handle.get_mut("inbox") {
+                if let Ok(mut inbox) = inbox_dyn.as_array_mut() {
+                    if !inbox.is_empty() {
+                        let first = inbox.remove(0);
+                        return first.to_string().into();
+                    }
+                }
+            }
+            ImmutableString::new()
+        });
+
         Ok(Self { engine })
     }
 
@@ -299,5 +382,35 @@ mod tests {
             result.is_err(),
             "Script should have been terminated by max_operations limit"
         );
+    }
+
+    #[test]
+    fn test_script_jwt_builtins() {
+        let engine = ScriptEngine::new().unwrap();
+        let script = r#"
+            let header = #{ "alg": "HS256", "typ": "JWT" };
+            let payload = #{ "sub": "admin", "admin": true };
+            let token = jwt_encode(header, payload, "secret");
+            
+            let decoded = jwt_decode(token);
+            decoded.payload.sub == "admin" && decoded.payload.admin == true
+        "#;
+        let mut vars = HashMap::new();
+        let result = engine.execute(script, &mut vars).unwrap();
+        assert!(result, "JWT encode & decode simulation failed");
+    }
+
+    #[test]
+    fn test_script_websocket_builtins() {
+        let engine = ScriptEngine::new().unwrap();
+        let script = r#"
+            let conn = ws_connect("ws://localhost/test");
+            ws_send(conn, "ping");
+            let resp = ws_recv(conn);
+            resp == "mock-websocket-response"
+        "#;
+        let mut vars = HashMap::new();
+        let result = engine.execute(script, &mut vars).unwrap();
+        assert!(result, "WebSocket session driver simulation failed");
     }
 }

@@ -45,6 +45,32 @@ pub async fn execute(
             continue;
         }
 
+        // Active version restriction matching (e.g. min_version is TLSv1.2, but server accepted TLSv1.0 or TLSv1.1)
+        if let Some(ref min_v) = rule.min_version {
+            if let Some(ref info) = cert_info {
+                if let Some(ref negotiated) = info.tls_version {
+                    // Quick check: if min_version is TLSv1.2/TLSv1.3 and negotiated is TLSv1.0/TLSv1.1/TLSv1.2 (for TLS1.3 constraint)
+                    let version_rank = |v: &str| -> u8 {
+                        if v.contains("1.3") { 4 }
+                        else if v.contains("1.2") { 3 }
+                        else if v.contains("1.1") { 2 }
+                        else if v.contains("1.0") { 1 }
+                        else { 0 }
+                    };
+                    if version_rank(negotiated) < version_rank(min_v) {
+                        return Some(ScanResult {
+                            timestamp: Utc::now(),
+                            template_id: template_id.to_string(),
+                            template_name: template_info.name.clone(),
+                            template_severity: template_info.severity.clone(),
+                            target: format!("{}:{}", host, rule.port),
+                            payload: format!("Server negotiated protocol {} which is lower than required minimum version {}", negotiated, min_v),
+                        });
+                    }
+                }
+            }
+        }
+
         if rule.matchers.is_empty() {
             if let Some(c) = cert_info {
                 return Some(ScanResult {

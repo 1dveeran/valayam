@@ -3,6 +3,7 @@ use crate::features::http_scan::parser::HttpRequestTemplate;
 use crate::features::network_scan::parser::NetworkRequestTemplate;
 use crate::features::scripting::parser::ScriptTemplate;
 use crate::features::tls_audit::parser::TlsAuditTemplate;
+use crate::features::fuzzer::parser::FuzzTemplate;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -22,6 +23,8 @@ pub struct VulnerabilityTemplate {
     pub dns: Vec<DnsRequestTemplate>,
     #[serde(default)]
     pub tls: Vec<TlsAuditTemplate>,
+    #[serde(default)]
+    pub fuzz: Vec<FuzzTemplate>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -157,6 +160,7 @@ dns:
 tls:
   - host: "{{Hostname}}"
     port: 443
+    min_version: "TLSv1.2"
     matchers:
       - type: expired
         part: body
@@ -167,5 +171,6 @@ tls:
         let template = VulnerabilityTemplate::load(file.path()).unwrap();
         assert!(!template.dns.is_empty());
         assert!(!template.tls.is_empty());
+        assert_eq!(template.tls[0].min_version.as_deref(), Some("TLSv1.2"));
     }
 }

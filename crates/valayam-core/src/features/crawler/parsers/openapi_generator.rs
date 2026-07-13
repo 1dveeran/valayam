@@ -65,6 +65,7 @@ pub fn generate_template_from_openapi(openapi_content: &str) -> Result<Vulnerabi
         scripts: vec![],
         dns: vec![],
         tls: vec![],
+        fuzz: vec![],
     })
 }
 

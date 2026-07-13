@@ -1,7 +1,7 @@
 use crate::core::rate_limiter::RateLimiter;
 use crate::core::result::ScanResult;
 use crate::core::variables::build_initial_context;
-use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit};
+use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer};
 use crate::network::http::StealthHttpClient;
 use super::schema::VulnerabilityTemplate;
 use url::Url;
@@ -104,6 +104,21 @@ pub async fn execute_template(
             &template.id,
             &template.info,
             &variables,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 5: Fuzzing Engine
+    if !template.fuzz.is_empty() {
+        if let Some(result) = fuzzer::executor::execute(
+            client,
+            target_url,
+            &template.fuzz,
+            &template.id,
+            &template.info,
         )
         .await
         {

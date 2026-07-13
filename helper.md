@@ -242,7 +242,7 @@ requests:
 
 ### Network Scanning — TCP with Banner Grabbing
 
-Scan ports and match against service banners.
+Scan ports and match against service banners. If a port (like port 80/8080/443) is silent and doesn't return an initial greeting banner, the scanner automatically falls back to sending a lightweight `GET / HTTP/1.1` probe to retrieve headers/banners.
 
 ```yaml
 id: network-banner-grab
@@ -458,6 +458,16 @@ scripts:
         let timestamp = "1720000000";
         let signature = hmac_sha256("secret_key", "GET/api/data" + timestamp);
         log("Computed HMAC: " + signature);
+
+        // JWT Token forging
+        let header = #{ "alg": "HS256", "typ": "JWT" };
+        let payload = #{ "sub": "admin", "admin": true };
+        let token = jwt_encode(header, payload, "jwt_key");
+        log("Forged JWT: " + token);
+
+        // JWT Token decoding
+        let claims = jwt_decode(token);
+        log("Admin Claim: " + claims.payload.admin);
 
         // Parse JSON response
         let resp = http_get(target_url + "/api/info");
@@ -677,3 +687,99 @@ export OPENAI_API_KEY="sk-..."
 # Run in gRPC Mode (delegates executions to remote worker over gRPC)
 python agent.py -u https://example.com -i "Perform a full port scan and verify web applications" --worker localhost:50051
 ```
+
+---
+
+### Fuzzing Engine — SQL Injection Parameter Scan
+
+Define fuzzing rules to inject SQL payloads into query parameters.
+
+```yaml
+id: sqli-fuzz-test
+info:
+  name: "SQL Injection Parameter Fuzz"
+  severity: "High"
+fuzz:
+  - part: "query"
+    keys:
+      - "id"
+      - "q"
+    payloads:
+      - "' OR 1=1--"
+      - "1; DROP TABLE users--"
+      - "' UNION SELECT NULL,NULL--"
+    matchers:
+      - type: "status"
+        part: "status"
+        status:
+          - 500
+      - type: "regex"
+        part: "body"
+        regex:
+          - "SQL syntax"
+          - "mysql_fetch"
+          - "ORA-\\d+"
+```
+
+```bash
+cargo run --bin valayam-cli -- -u "https://example.com/search?q=test&id=1" -t sqli-fuzz.yaml
+```
+
+---
+
+### TLS Audit — Minimum Version Enforcement
+
+Flag servers that negotiate deprecated TLS versions.
+
+```yaml
+id: tls-version-policy
+info:
+  name: "TLS Version Policy Check"
+  severity: "Medium"
+tls:
+  - host: "{{Hostname}}"
+    port: 443
+    min_version: "TLSv1.2"
+    matchers:
+      - type: legacy_tls
+        part: body
+```
+
+```bash
+cargo run --bin valayam-cli -- -u https://example.com -t tls-version-policy.yaml
+```
+
+---
+
+### Rhai Script — WebSocket Session Driver
+
+Use `ws_connect`, `ws_send`, and `ws_recv` to test WebSocket-based backends.
+
+```yaml
+id: websocket-exploit
+info:
+  name: "WebSocket Chat Injection"
+  severity: "High"
+scripts:
+  - engine: "rhai"
+    source:
+      code: |
+        let conn = ws_connect("ws://" + hostname + "/chat");
+        ws_send(conn, "{\"type\": \"message\", \"text\": \"<script>alert(1)</script>\"}");
+        let resp = ws_recv(conn);
+        log("WS Response: " + resp);
+        resp.contains("script")
+```
+
+```bash
+cargo run --bin valayam-cli -- -u https://example.com -t websocket-exploit.yaml
+```
+
+---
+
+### WAF Detection & Fingerprinting
+
+The WAF detection module (`features/waf_detect/`) can be called programmatically to identify WAF products before running scans. It sends a clean GET request followed by a trigger probe containing XSS/SQLi signatures, then fingerprints the responses via header and body analysis.
+
+Detected WAFs include: **Cloudflare**, **Incapsula/Imperva**, **Akamai**, **Amazon CloudFront**, **Azure Front Door**, **ModSecurity**, **Barracuda**, **Fortinet FortiWeb**, **DDoS-Guard**, **PerimeterX/HUMAN**, and **Citrix NetScaler**.
+
