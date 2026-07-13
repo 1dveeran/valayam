@@ -1565,6 +1565,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "rhai_codegen",
+ "serde",
  "smallvec",
  "smartstring",
  "thin-vec",
@@ -1804,6 +1805,9 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "smartstring"
@@ -1812,6 +1816,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fb72c633efbaa2dd666986505016c32c3044395ceaf881518399d2f4127ee29"
 dependencies = [
  "autocfg",
+ "serde",
  "static_assertions",
  "version_check",
 ]
@@ -1914,6 +1919,9 @@ name = "thin-vec"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0f7e269b48f0a7dd0146680fa24b50cc67fc0373f086a5b2f99bd084639b482"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "thiserror"
@@ -2195,18 +2203,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
-name = "valayam"
+name = "valayam-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "futures",
+ "indicatif",
+ "serde_json",
+ "tokio",
+ "valayam-core",
+ "walkdir",
+]
+
+[[package]]
+name = "valayam-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
  "chrono",
- "clap",
  "futures",
  "governor",
  "hickory-resolver",
  "hmac",
- "indicatif",
  "md5",
  "rand 0.8.7",
  "regex",
@@ -2223,8 +2243,16 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "url",
- "walkdir",
  "x509-parser",
+]
+
+[[package]]
+name = "valayam-worker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "valayam-core",
 ]
 
 [[package]]

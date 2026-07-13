@@ -1,5 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::network::tcp::scan_ports;
+use crate::network::tcp;
+use crate::network::udp;
 use crate::template::schema::TemplateInfo;
 use super::parser::NetworkRequestTemplate;
 use chrono::Utc;
@@ -19,12 +20,22 @@ pub async fn execute(
 ) -> Option<ScanResult> {
     for net_rule in network_rules {
         let host_to_scan = net_rule.host.replace("{{Hostname}}", target_host);
-        let port_results = scan_ports(
-            &host_to_scan,
-            &net_rule.ports,
-            net_rule.banner_timeout_ms,
-        )
-        .await;
+        
+        let port_results = if net_rule.protocol.to_lowercase() == "udp" {
+            udp::scan_ports(
+                &host_to_scan,
+                &net_rule.ports,
+                net_rule.banner_timeout_ms,
+            )
+            .await
+        } else {
+            tcp::scan_ports(
+                &host_to_scan,
+                &net_rule.ports,
+                net_rule.banner_timeout_ms,
+            )
+            .await
+        };
 
         if net_rule.matchers.is_empty() {
             // No matchers: any open port is a finding

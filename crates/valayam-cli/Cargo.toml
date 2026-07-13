@@ -1,0 +1,14 @@
+[package]
+name = "valayam-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+valayam-core = { path = "../valayam-core" }
+tokio = { workspace = true }
+clap = { workspace = true }
+walkdir = { workspace = true }
+indicatif = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }

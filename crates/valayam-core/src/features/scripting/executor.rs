@@ -3,7 +3,7 @@ use crate::template::schema::TemplateInfo;
 use super::engine::ScriptEngine;
 use super::parser::{ScriptSource, ScriptTemplate};
 use chrono::Utc;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 /// Executes all script rules from a template against the target.
 /// Returns the first finding (ScanResult) or None if no scripts triggered.
@@ -13,6 +13,7 @@ pub async fn execute(
     scripts: &[ScriptTemplate],
     template_id: &str,
     template_info: &TemplateInfo,
+    variables_in: &HashMap<String, String>,
 ) -> Option<ScanResult> {
     for script_rule in scripts {
         // Only support the "rhai" engine for now; skip unknown engines gracefully
@@ -36,8 +37,8 @@ pub async fn execute(
             }
         };
 
-        // Build the variables map to inject into the script's scope
-        let mut variables = BTreeMap::new();
+        // Clone variables to inject into the script's scope
+        let mut variables = variables_in.clone();
         let clean_target = target_url.trim_end_matches('/').to_string();
         variables.insert("target_url".to_string(), clean_target);
         variables.insert("base_url".to_string(), target_url.to_string());
@@ -56,7 +57,7 @@ pub async fn execute(
                 return None;
             };
 
-            match engine.execute(&script_code, &variables) {
+            match engine.execute(&script_code, &mut variables) {
                 Ok(true) => Some(ScanResult {
                     timestamp: Utc::now(),
                     template_id,

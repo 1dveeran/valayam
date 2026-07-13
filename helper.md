@@ -5,7 +5,7 @@ This document provides examples on how to use the `valayam` scanner, covering al
 ## Getting Help
 
 ```bash
-cargo run -- --help
+cargo run --bin valayam-cli -- --help
 ```
 
 ## CLI Flags
@@ -26,19 +26,19 @@ cargo run -- --help
 
 ```bash
 # Uses default demo template against default target (httpbin.org)
-cargo run
+cargo run --bin valayam-cli
 
 # Custom target
-cargo run -- -u https://example.com -t ./templates_repo/demo-template.yaml
+cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/demo-template.yaml
 
 # Batch execution (all .yaml files in directory, concurrently)
-cargo run -- -u https://example.com -t ./templates_repo/
+cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/
 
 # Save findings to JSON
-cargo run -- -t ./templates_repo/ -o results.json
+cargo run --bin valayam-cli -- -t ./templates_repo/ -o results.json
 
 # Rate-limited scan (max 5 requests/second)
-cargo run -- -t ./templates_repo/ --rate-limit 5
+cargo run --bin valayam-cli -- -t ./templates_repo/ --rate-limit 5
 ```
 
 ---
@@ -65,7 +65,7 @@ requests:
 ```
 
 ```bash
-cargo run -- -t http-only.yaml
+cargo run --bin valayam-cli -- -t http-only.yaml
 ```
 
 ---
@@ -116,7 +116,7 @@ requests:
 ```
 
 ```bash
-cargo run -- -t auth-chain.yaml -u https://vulnerable-app.com
+cargo run --bin valayam-cli -- -t auth-chain.yaml -u https://vulnerable-app.com
 ```
 
 ---
@@ -239,7 +239,7 @@ network:
 ```
 
 ```bash
-cargo run -- -t network-banner.yaml -u example.com
+cargo run --bin valayam-cli -- -t network-banner.yaml -u example.com
 ```
 
 ---
@@ -265,7 +265,7 @@ network:
 ```
 
 ```bash
-cargo run -- -t network-only.yaml -u example.com
+cargo run --bin valayam-cli -- -t network-only.yaml -u example.com
 ```
 
 ---
@@ -285,6 +285,7 @@ dns:
     query_type: "CNAME"
     matchers:
       - type: "regex"
+        part: "record"
         regex:
           - "\\.github\\.io$"
           - "\\.herokuapp\\.com$"
@@ -293,7 +294,7 @@ dns:
 ```
 
 ```bash
-cargo run -- -t dns-takeover.yaml -u sub.example.com
+cargo run --bin valayam-cli -- -t dns-takeover.yaml -u sub.example.com
 ```
 
 ---
@@ -312,6 +313,7 @@ dns:
     query_type: "TXT"
     matchers:
       - type: "regex"
+        part: "record"
         regex:
           - "v=spf1.*\\+all"    # Overly permissive SPF
 ```
@@ -333,8 +335,11 @@ tls:
     port: 443
     matchers:
       - type: "expired"
+        part: "cert"
       - type: "weak_cipher"
+        part: "cert"
       - type: "self_signed"
+        part: "cert"
 ```
 
 ```yaml
@@ -354,7 +359,7 @@ tls:
 ```
 
 ```bash
-cargo run -- -t tls-audit.yaml -u https://example.com
+cargo run --bin valayam-cli -- -t tls-audit.yaml -u https://example.com
 ```
 
 ---
@@ -398,7 +403,7 @@ scripts:
 ```
 
 ```bash
-cargo run -- -t script-demo.yaml
+cargo run --bin valayam-cli -- -t script-demo.yaml
 ```
 
 ---
@@ -455,7 +460,7 @@ scripts:
 ```
 
 ```bash
-cargo run -- -t script-file.yaml -u https://target.com
+cargo run --bin valayam-cli -- -t script-file.yaml -u https://target.com
 ```
 
 ---
@@ -516,6 +521,7 @@ dns:
     query_type: "CNAME"
     matchers:
       - type: "regex"
+        part: "record"
         regex:
           - "\\.github\\.io$"
 
@@ -524,6 +530,7 @@ tls:
     port: 443
     matchers:
       - type: "expired"
+        part: "cert"
 
 scripts:
   - engine: "rhai"
@@ -564,7 +571,7 @@ requests:
 ```
 
 ```bash
-cargo run -- -n nuclei-demo.yaml -u https://example.com
+cargo run --bin valayam-cli -- -n nuclei-demo.yaml -u https://example.com
 ```
 
 ---
@@ -581,19 +588,36 @@ socks5://proxy2.example.com:1080
 ```
 
 ```bash
-cargo run -- -t ./templates_repo/ --proxy-file proxies.txt
+cargo run --bin valayam-cli -- -t ./templates_repo/ --proxy-file proxies.txt
 ```
 
 ### Random User-Agent
 
 ```bash
-cargo run -- -t ./templates_repo/ --random-agent
+cargo run --bin valayam-cli -- -t ./templates_repo/ --random-agent
 ```
 
 ### Combined Stealth + Rate Limiting
 
 ```bash
-cargo run -- -t ./templates_repo/ -u https://target.com \
+cargo run --bin valayam-cli -- -t ./templates_repo/ -u https://target.com \
   --rate-limit 3 --proxy-file proxies.txt --random-agent \
   -o results.json
+```
+
+## AI Orchestration
+
+Valayam includes a Python-based AI orchestration layer.
+
+```bash
+cd services/ai
+python -m venv venv
+source venv/bin/activate  # or `.\venv\Scripts\Activate.ps1` on Windows
+pip install -r requirements.txt
+
+# Set OpenAI key
+export OPENAI_API_KEY="sk-..."
+
+# Run a dynamic AI-generated scan
+python agent.py -u https://example.com -i "Check for exposed .git directories and sensitive config files"
 ```

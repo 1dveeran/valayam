@@ -4,3 +4,9 @@
 .vscode/
 .idea/
 .DS_Store
+/implementation_plan.md
+
+# Python
+venv/
+__pycache__/
+.env

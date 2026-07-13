@@ -1,6 +1,4 @@
-use std::collections::HashMap;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
@@ -31,8 +29,9 @@ pub async fn inspect_certificate(host: &str, port: u16) -> Option<CertInfo> {
         _ => return None,
     };
 
-    // Build a rustls config that accepts all certs (we want to inspect, not validate)
-    let mut root_store = rustls::RootCertStore::empty();
+    // Install default crypto provider (safe to call multiple times as it returns Err if already installed)
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // We intentionally use a permissive verifier
     let config = rustls::ClientConfig::builder()
         .dangerous()

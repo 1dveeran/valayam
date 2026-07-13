@@ -1,73 +1,40 @@
-[package]
-name = "valayam"
+[workspace]
+members = [
+    "crates/valayam-core",
+    "crates/valayam-cli",
+    "crates/valayam-worker"
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-description = "High-performance modular vulnerability scanner core"
 
-[dependencies]
-# Async runtime for massive concurrency
+[workspace.dependencies]
 tokio = { version = "1.38", features = ["full"] }
-
-# YAML parsing for the DSL templates
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
-
-# HTTP client (using rustls to avoid OpenSSL linkage issues across OSs)
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "blocking"] }
-
-# Embedded scripting engine (sandboxed, sync-compatible with tokio via spawn_blocking)
-rhai = { version = "1.25", features = ["sync"] }
-
-# Zero-copy regex streaming evaluation
+rhai = { version = "1.25", features = ["sync", "serde"] }
 regex = "1.10"
-
-# CLI interface generation
 clap = { version = "4.5", features = ["derive"] }
-
-# Batch template execution
 walkdir = "2.5"
-
-# Robust error handling
 anyhow = "1.0"
 thiserror = "1.0"
-
-# JSON serialization for structured output
 serde_json = "1.0"
-
-# Encoding and hashing for DSL helper functions
 base64 = "0.22"
 md5 = "0.7"
 sha2 = "0.10"
-
-# Timestamping for scan results
 chrono = { version = "0.4", features = ["serde"] }
-
-# Concurrency utilities
 futures = "0.3"
-
-# Token-bucket rate limiter for global RPS control
 governor = "0.6"
-
-# URL parsing
 url = { version = "2.5", features = ["serde"] }
-
-# Interactive CLI progress bars and spinners
 indicatif = "0.17"
-
-# DNS resolution for dns_audit feature
 hickory-resolver = "0.24"
-
-# TLS certificate parsing for tls_audit feature
 x509-parser = "0.16"
 rustls-pemfile = "2.0"
-rustls = "0.23"
+rustls = { version = "0.23", features = ["ring"] }
 tokio-rustls = "0.26"
-
-# Random selection for stealth UA/proxy rotation
 rand = "0.8"
-
-# HMAC computation for scripting builtins
 hmac = "0.12"
-
-[dev-dependencies]
 tempfile = "3.10"

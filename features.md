@@ -85,13 +85,12 @@
 - **JSON Serialization**: Full support for logging scan findings to JSON files (via `-o`) for seamless integration into larger data pipelines, SIEMs, or CI/CD dashboards.
 - **Extracted Variables**: Scan results include extracted variable values for downstream correlation.
 
-## Future: Enterprise Scaling
+## Phase 5: Distributed Scaling & AI Orchestration
 
-### Distributed Worker Architecture
-- **Message Broker Integration**: Worker daemon mode consuming scan jobs from NATS/RabbitMQ queues.
-- **Master-Agent Coordination**: Distributed target splitting across multiple worker nodes with deduplication.
-- **Cargo Workspace**: Engine extracted as `valayam-core` library, with `valayam-cli` and `valayam-worker` as separate binaries.
+### 13. Distributed Worker Architecture
+- **Cargo Workspace**: Engine is extracted as the `valayam-core` library, with `valayam-cli` and `valayam-worker` as separate crates.
+- **Worker Daemon**: `valayam-worker` serves as a baseline for future message broker integration (NATS/RabbitMQ).
 
-### AI-Assisted Security
-- **Template Generation**: LLM pipeline that converts CVE descriptions and exploit write-ups into Valayam YAML templates.
-- **Intelligent Hunting**: AI layer that analyzes scan results and automatically selects targeted follow-up templates based on discovered services and technologies.
+### 14. AI-Assisted Security
+- **Dynamic AI Agent**: A Python AI orchestration layer (`services/ai/`) leveraging LLMs (OpenAI via Pydantic) to dynamically generate and execute Valayam YAML templates based on high-level natural language security objectives.
+- **Client Wrapper**: `valayam_client.py` handles programmatic invocation and parsing of JSON outputs from the CLI.

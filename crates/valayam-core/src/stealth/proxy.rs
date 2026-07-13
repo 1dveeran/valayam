@@ -5,8 +5,8 @@ use std::fs;
 /// Supports SOCKS5 and HTTP proxies in `protocol://host:port` format.
 #[derive(Clone)]
 pub struct ProxyRotator {
-    proxies: Vec<String>,
-    index: std::sync::atomic::AtomicUsize,
+    pub proxies: Vec<String>,
+    index: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl ProxyRotator {
@@ -28,7 +28,7 @@ impl ProxyRotator {
 
         Ok(Self {
             proxies,
-            index: std::sync::atomic::AtomicUsize::new(0),
+            index: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         })
     }
 

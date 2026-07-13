@@ -1,8 +1,13 @@
 use regex::Regex;
 use rhai::{Dynamic, Engine, ImmutableString, Map, Scope};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use std::net::TcpStream;
+use std::io::{Read, Write};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 /// A sandboxed Rhai scripting environment that exposes safe HTTP and regex
 /// capabilities to executed scripts. Designed for multi-step scan workflows
@@ -105,6 +110,48 @@ impl ScriptEngine {
             println!("[script] {}", msg);
         });
 
+        // ── Register: TCP builtins ──
+        engine.register_fn("tcp_request", |host: ImmutableString, port: i64, payload: ImmutableString| -> Dynamic {
+            let address = format!("{}:{}", host, port);
+            match TcpStream::connect_timeout(&address.parse().unwrap(), Duration::from_secs(5)) {
+                Ok(mut stream) => {
+                    if stream.write_all(payload.as_bytes()).is_ok() {
+                        let mut buf = Vec::new();
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                        let _ = stream.read_to_end(&mut buf);
+                        return Dynamic::from(String::from_utf8_lossy(&buf).to_string());
+                    }
+                }
+                Err(_) => {}
+            }
+            Dynamic::from(String::new())
+        });
+
+        // ── Register: Crypto builtins ──
+        engine.register_fn("base64_encode", |text: ImmutableString| -> ImmutableString {
+            STANDARD.encode(text.as_bytes()).into()
+        });
+
+        engine.register_fn("hmac_sha256", |key: ImmutableString, data: ImmutableString| -> ImmutableString {
+            let mut mac = Hmac::<Sha256>::new_from_slice(key.as_bytes()).expect("HMAC can take key of any size");
+            mac.update(data.as_bytes());
+            let result = mac.finalize().into_bytes();
+            let mut hex_str = String::with_capacity(result.len() * 2);
+            for b in result {
+                use std::fmt::Write;
+                let _ = write!(&mut hex_str, "{:02x}", b);
+            }
+            hex_str.into()
+        });
+
+        // ── Register: Data builtins ──
+        engine.register_fn("json_parse", |json: ImmutableString| -> Dynamic {
+            match serde_json::from_str::<serde_json::Value>(json.as_str()) {
+                Ok(val) => rhai::serde::to_dynamic(val).unwrap_or(Dynamic::UNIT),
+                Err(_) => Dynamic::UNIT
+            }
+        });
+
         Ok(Self { engine })
     }
 
@@ -121,12 +168,12 @@ impl ScriptEngine {
     pub fn execute(
         &self,
         script_source: &str,
-        variables: &BTreeMap<String, String>,
+        variables: &mut HashMap<String, String>,
     ) -> Result<bool, crate::core::error::ScannerError> {
         let mut scope = Scope::new();
 
         // Inject all provided variables into the Rhai scope
-        for (key, value) in variables {
+        for (key, value) in variables.iter() {
             scope.push(key.clone(), value.clone());
         }
 
@@ -134,6 +181,15 @@ impl ScriptEngine {
             .engine
             .eval_with_scope(&mut scope, script_source)
             .map_err(|e| crate::core::error::ScannerError::ScriptExecutionError(e.to_string()))?;
+
+        // Extract variables back from the scope (variable bridge)
+        for (_, name, value) in scope.iter() {
+            if let Some(val_str) = value.clone().try_cast::<String>() {
+                variables.insert(name.to_string(), val_str);
+            } else if let Some(val_str) = value.clone().try_cast::<ImmutableString>() {
+                variables.insert(name.to_string(), val_str.to_string());
+            }
+        }
 
         // Coerce the script's return value to a boolean finding signal
         Ok(result.as_bool().unwrap_or(false))
@@ -215,7 +271,7 @@ fn error_map(message: &str) -> Dynamic {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
+    use std::collections::HashMap;
 
     #[test]
     fn test_script_regex_match() {
@@ -223,8 +279,8 @@ mod tests {
         let script = r#"
             regex_match("test-string-123", "string-[0-9]+")
         "#;
-        let vars = BTreeMap::new();
-        let result = engine.execute(script, &vars).unwrap();
+        let mut vars = HashMap::new();
+        let result = engine.execute(script, &mut vars).unwrap();
         assert!(result, "Regex match should return true");
     }
 
@@ -236,8 +292,8 @@ mod tests {
             let x = 0;
             loop { x += 1; }
         "#;
-        let vars = BTreeMap::new();
-        let result = engine.execute(script, &vars);
+        let mut vars = HashMap::new();
+        let result = engine.execute(script, &mut vars);
         // The max_operations limit should kill it and return an error, NOT hang the test
         assert!(
             result.is_err(),

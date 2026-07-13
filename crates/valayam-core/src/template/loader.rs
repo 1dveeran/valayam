@@ -103,6 +103,7 @@ pub async fn execute_template(
             &template.scripts,
             &template.id,
             &template.info,
+            &variables,
         )
         .await
         {

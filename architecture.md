@@ -5,123 +5,81 @@ This document describes the **vertical slice architecture** of `valayam`. Each f
 ## Directory Structure
 
 ```
-src/
-├── main.rs                          # CLI parsing, router, orchestrator
+valayam/
+├── Cargo.toml                       # Virtual workspace manifest
+├── crates/
+│   ├── valayam-core/                # Shared library (Foundation + Features)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── core/                # error.rs, result.rs, variables.rs, rate_limiter.rs
+│   │       ├── network/             # http.rs, tcp.rs, udp.rs, dns.rs, tls.rs
+│   │       ├── stealth/             # proxy.rs, user_agent.rs
+│   │       ├── template/            # schema.rs, loader.rs
+│   │       └── features/            # Vertical slices: http_scan, network_scan, scripting, etc.
+│   │
+│   ├── valayam-cli/                 # Command-line interface
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       └── main.rs              # CLI parsing (clap), orchestrator invocation, JSON output
+│   │
+│   └── valayam-worker/              # Distributed worker node (Placeholder/Future gRPC)
+│       ├── Cargo.toml
+│       └── src/
+│           └── main.rs
 │
-├── core/                            # Shared foundation (thin)
-│   ├── mod.rs
-│   ├── error.rs                     # Global error enum
-│   ├── result.rs                    # ScanResult struct
-│   ├── variables.rs                 # {{variable}} + {{helper()}} resolution
-│   └── rate_limiter.rs              # Global token-bucket rate limiter
-│
-├── network/                         # Shared network clients
-│   ├── mod.rs
-│   ├── http.rs                      # StealthHttpClient
-│   ├── tcp.rs                       # TCP connect + banner grab
-│   ├── udp.rs                       # UDP probe primitives
-│   ├── dns.rs                       # DNS resolver (hickory-resolver)
-│   ├── tls.rs                       # TLS cert inspection (rustls + x509)
-│   └── stealth.rs                   # UA pool, proxy rotation, JA3 spoofing
-│
-├── features/                        # Vertical feature slices
-│   ├── mod.rs
-│   ├── http_scan/                   # HTTP request scanning
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── executor.rs
-│   │   └── tests.rs
-│   ├── extractors/                  # Dynamic value extraction
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── engine.rs
-│   │   └── tests.rs
-│   ├── helpers/                     # DSL helper functions
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── functions.rs
-│   │   └── tests.rs
-│   ├── network_scan/                # TCP/UDP port scanning + banners
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── executor.rs
-│   │   └── tests.rs
-│   ├── dns_audit/                   # DNS query scanning
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── executor.rs
-│   │   └── tests.rs
-│   ├── tls_audit/                   # TLS/SSL certificate auditing
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── executor.rs
-│   │   └── tests.rs
-│   ├── scripting/                   # Rhai embedded scripting
-│   │   ├── mod.rs
-│   │   ├── parser.rs
-│   │   ├── engine.rs
-│   │   ├── builtins.rs
-│   │   └── tests.rs
-│   └── nuclei_compat/              # Nuclei template compatibility
-│       ├── mod.rs
-│       ├── parser.rs
-│       ├── executor.rs
-│       ├── matchers.rs
-│       └── tests.rs
-│
-├── stealth/                         # Evasion & network stealth
-│   ├── mod.rs
-│   ├── fingerprint.rs               # JA3/JA4 TLS spoofing
-│   ├── proxy.rs                     # SOCKS5/HTTP proxy rotation
-│   ├── user_agent.rs                # Browser UA string pool
-│   └── tests.rs
-│
-└── template/                        # Template orchestrator
-    ├── mod.rs
-    ├── loader.rs                    # YAML loading + execution routing
-    └── schema.rs                    # Top-level VulnerabilityTemplate struct
+├── services/
+│   └── ai/                          # Python AI Orchestration Layer
+│       ├── requirements.txt
+│       ├── valayam_client.py        # Python wrapper around valayam-cli
+│       └── agent.py                 # LLM agent to dynamically generate and run templates
 ```
 
 ## Dependency Flow
 
 ```mermaid
 graph BT
-    subgraph Foundation
-        Core["core/<br/>error, result, variables, rate_limiter"]
-        Network["network/<br/>http, tcp, udp, dns, tls, stealth"]
+    subgraph Core["valayam-core"]
+        subgraph Foundation
+            CoreData["core/<br/>error, result, variables, rate_limiter"]
+            Network["network/<br/>http, tcp, udp, dns, tls, stealth"]
+        end
+
+        subgraph Slices["features/ — vertical slices"]
+            HTTP["http_scan/"]
+            Extract["extractors/"]
+            Helpers["helpers/"]
+            NetScan["network_scan/"]
+            DNS["dns_audit/"]
+            TLS["tls_audit/"]
+            Script["scripting/"]
+            Nuclei["nuclei_compat/"]
+        end
+
+        Stealth["stealth/<br/>proxies, UA pool"]
+        Template["template/<br/>schema + loader"]
     end
 
-    subgraph Slices["features/ — vertical slices"]
-        HTTP["http_scan/"]
-        Extract["extractors/"]
-        Helpers["helpers/"]
-        NetScan["network_scan/"]
-        DNS["dns_audit/"]
-        TLS["tls_audit/"]
-        Script["scripting/"]
-        Nuclei["nuclei_compat/"]
-    end
+    CLI["valayam-cli<br/>(CLI + progress output)"]
+    Worker["valayam-worker<br/>(Future Distributed Node)"]
+    AIAgent["services/ai/<br/>(Python AI Agent)"]
 
-    Stealth["stealth/<br/>JA3, proxies, UA pool"]
-    Template["template/<br/>schema + loader"]
-    Main["main.rs<br/>CLI + orchestrator"]
-
-    Network --> Core
+    Network --> CoreData
     Stealth --> Network
 
-    HTTP --> Core
+    HTTP --> CoreData
     HTTP --> Network
-    Extract --> Core
-    Helpers --> Core
-    NetScan --> Core
+    Extract --> CoreData
+    Helpers --> CoreData
+    NetScan --> CoreData
     NetScan --> Network
-    DNS --> Core
+    DNS --> CoreData
     DNS --> Network
-    TLS --> Core
+    TLS --> CoreData
     TLS --> Network
-    Script --> Core
+    Script --> CoreData
     Script --> Network
-    Nuclei --> Core
+    Nuclei --> CoreData
     Nuclei --> Network
 
     Template --> HTTP
@@ -133,9 +91,14 @@ graph BT
     Template --> Script
     Template --> Nuclei
 
-    Main --> Template
-    Main --> Stealth
-    Main --> Core
+    CLI --> Template
+    CLI --> Stealth
+    CLI --> CoreData
+
+    Worker --> Template
+    Worker --> CoreData
+
+    AIAgent -.->|Subprocess / CLI| CLI
 ```
 
 ## Design Principles
@@ -180,7 +143,9 @@ This is injected at the `StealthHttpClient` level, so all slices benefit without
 
 | Component | Responsibility |
 |---|---|
-| `main.rs` | CLI argument parsing (clap), progress display, JSON output |
+| `valayam-cli` | CLI argument parsing (clap), progress display, JSON output |
+| `valayam-worker`| Daemonized distributed scanning node (Future phase) |
+| `services/ai/`| Python AI Agent for dynamic template generation and scanning |
 | `core/error.rs` | Unified error enum for all slices |
 | `core/result.rs` | `ScanResult` struct serialized to JSON |
 | `core/variables.rs` | `{{var}}` substitution + `{{helper()}}` evaluation |

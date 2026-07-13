@@ -1,0 +1,9 @@
+[package]
+name = "valayam-worker"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+valayam-core = { path = "../valayam-core" }
+tokio = { workspace = true }
+anyhow = { workspace = true }

@@ -1,0 +1,12 @@
+id: http-only-example
+info:
+  name: "HTTP Only Example"
+  severity: "Info"
+requests:
+  - method: "GET"
+    path: "/"
+    matchers:
+      - type: "status"
+        part: "status"
+        status:
+          - 200

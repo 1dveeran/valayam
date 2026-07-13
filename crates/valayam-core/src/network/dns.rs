@@ -10,13 +10,7 @@ use hickory_resolver::TokioAsyncResolver;
 /// # Returns
 /// A vector of string representations of the DNS records found.
 pub async fn resolve(domain: &str, query_type: &str) -> Vec<String> {
-    let resolver = match TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default()) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("[!] Failed to create DNS resolver: {}", e);
-            return Vec::new();
-        }
-    };
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
 
     match query_type.to_uppercase().as_str() {
         "A" => {

@@ -1,9 +1,3 @@
-mod core;
-mod features;
-mod network;
-mod stealth;
-mod template;
-
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
@@ -12,13 +6,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::core::rate_limiter::RateLimiter;
+use valayam_core::core::rate_limiter::RateLimiter;
 
-use crate::features::nuclei_compat::executor::NucleiExecutor;
-use crate::features::nuclei_compat::parser::NucleiTemplate;
-use crate::network::http::StealthHttpClient;
-use crate::template::loader::execute_template;
-use crate::template::schema::VulnerabilityTemplate;
+use valayam_core::features::nuclei_compat::executor::NucleiExecutor;
+use valayam_core::features::nuclei_compat::parser::NucleiTemplate;
+use valayam_core::network::http::StealthHttpClient;
+use valayam_core::stealth::proxy::ProxyRotator;
+use valayam_core::template::loader::execute_template;
+use valayam_core::template::schema::VulnerabilityTemplate;
 use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
@@ -140,7 +135,22 @@ network:
     }
 
     // 1. Initialize Stealth Core
-    let http_client = Arc::new(StealthHttpClient::new()?);
+    let proxy_rotator = if let Some(path) = &args.proxy_file {
+        match ProxyRotator::load_from_file(path) {
+            Ok(rotator) => {
+                println!("[+] Loaded {} proxies from {}", rotator.len(), path);
+                Some(rotator)
+            }
+            Err(e) => {
+                eprintln!("[!] Failed to load proxies: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let http_client = Arc::new(StealthHttpClient::new(args.random_agent, proxy_rotator)?);
     let executor_nuclei = NucleiExecutor::new(Arc::clone(&http_client));
 
     // Initialize rate limiter if configured
