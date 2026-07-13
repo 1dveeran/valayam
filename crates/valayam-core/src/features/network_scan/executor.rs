@@ -21,6 +21,8 @@ pub async fn execute(
     for net_rule in network_rules {
         let host_to_scan = net_rule.host.replace("{{Hostname}}", target_host);
         
+        tracing::debug!(target = %host_to_scan, ports = ?net_rule.ports, protocol = %net_rule.protocol, "Starting network port scan");
+
         let port_results = if net_rule.protocol.to_lowercase() == "udp" {
             udp::scan_ports(
                 &host_to_scan,
@@ -39,6 +41,7 @@ pub async fn execute(
 
         if net_rule.matchers.is_empty() {
             // No matchers: any open port is a finding
+            tracing::trace!(target = %host_to_scan, open_ports = %port_results.len(), "Evaluating open ports (no matchers)");
             if let Some(first) = port_results.into_iter().next() {
                 let payload = match &first.banner {
                     Some(b) => format!("Port {} open — Banner: {}", first.port, b.trim()),
@@ -55,6 +58,7 @@ pub async fn execute(
             }
         } else {
             // With matchers: evaluate regex against banners
+            tracing::trace!(target = %host_to_scan, matchers_count = net_rule.matchers.len(), "Evaluating banner matchers against open ports");
             for port_result in &port_results {
                 let banner_text = port_result
                     .banner
@@ -68,6 +72,7 @@ pub async fn execute(
                                 continue;
                             };
                             if re.is_match(banner_text.as_bytes()) {
+                                tracing::debug!(port = %port_result.port, pattern = %pattern, "Vulnerability banner match found");
                                 return Some(ScanResult {
                                     timestamp: Utc::now(),
                                     template_id: template_id.to_string(),

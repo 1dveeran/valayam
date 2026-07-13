@@ -32,11 +32,12 @@ cargo test variables
 
 ### Key Test Coverage Areas
 
-- **Variables & Extractors**: Validates that `{{placeholders}}` are correctly parsed, substituted, and that regex extractors appropriately populate the shared variable context.
+- **Variables & Extractors**: Validates that `{{placeholders}}` are correctly parsed, substituted, and that regex, JSON Pointer, and CSS extractors appropriately populate the shared variable context.
 - **DSL Helpers**: Unit tests ensure `base64`, `md5`, `sha256`, `url_encode`, and string manipulation functions correctly transform data.
 - **Template Schemas**: Tests serialization and deserialization of YAML templates (both native and Nuclei compatibility modes).
 - **Rate Limiting**: Verifies the token-bucket algorithm properly throttles requests without deadlocking.
 - **Scripting Engine**: Confirms Rhai sandboxing constraints (limits on operations, infinite loops) and execution of built-in functions.
+- **Web Crawler Parsers**: Validates Javascript regex parsers, WASM binary strings extraction, and OpenAPI schema routes compilation.
 
 ## Python AI Layer Tests
 
@@ -57,8 +58,11 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-# Run the local fallback test
+# Run the local fallback test (Subprocess Mode)
 python agent.py -u https://httpbin.org -i "Check if the target is alive"
+
+# Run the local fallback test (gRPC Mode - requires valayam-worker running)
+python agent.py -u https://httpbin.org -i "Check if the target is alive" --worker localhost:50051
 ```
 
-Expected output is a JSON finding proving that the Python script successfully generated a template, launched `valayam-cli`, captured the JSON lines output, and successfully parsed the data structures back into Python.
+Expected output is a JSON finding proving that the Python script successfully generated a template, launched the scan (locally or via worker), captured the results, and successfully parsed the findings.

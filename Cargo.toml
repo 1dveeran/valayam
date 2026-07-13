@@ -17,7 +17,7 @@ serde_yaml = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "blocking"] }
 rhai = { version = "1.25", features = ["sync", "serde"] }
 regex = "1.10"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 walkdir = "2.5"
 anyhow = "1.0"
 thiserror = "1.0"
@@ -38,3 +38,11 @@ tokio-rustls = "0.26"
 rand = "0.8"
 hmac = "0.12"
 tempfile = "3.10"
+tonic = "0.11"
+prost = "0.12"
+tonic-build = "0.11"
+scraper = "0.19"
+async-trait = "0.1"
+redis = { version = "0.25", features = ["tokio-comp"] }
+lapin = "2.3"
+tokio-executor-trait = "2.1"

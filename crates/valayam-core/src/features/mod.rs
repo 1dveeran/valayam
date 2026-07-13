@@ -6,3 +6,4 @@ pub mod network_scan;
 pub mod nuclei_compat;
 pub mod scripting;
 pub mod tls_audit;
+pub mod crawler;

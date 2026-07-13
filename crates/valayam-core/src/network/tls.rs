@@ -13,6 +13,8 @@ pub struct CertInfo {
     pub is_self_signed: bool,
     pub serial: String,
     pub signature_algorithm: String,
+    pub tls_version: Option<String>,
+    pub cipher_suite: Option<String>,
 }
 
 /// Connects to a host:port and extracts TLS certificate information.
@@ -52,6 +54,9 @@ pub async fn inspect_certificate(host: &str, port: u16) -> Option<CertInfo> {
 
     // Extract the peer certificate
     let (_, server_conn) = tls_stream.get_ref();
+    let tls_version = server_conn.protocol_version().map(|v| format!("{:?}", v));
+    let cipher_suite = server_conn.negotiated_cipher_suite().map(|c| format!("{:?}", c.suite()));
+
     let certs = server_conn.peer_certificates()?;
     let cert_der = certs.first()?;
 
@@ -76,6 +81,8 @@ pub async fn inspect_certificate(host: &str, port: u16) -> Option<CertInfo> {
         is_self_signed,
         serial,
         signature_algorithm: sig_alg,
+        tls_version,
+        cipher_suite,
     })
 }
 
@@ -128,3 +135,64 @@ impl rustls::client::danger::ServerCertVerifier for NoCertVerifier {
         ]
     }
 }
+
+/// Probes a server for legacy SSL/TLS versions that are not supported by rustls.
+/// Returns a list of supported protocol names (e.g., "SSLv3", "TLSv1.0").
+pub async fn probe_legacy_tls(host: &str, port: u16) -> Vec<String> {
+    let mut supported = Vec::new();
+    
+    let versions = [
+        ("SSLv3", 0x0300),
+        ("TLSv1.0", 0x0301),
+        ("TLSv1.1", 0x0302),
+    ];
+    
+    for (name, version) in versions {
+        if check_tls_version(host, port, version).await {
+            supported.push(name.to_string());
+        }
+    }
+    supported
+}
+
+async fn check_tls_version(host: &str, port: u16, version: u16) -> bool {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let address = format!("{}:{}", host, port);
+    let Ok(mut stream) = tokio::time::timeout(Duration::from_secs(2), tokio::net::TcpStream::connect(&address)).await.unwrap_or(Err(std::io::Error::from(std::io::ErrorKind::TimedOut))) else {
+        return false;
+    };
+    
+    let mut hello = vec![
+        0x16, // Handshake
+        (version >> 8) as u8, (version & 0xFF) as u8, // Record version
+        0x00, 0x2d, // Record length: 45
+        0x01, // ClientHello
+        0x00, 0x00, 0x29, // Handshake length: 41
+        (version >> 8) as u8, (version & 0xFF) as u8, // Client version
+    ];
+    // 32 bytes random
+    hello.extend_from_slice(&[0x0b; 32]);
+    hello.extend_from_slice(&[
+        0x00, // Session ID length
+        0x00, 0x04, // Cipher suites length
+        0x00, 0x2f, // TLS_RSA_WITH_AES_128_CBC_SHA
+        0x00, 0xff, // TLS_EMPTY_RENEGOTIATION_INFO_SCSV
+        0x01, 0x00, // Compression methods length + null compression
+    ]);
+    
+    if stream.write_all(&hello).await.is_err() { return false; }
+    
+    let mut buf = [0u8; 5];
+    if stream.read_exact(&mut buf).await.is_err() { return false; }
+    
+    if buf[0] == 0x16 {
+        let mut hs_buf = [0u8; 4];
+        if stream.read_exact(&mut hs_buf).await.is_ok() {
+            if hs_buf[0] == 0x02 { // ServerHello
+                return true;
+            }
+        }
+    }
+    false
+}
+

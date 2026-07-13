@@ -12,3 +12,8 @@ indicatif = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["json"] }
+tracing-appender = "0.2.5"
+tonic = { workspace = true }
+prost = { workspace = true }

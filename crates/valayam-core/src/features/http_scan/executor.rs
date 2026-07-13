@@ -81,7 +81,18 @@ pub async fn execute(
 
         let resolved_body = req_rule.body.as_ref().map(|b| resolve_all(b, variables));
 
+        tracing::trace!(
+            target = %target_url,
+            method = %req_rule.method,
+            path = %resolved_path,
+            headers = ?resolved_headers,
+            body = ?resolved_body,
+            "Prepared raw HTTP request payload"
+        );
+
         // ── Send HTTP request ──
+        tracing::debug!(target = %target_url, method = %req_rule.method, path = %resolved_path, "Sending HTTP request");
+        
         let Ok(resp) = client
             .send_request(
                 target_url,
@@ -92,6 +103,7 @@ pub async fn execute(
             )
             .await
         else {
+            tracing::debug!("Request failed or timed out to {}", target_url);
             continue; // Silently skip connection timeouts/failures
         };
 
@@ -107,8 +119,16 @@ pub async fn execute(
             .collect();
 
         let Ok(body_bytes) = resp.bytes().await else {
+            tracing::debug!("Failed to read response body from {}", target_url);
             continue;
         };
+
+        tracing::trace!(
+            status = %status,
+            headers = ?resp_headers,
+            body_preview = %String::from_utf8_lossy(&body_bytes).chars().take(200).collect::<String>(),
+            "Received HTTP response"
+        );
 
         // ── Run extractors (always, even if matchers fail) ──
         if !req_rule.extractors.is_empty() {
@@ -124,6 +144,8 @@ pub async fn execute(
         }
 
         // ── Evaluate matchers ──
+        tracing::debug!(status = %status, response_len = %body_bytes.len(), "Evaluating matchers");
+        
         let all_matchers_succeeded = if req_rule.matchers.is_empty() {
             false
         } else {
@@ -142,6 +164,7 @@ pub async fn execute(
         };
 
         if all_matchers_succeeded {
+            tracing::debug!("Vulnerability match found for template {}", template_id);
             return Some(ScanResult {
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),

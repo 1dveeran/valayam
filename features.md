@@ -12,6 +12,8 @@
 
 ### 2. Dynamic Value Extraction (`features/extractors/`)
 - **Regex Capture Groups**: Extract specific values from response bodies or headers using named capture groups.
+- **JSON Pointer Extraction**: Extract values from structured JSON API responses using standard JSON Pointer path navigation (RFC 6901, e.g. `/data/token`).
+- **CSS Selector Extraction**: Parse HTML response bodies natively to extract element attributes (like `value`, `href`) or inner text (e.g. `input[name=csrf_token]`).
 - **Variable Assignment**: Captured values are stored as `{{variable_name}}` and automatically available to all subsequent requests in the same template.
 - **Use Cases**: JWT extraction from login responses, CSRF token capture, API key harvesting, session cookie chaining.
 - **Configurable Targets**: Extract from `body` or `header` parts of the HTTP response.
@@ -89,8 +91,20 @@
 
 ### 13. Distributed Worker Architecture
 - **Cargo Workspace**: Engine is extracted as the `valayam-core` library, with `valayam-cli` and `valayam-worker` as separate crates.
-- **Worker Daemon**: `valayam-worker` serves as a baseline for future message broker integration (NATS/RabbitMQ).
+- **Worker Daemon**: `valayam-worker` acts as a distributed daemon running in either a synchronous **gRPC server mode** or an asynchronous **TaskBroker queue mode**.
+- **Multi-Broker Integration**: Native support for **Redis** (`redis://`) and **RabbitMQ** (`amqp://`) messaging brokers to consume scanning tasks asynchronously and publish findings back, with a structured stub implementation for **Kafka** (`kafka://`).
 
-### 14. AI-Assisted Security
+### 14. AI-Assisted Security & Autonomous Loops
 - **Dynamic AI Agent**: A Python AI orchestration layer (`services/ai/`) leveraging LLMs (OpenAI via Pydantic) to dynamically generate and execute Valayam YAML templates based on high-level natural language security objectives.
-- **Client Wrapper**: `valayam_client.py` handles programmatic invocation and parsing of JSON outputs from the CLI.
+- **Autonomous Recon Loop**: Rather than single-scan template executions, the agent evaluates previous scan results in a recursive feedback loop to automatically determine follow-up scan targets and templates (up to 5 steps, terminating with a `STOP` command).
+- **gRPC Client Integration**: Updates the python `valayam_client.py` to communicate directly with worker daemons over gRPC, bypassing local compilation overheads.
+
+### 15. Enterprise-grade Web Crawler (`features/crawler/`)
+- **Asynchronous Crawling Loop**: Scrapes target hosts concurrently while enforcing domain restrictions and matching proxy/rate-limiting constraints.
+- **Custom Crawl Headers**: Supports passing auth cookies or token headers (`--crawl-headers`) to scan session-protected applications.
+- **OpenAPI scan template compiler**: Automatically parses local or fetched OpenAPI/Swagger JSON specifications and compiles them into Valayam executable requests at runtime.
+- **Multi-Format Parsers**:
+  - **JavaScript Parser & Parameter Extractor**: Extracts relative routes, query parameters (e.g. `?q=`, `&limit=`), object properties/POST payload keys (like `"username":`), and WebSocket endpoints (`ws://`, `wss://`) from client-side SPA scripts.
+  - **WASM Extractor**: Scrapes compiled WebAssembly binary files for hardcoded endpoints.
+  - **OpenAPI/Swagger Decoder**: Parses API JSON schemas directly to extract routes and endpoints instantly.
+- **Framework Discovery Probes**: Embedded active wordlists to discover Spring Boot Actuator endpoints (like `/actuator/mappings`), J2EE configuration files (`WEB-INF/web.xml`), GraphQL endpoints (`/graphql`), and SOAP services (`?wsdl`).

@@ -27,6 +27,13 @@ rustls = { workspace = true }
 tokio-rustls = { workspace = true }
 rand = { workspace = true }
 hmac = { workspace = true }
+tracing = "0.1.44"
+tonic = { workspace = true }
+prost = { workspace = true }
+scraper = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

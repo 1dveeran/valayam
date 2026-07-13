@@ -18,10 +18,7 @@ pub async fn execute(
     for script_rule in scripts {
         // Only support the "rhai" engine for now; skip unknown engines gracefully
         let "rhai" = script_rule.engine.as_str() else {
-            eprintln!(
-                "[!] Unsupported script engine: '{}'. Skipping.",
-                script_rule.engine
-            );
+            tracing::warn!("Unsupported script engine: '{}'. Skipping.", script_rule.engine);
             continue;
         };
 
@@ -30,7 +27,7 @@ pub async fn execute(
             ScriptSource::Inline { code } => code.clone(),
             ScriptSource::File { path } => {
                 let Ok(contents) = std::fs::read_to_string(path) else {
-                    eprintln!("[!] Failed to read script file: '{}'. Skipping.", path);
+                    tracing::error!("Failed to read script file: '{}'. Skipping.", path);
                     continue;
                 };
                 contents
@@ -51,24 +48,31 @@ pub async fn execute(
         let target_owned = target_url.to_string();
 
         // Bridge sync Rhai eval into the async runtime via spawn_blocking
+        tracing::debug!(target = %target_url, engine = %script_rule.engine, "Executing script");
         let handle = tokio::task::spawn_blocking(move || {
             let Ok(engine) = ScriptEngine::new() else {
-                eprintln!("[!] Failed to initialize Rhai engine.");
+                tracing::error!("Failed to initialize Rhai engine.");
                 return None;
             };
 
             match engine.execute(&script_code, &mut variables) {
-                Ok(true) => Some(ScanResult {
-                    timestamp: Utc::now(),
-                    template_id,
-                    template_name,
-                    template_severity,
-                    target: target_owned,
-                    payload: "[script finding]".to_string(),
-                }),
-                Ok(false) => None,
+                Ok(true) => {
+                    tracing::debug!(target = %target_owned, "Vulnerability script match found");
+                    Some(ScanResult {
+                        timestamp: Utc::now(),
+                        template_id,
+                        template_name,
+                        template_severity,
+                        target: target_owned,
+                        payload: "[script finding]".to_string(),
+                    })
+                },
+                Ok(false) => {
+                    tracing::trace!("Script executed successfully but returned false");
+                    None
+                },
                 Err(e) => {
-                    eprintln!("[!] Script execution error: {}", e);
+                    tracing::error!("Script execution error: {}", e);
                     None
                 }
             }

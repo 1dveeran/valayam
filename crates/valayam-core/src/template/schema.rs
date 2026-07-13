@@ -4,7 +4,6 @@ use crate::features::network_scan::parser::NetworkRequestTemplate;
 use crate::features::scripting::parser::ScriptTemplate;
 use crate::features::tls_audit::parser::TlsAuditTemplate;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
 use std::path::Path;
 
 /// Top-level template structure that composes types from all feature slices.
@@ -34,8 +33,19 @@ pub struct TemplateInfo {
 
 impl VulnerabilityTemplate {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, crate::core::error::ScannerError> {
-        let file = File::open(path)?;
-        let template: VulnerabilityTemplate = serde_yaml::from_reader(file)?;
+        let content = std::fs::read_to_string(path)?;
+        Self::load_from_str(&content)
+    }
+
+    pub fn load_from_str(content: &str) -> Result<Self, crate::core::error::ScannerError> {
+        // Detect and convert OpenAPI/Swagger JSON specifications dynamically
+        if content.trim().starts_with('{') && (content.contains("\"openapi\"") || content.contains("\"swagger\"")) {
+            if let Ok(generated) = crate::features::crawler::parsers::openapi_generator::generate_template_from_openapi(content) {
+                return Ok(generated);
+            }
+        }
+
+        let template: VulnerabilityTemplate = serde_yaml::from_str(content)?;
         Ok(template)
     }
 }

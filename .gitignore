@@ -5,6 +5,8 @@
 .idea/
 .DS_Store
 /implementation_plan.md
+/scan_logs.json
+/results.json
 
 # Python
 venv/

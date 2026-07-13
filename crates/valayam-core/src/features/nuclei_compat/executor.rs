@@ -29,6 +29,7 @@ impl NucleiExecutor {
                 // Nuclei Variable Substitution
                 let resolved_path = raw_path.replace("{{BaseURL}}", target_url);
 
+                tracing::debug!(target = %target_url, method = %req_rule.method, path = %resolved_path, "Sending Nuclei HTTP request");
                 let Ok(resp) = self
                     .client
                     .send_request(
@@ -40,13 +41,21 @@ impl NucleiExecutor {
                     )
                     .await
                 else {
+                    tracing::debug!("Nuclei request failed or timed out to {}", target_url);
                     continue;
                 };
 
                 let status = resp.status().as_u16();
                 let Ok(body_bytes) = resp.bytes().await else {
+                    tracing::debug!("Failed to read Nuclei response body from {}", target_url);
                     continue;
                 };
+
+                tracing::trace!(
+                    status = %status,
+                    body_preview = %String::from_utf8_lossy(&body_bytes).chars().take(200).collect::<String>(),
+                    "Received Nuclei HTTP response"
+                );
 
                 let match_successful = if req_rule.matchers.is_empty() {
                     false
@@ -80,6 +89,7 @@ impl NucleiExecutor {
                 };
 
                 if match_successful {
+                    tracing::debug!(target = %target_url, template = %template.id, "Vulnerability Nuclei match found");
                     found_vulnerability = true;
                     finding_payload = format!("Nuclei HTTP Match on: {}", resolved_path);
                     break;

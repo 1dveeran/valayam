@@ -17,12 +17,16 @@ pub async fn execute(
 ) -> Option<ScanResult> {
     for rule in dns_rules {
         let domain = resolve_variables(&rule.domain, variables);
+        
+        tracing::debug!(target = %domain, query_type = %rule.query_type, "Starting DNS resolution");
         let records = dns::resolve(&domain, &rule.query_type).await;
 
         if records.is_empty() {
+            tracing::trace!("No DNS records found for {}", domain);
             continue;
         }
 
+        tracing::trace!(target = %domain, records_count = %records.len(), "DNS records resolved successfully");
         // Join all records into a single string for matching
         let records_text = records.join("\n");
 
@@ -46,6 +50,7 @@ pub async fn execute(
                         continue;
                     };
                     if re.is_match(&records_text) {
+                        tracing::debug!(target = %domain, pattern = %pattern, "Vulnerability DNS match found");
                         return Some(ScanResult {
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),

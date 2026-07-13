@@ -12,8 +12,10 @@ use std::collections::HashMap;
 /// Supports special matcher types:
 /// - `type: "expired"` — matches if the certificate is past its expiry date
 /// - `type: "self_signed"` — matches if the certificate is self-signed
-/// - `type: "regex"` with `part: "issuer"` — regex match against issuer string
-/// - `type: "regex"` with `part: "subject"` — regex match against subject string
+/// - `type: "weak_cipher"` — matches if the negotiated cipher is weak (e.g., CBC)
+/// - `type: "tls_version"` — regex match against the negotiated TLS version
+/// - `type: "legacy_tls"` — active probe to see if server supports SSLv3, TLSv1.0, TLSv1.1
+/// - `type: "regex"` — regex match against issuer, subject, serial, version, or cipher
 pub async fn execute(
     tls_rules: &[TlsAuditTemplate],
     template_id: &str,
@@ -23,52 +25,94 @@ pub async fn execute(
     for rule in tls_rules {
         let host = resolve_variables(&rule.host, variables);
 
-        let Some(cert_info) = tls::inspect_certificate(&host, rule.port).await else {
-            continue; // Could not connect or extract cert
-        };
+        tracing::debug!(target = %host, port = %rule.port, "Starting TLS certificate inspection");
+        
+        let mut cert_info = None;
+        let mut legacy_versions = Vec::new();
+
+        let needs_legacy_probe = rule.matchers.iter().any(|m| m.r#type == "legacy_tls");
+        if needs_legacy_probe {
+            legacy_versions = tls::probe_legacy_tls(&host, rule.port).await;
+        }
+
+        let needs_cert_inspection = rule.matchers.is_empty() || rule.matchers.iter().any(|m| m.r#type != "legacy_tls");
+        if needs_cert_inspection {
+            cert_info = tls::inspect_certificate(&host, rule.port).await;
+        }
+
+        if cert_info.is_none() && legacy_versions.is_empty() {
+            tracing::trace!(target = %host, port = %rule.port, "Failed to connect or extract TLS information");
+            continue;
+        }
 
         if rule.matchers.is_empty() {
-            // No matchers: report cert info as finding
-            return Some(ScanResult {
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: template_info.severity.clone(),
-                target: format!("{}:{}", host, rule.port),
-                payload: format!(
-                    "Issuer: {}, Subject: {}, Expires: {}, Self-signed: {}",
-                    cert_info.issuer, cert_info.subject, cert_info.not_after, cert_info.is_self_signed
-                ),
-            });
+            if let Some(c) = cert_info {
+                return Some(ScanResult {
+                    timestamp: Utc::now(),
+                    template_id: template_id.to_string(),
+                    template_name: template_info.name.clone(),
+                    template_severity: template_info.severity.clone(),
+                    target: format!("{}:{}", host, rule.port),
+                    payload: format!(
+                        "Issuer: {}, Subject: {}, Expires: {}, Self-signed: {}",
+                        c.issuer, c.subject, c.not_after, c.is_self_signed
+                    ),
+                });
+            }
         }
 
         for matcher in &rule.matchers {
             let matched = match matcher.r#type.as_str() {
-                "expired" => cert_info.is_expired,
-                "self_signed" => cert_info.is_self_signed,
-                "regex" => {
-                    let search_text = match matcher.part.as_str() {
-                        "issuer" => &cert_info.issuer,
-                        "subject" => &cert_info.subject,
-                        "serial" => &cert_info.serial,
-                        _ => &cert_info.issuer, // default to issuer
-                    };
-                    matcher.regex.iter().any(|pattern| {
-                        Regex::new(pattern)
-                            .map(|re| re.is_match(search_text))
-                            .unwrap_or(false)
+                "legacy_tls" => !legacy_versions.is_empty(),
+                "expired" => cert_info.as_ref().map_or(false, |c| c.is_expired),
+                "self_signed" => cert_info.as_ref().map_or(false, |c| c.is_self_signed),
+                "weak_cipher" => {
+                    cert_info.as_ref().and_then(|c| c.cipher_suite.as_ref()).map_or(false, |cipher| {
+                        cipher.contains("CBC") || cipher.contains("RC4") || cipher.contains("3DES") || cipher.contains("DES")
                     })
+                },
+                "tls_version" => {
+                    cert_info.as_ref().and_then(|c| c.tls_version.as_ref()).map_or(false, |v| {
+                        matcher.regex.iter().any(|pattern| {
+                            Regex::new(pattern).map(|re| re.is_match(v)).unwrap_or(false)
+                        })
+                    })
+                },
+                "regex" => {
+                    if let Some(c) = cert_info.as_ref() {
+                        let search_text = match matcher.part.as_str() {
+                            "issuer" => &c.issuer,
+                            "subject" => &c.subject,
+                            "serial" => &c.serial,
+                            "version" => c.tls_version.as_deref().unwrap_or(""),
+                            "cipher" => c.cipher_suite.as_deref().unwrap_or(""),
+                            _ => &c.issuer,
+                        };
+                        matcher.regex.iter().any(|pattern| {
+                            Regex::new(pattern)
+                                .map(|re| re.is_match(search_text))
+                                .unwrap_or(false)
+                        })
+                    } else {
+                        false
+                    }
                 }
                 _ => false,
             };
 
             if matched {
+                tracing::debug!(target = %host, matcher_type = %matcher.r#type, "Vulnerability TLS match found");
                 let payload = match matcher.r#type.as_str() {
-                    "expired" => format!("Certificate expired: {}", cert_info.not_after),
+                    "expired" => format!("Certificate expired: {}", cert_info.as_ref().unwrap().not_after),
                     "self_signed" => "Self-signed certificate detected".to_string(),
+                    "weak_cipher" => format!("Weak cipher negotiated: {}", cert_info.as_ref().unwrap().cipher_suite.as_deref().unwrap_or("Unknown")),
+                    "tls_version" => format!("TLS version matched: {}", cert_info.as_ref().unwrap().tls_version.as_deref().unwrap_or("Unknown")),
+                    "legacy_tls" => format!("Legacy protocols supported: {:?}", legacy_versions),
                     _ => format!(
                         "TLS match on {}: issuer={}, expires={}",
-                        host, cert_info.issuer, cert_info.not_after
+                        host, 
+                        cert_info.as_ref().map(|c| c.issuer.as_str()).unwrap_or(""), 
+                        cert_info.as_ref().map(|c| c.not_after.as_str()).unwrap_or("")
                     ),
                 };
 

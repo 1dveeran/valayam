@@ -74,11 +74,67 @@ struct Args {
 
     #[arg(long, help = "Path to proxy list file (one proxy per line)")]
     proxy_file: Option<String>,
+
+    #[arg(short = 'l', long, default_value = "info", help = "Log level (trace, debug, info, warn, error)")]
+    log_level: String,
+
+    #[arg(short = 'f', long, help = "Path to output verbose logs to a JSON file")]
+    log_file: Option<String>,
+
+    #[arg(long, help = "URI of a Valayam gRPC worker node (e.g. http://127.0.0.1:50051)")]
+    worker: Option<String>,
+
+    #[arg(long, help = "Crawl the target URL first to discover pages")]
+    crawl: bool,
+
+    #[arg(long, default_value = "3", help = "Maximum depth for crawler")]
+    crawl_depth: usize,
+
+    #[arg(long, help = "Custom headers for crawler requests (format: Key:Value,Key2:Value2)")]
+    crawl_headers: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    
+    // Parse log level from string
+    let level = args.log_level.parse::<tracing::Level>().unwrap_or(tracing::Level::INFO);
+    let level_filter = tracing_subscriber::filter::LevelFilter::from_level(level);
+
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+
+    // Console layer (text format)
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_filter(level_filter);
+
+    // Optional File layer (JSON format)
+    if let Some(log_path) = &args.log_file {
+        let file = std::fs::File::create(log_path).expect("Failed to create log file");
+        let (non_blocking, _guard) = tracing_appender::non_blocking(file);
+        
+        let file_layer = tracing_subscriber::fmt::layer()
+            .json()
+            .with_writer(non_blocking)
+            .with_filter(level_filter);
+
+        tracing_subscriber::registry()
+            .with(console_layer)
+            .with(file_layer)
+            .init();
+            
+        // We need to keep _guard alive in a real app, but for this CLI we can let it leak 
+        // or just accept it'll flush on drop. Since we use `tokio::main`, standard `std::mem::forget` 
+        // or leaking is okay, but `tracing_appender::non_blocking` docs recommend keeping the guard.
+        // For simplicity, we'll leak it so it stays alive for the duration of the program.
+        std::mem::forget(_guard);
+    } else {
+        tracing_subscriber::registry()
+            .with(console_layer)
+            .init();
+    }
+
     // Extract template path, defaulting to a generated native demo template if neither flag is provided
     let default_template = "./templates_repo/demo-template.yaml".to_string();
     
@@ -159,6 +215,22 @@ network:
         Arc::new(RateLimiter::new(rps))
     });
 
+    // 1.5 Initialize gRPC Client if requested
+    let mut grpc_client = None;
+    if let Some(ref worker_url) = args.worker {
+        use valayam_core::rpc::scanner_client::ScannerClient;
+        match ScannerClient::connect(worker_url.clone()).await {
+            Ok(client) => {
+                println!("[+] Connected to Valayam worker node at {}", worker_url);
+                grpc_client = Some(client);
+            }
+            Err(e) => {
+                eprintln!("[!] Failed to connect to Valayam worker node: {}", e);
+                return Ok(());
+            }
+        }
+    }
+
     // 2. Discover Templates
     let mut template_files = Vec::new();
     let p = Path::new(template_path);
@@ -196,78 +268,166 @@ network:
     spinner.set_message(format!("Scanning {}...", args.target));
 
     // 3. Dispatch Tasks Concurrently
-    let mut handles = Vec::new();
-    for file_path in template_files {
-        let client = Arc::clone(&http_client);
-        let exec_nuclei = executor_nuclei.clone();
-        let target = args.target.clone();
-        let rl = rate_limiter.clone();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<valayam_core::core::result::ScanResult>(100);
+    let output_path = args.output.clone();
+    
+    // Spawn dedicated writer task
+    let writer_task = tokio::spawn(async move {
+        let mut findings_count = 0;
+        let mut file_opt = output_path.as_ref().and_then(|path| {
+            fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .ok()
+        });
 
-        handles.push(tokio::spawn(async move {
-            let path_str = file_path.to_string_lossy().to_string();
-            
-            if is_nuclei {
-                let template = match NucleiTemplate::load(&file_path) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        eprintln!("\n[!] Failed to load Nuclei template {}: {}", path_str, e);
-                        return None;
-                    }
-                };
-                exec_nuclei.execute_scan(&target, template).await
-            } else {
-                let template = match VulnerabilityTemplate::load(&file_path) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        eprintln!("\n[!] Failed to load Native template {}: {}", path_str, e);
-                        return None;
-                    }
-                };
-                execute_template(&client, &target, template, rl.as_ref().map(|r| r.as_ref())).await
-            }
-      }));
-    }
-
-    let results = futures::future::join_all(handles).await;
-    spinner.finish_and_clear();
-
-    // 4. Process Results
-    let mut findings_count = 0;
-    for res in results {
-        if let Ok(Some(result)) = res {
+        while let Some(result) = rx.recv().await {
             findings_count += 1;
             println!("\n[🚨 VULNERABILITY DETECTED]");
             println!(" ├─ Target:   {}", result.target);
-            println!(
-                " ├─ Template: {} ({})",
-                result.template_name, result.template_id
-            );
+            println!(" ├─ Template: {} ({})", result.template_name, result.template_id);
             println!(" ├─ Severity: {}", result.template_severity);
             println!(" └─ Payload:  {}", result.payload);
 
-            if let Some(ref output_path) = args.output {
-                if let Ok(mut file) = fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(output_path)
-                {
-                    if let Ok(json_string) = serde_json::to_string(&result) {
-                        let _ = writeln!(file, "{}", json_string);
-                    }
+            if let Some(file) = &mut file_opt {
+                if let Ok(json_string) = serde_json::to_string(&result) {
+                    let _ = writeln!(file, "{}", json_string);
                 }
+            }
+        }
+        findings_count
+    });
+
+    // 2.5 Run Web Crawler if requested to build target URLs list
+    let mut targets = vec![args.target.clone()];
+    if args.crawl {
+        println!("[*] Starting Web Crawler discovery on {}...", args.target);
+        
+        let crawl_hdrs = args.crawl_headers.as_ref().map(|s| {
+            let mut map = std::collections::HashMap::new();
+            for kv in s.split(',') {
+                let mut parts = kv.splitn(2, ':');
+                if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+                    map.insert(k.trim().to_string(), v.trim().to_string());
+                }
+            }
+            map
+        });
+
+        use valayam_core::features::crawler::Crawler;
+        let crawler = Crawler::new(
+            Arc::clone(&http_client),
+            &args.target,
+            args.crawl_depth,
+            rate_limiter.clone(),
+            crawl_hdrs,
+        );
+        match crawler {
+            Ok(c) => {
+                let discovered = c.run().await;
+                println!("[+] Crawler discovered {} page(s) on target domain.", discovered.len());
+                if !discovered.is_empty() {
+                    targets = discovered.into_iter().collect();
+                }
+            }
+            Err(e) => {
+                eprintln!("[!] Failed to initialize crawler: {}", e);
             }
         }
     }
 
+    let mut handles = Vec::new();
+    for target in targets {
+        for file_path in &template_files {
+            let client = Arc::clone(&http_client);
+            let exec_nuclei = executor_nuclei.clone();
+            let target_url = target.clone();
+            let rl = rate_limiter.clone();
+            let tx = tx.clone();
+            let grpc_client_clone = grpc_client.clone();
+            let file_path_clone = file_path.clone();
+
+            handles.push(tokio::spawn(async move {
+                let path_str = file_path_clone.to_string_lossy().to_string();
+                
+                let result = if is_nuclei {
+                    let template = match NucleiTemplate::load(&file_path_clone) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            eprintln!("\n[!] Failed to load Nuclei template {}: {}", path_str, e);
+                            return;
+                        }
+                    };
+                    exec_nuclei.execute_scan(&target_url, template).await
+                } else {
+                    if let Some(mut client) = grpc_client_clone {
+                        // Remote execution via gRPC
+                        let yaml_str = match fs::read_to_string(&file_path_clone) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                eprintln!("\n[!] Failed to read template {}: {}", path_str, e);
+                                return;
+                            }
+                        };
+                        
+                        let req = tonic::Request::new(valayam_core::rpc::ScanRequest {
+                            template_yaml: yaml_str,
+                            target_url: target_url.clone(),
+                        });
+                        
+                        match client.scan(req).await {
+                            Ok(response) => {
+                                let resp = response.into_inner();
+                                for finding_json in resp.findings_json {
+                                    if let Ok(scan_res) = serde_json::from_str::<valayam_core::core::result::ScanResult>(&finding_json) {
+                                        let _ = tx.send(scan_res).await;
+                                    }
+                                }
+                                None
+                            }
+                            Err(e) => {
+                                eprintln!("\n[!] gRPC error for template {}: {}", path_str, e);
+                                None
+                            }
+                        }
+                    } else {
+                        // Local execution
+                        let template = match VulnerabilityTemplate::load(&file_path_clone) {
+                            Ok(t) => t,
+                            Err(e) => {
+                                eprintln!("\n[!] Failed to load Native template {}: {}", path_str, e);
+                                return;
+                            }
+                        };
+                        execute_template(&client, &target_url, template, rl.as_ref().map(|r| r.as_ref())).await
+                    }
+                };
+
+                if let Some(finding) = result {
+                    let _ = tx.send(finding).await;
+                }
+            }));
+        }
+    }
+
+    // Drop the original sender so rx closes when all workers finish
+    drop(tx);
+
+    // Wait for all workers to finish
+    futures::future::join_all(handles).await;
+    
+    // Wait for the writer task to finish processing the last messages
+    let findings_count = writer_task.await.unwrap_or(0);
+    
+    spinner.finish_and_clear();
+
     if findings_count == 0 {
         println!("\n[+] Scan completed. No vulnerabilities detected.");
     } else {
-        println!(
-            "\n[+] Scan completed. {} vulnerabilities detected.",
-            findings_count
-        );
+        println!("\n[+] Scan completed. {} vulnerabilities detected.", findings_count);
         if args.output.is_some() {
-            println!("    Results written to output file.");
+            println!("    Results appended to output file.");
         }
     }
 

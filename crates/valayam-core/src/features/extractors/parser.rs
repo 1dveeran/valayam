@@ -23,6 +23,18 @@ pub struct Extractor {
     #[serde(default)]
     pub regex: Option<String>,
 
+    /// JSON Pointer path to extract from (e.g. "/data/token").
+    #[serde(default)]
+    pub json: Option<String>,
+
+    /// CSS selector to extract from (e.g., "input[name=csrf]").
+    #[serde(default)]
+    pub css: Option<String>,
+
+    /// HTML attribute to extract (e.g. "value"). If None, extracts inner text.
+    #[serde(default)]
+    pub attribute: Option<String>,
+
     /// Capture group index to extract (default: 1 = first group).
     #[serde(default = "default_group")]
     pub group: usize,

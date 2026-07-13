@@ -23,16 +23,18 @@ valayam/
 │   │   └── src/
 │   │       └── main.rs              # CLI parsing (clap), orchestrator invocation, JSON output
 │   │
-│   └── valayam-worker/              # Distributed worker node (Placeholder/Future gRPC)
+│   └── valayam-worker/              # Distributed worker node (gRPC & TaskBroker queue mode)
 │       ├── Cargo.toml
 │       └── src/
-│           └── main.rs
+│           ├── main.rs
+│           └── broker/              # Redis, RabbitMQ, Kafka drivers
 │
 ├── services/
 │   └── ai/                          # Python AI Orchestration Layer
 │       ├── requirements.txt
-│       ├── valayam_client.py        # Python wrapper around valayam-cli
-│       └── agent.py                 # LLM agent to dynamically generate and run templates
+│       ├── valayam_client.py        # Python gRPC client & subprocess fallback
+│       ├── agent.py                 # Autonomous multi-step recon loop agent
+│       └── valayam_pb2.py           # Generated gRPC stubs
 ```
 
 ## Dependency Flow
@@ -54,6 +56,7 @@ graph BT
             TLS["tls_audit/"]
             Script["scripting/"]
             Nuclei["nuclei_compat/"]
+            Crawler["crawler/"]
         end
 
         Stealth["stealth/<br/>proxies, UA pool"]
@@ -61,8 +64,8 @@ graph BT
     end
 
     CLI["valayam-cli<br/>(CLI + progress output)"]
-    Worker["valayam-worker<br/>(Future Distributed Node)"]
-    AIAgent["services/ai/<br/>(Python AI Agent)"]
+    Worker["valayam-worker<br/>(gRPC Server / Queue Worker)"]
+    AIAgent["services/ai/<br/>(Autonomous AI Agent)"]
 
     Network --> CoreData
     Stealth --> Network
@@ -81,6 +84,8 @@ graph BT
     Script --> Network
     Nuclei --> CoreData
     Nuclei --> Network
+    Crawler --> CoreData
+    Crawler --> Network
 
     Template --> HTTP
     Template --> Extract
@@ -90,15 +95,18 @@ graph BT
     Template --> TLS
     Template --> Script
     Template --> Nuclei
+    Template --> Crawler
 
     CLI --> Template
     CLI --> Stealth
     CLI --> CoreData
+    CLI --> Worker
 
     Worker --> Template
     Worker --> CoreData
 
-    AIAgent -.->|Subprocess / CLI| CLI
+    AIAgent -.->|gRPC| Worker
+    AIAgent -.->|Subprocess fallback| CLI
 ```
 
 ## Design Principles
@@ -143,9 +151,9 @@ This is injected at the `StealthHttpClient` level, so all slices benefit without
 
 | Component | Responsibility |
 |---|---|
-| `valayam-cli` | CLI argument parsing (clap), progress display, JSON output |
-| `valayam-worker`| Daemonized distributed scanning node (Future phase) |
-| `services/ai/`| Python AI Agent for dynamic template generation and scanning |
+| `valayam-cli` | CLI argument parsing (clap), progress display, JSON output, crawl options |
+| `valayam-worker`| Daemonized distributed scanning node (gRPC server or Redis/RabbitMQ/Kafka task queue worker) |
+| `services/ai/`| Python AI Agent for autonomous multi-step recon loop scanning |
 | `core/error.rs` | Unified error enum for all slices |
 | `core/result.rs` | `ScanResult` struct serialized to JSON |
 | `core/variables.rs` | `{{var}}` substitution + `{{helper()}}` evaluation |
@@ -156,13 +164,14 @@ This is injected at the `StealthHttpClient` level, so all slices benefit without
 | `network/dns.rs` | DNS query resolution (A, AAAA, CNAME, TXT, MX) |
 | `network/tls.rs` | TLS handshake + certificate extraction |
 | `features/http_scan/` | HTTP request execution, regex/status matching |
-| `features/extractors/` | Regex capture → variable extraction from responses |
+| `features/extractors/` | Dynamic value extraction: regex and JSON pointer support |
 | `features/helpers/` | DSL functions: base64, md5, sha256, hex, url_encode |
 | `features/network_scan/` | Port scanning with banner regex matching |
 | `features/dns_audit/` | DNS record querying + response matching |
 | `features/tls_audit/` | Certificate expiry, cipher, issuer auditing |
 | `features/scripting/` | Sandboxed Rhai engine with HTTP/TCP/crypto builtins |
 | `features/nuclei_compat/` | Isolated Nuclei template parser + executor |
+| `features/crawler/` | Enterprise crawler supporting HTML, JS/SPA routes, WASM, WebSockets, OpenAPI, and PostgREST |
 | `stealth/` | JA3 spoofing, proxy rotation, UA randomization |
 | `template/schema.rs` | Top-level `VulnerabilityTemplate` YAML schema |
 | `template/loader.rs` | Orchestrates slice execution in sequence |

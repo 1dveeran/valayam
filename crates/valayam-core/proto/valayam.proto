@@ -1,0 +1,16 @@
+syntax = "proto3";
+package valayam;
+
+service Scanner {
+    rpc Scan (ScanRequest) returns (ScanResponse);
+}
+
+message ScanRequest {
+    string template_yaml = 1;
+    string target_url = 2;
+}
+
+message ScanResponse {
+    // JSON-serialized ScanResult
+    repeated string findings_json = 1; 
+}

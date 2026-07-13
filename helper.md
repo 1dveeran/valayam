@@ -19,6 +19,10 @@ cargo run --bin valayam-cli -- --help
 | `--rate-limit` | `-r` | Max requests per second (default: unlimited) |
 | `--proxy-file` | | Path to proxy list file (one per line) |
 | `--random-agent` | | Randomize User-Agent per request |
+| `--worker` | | Target worker node URI (e.g. `http://localhost:50051`) |
+| `--crawl` | | Crawl the target URL first to discover endpoints |
+| `--crawl-depth` | | Maximum crawling depth (default: `3`) |
+| `--crawl-headers` | | Custom headers for crawler requests (format: Key:Value,Key2:Value2) |
 
 ## Running Scans
 
@@ -39,6 +43,15 @@ cargo run --bin valayam-cli -- -t ./templates_repo/ -o results.json
 
 # Rate-limited scan (max 5 requests/second)
 cargo run --bin valayam-cli -- -t ./templates_repo/ --rate-limit 5
+
+# Crawler-enabled Scan (spider target, then scan all discovered URLs)
+cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/ --crawl --crawl-depth 2
+
+# Authenticated Crawler-enabled Scan (scrapes with session cookie)
+cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/ --crawl --crawl-headers "Cookie:session=token,X-Custom:val"
+
+# OpenAPI/Swagger Direct Template Execution (converts Swagger file to scan requests dynamically)
+cargo run --bin valayam-cli -- -u https://api.example.com -t ./templates_repo/swagger.json
 ```
 
 ---
@@ -121,38 +134,53 @@ cargo run --bin valayam-cli -- -t auth-chain.yaml -u https://vulnerable-app.com
 
 ---
 
-### Extractors — CSRF Token Extraction
+### Extractors — JSON Pointer Extraction
 
-Extract a CSRF token from a form page and use it in a POST request.
+Extract a field from a structured JSON API response using a JSON Pointer path (starts with `/`):
 
 ```yaml
-id: csrf-token-chain
+id: json-pointer-example
 info:
-  name: "CSRF Token Bypass Check"
+  name: "JSON API Token Extraction"
   severity: "Medium"
 requests:
-  - method: "GET"
-    path: "/form"
-    matchers:
-      - type: "status"
-        part: "status"
-        status: [200]
-    extractors:
-      - type: "regex"
-        name: "csrf"
-        part: "body"
-        regex: 'name="csrf_token"\s+value="([^"]+)"'
-        group: 1
-
   - method: "POST"
-    path: "/submit"
-    body: "csrf_token={{csrf}}&action=delete_account"
+    path: "/api/login"
+    body: '{"username": "admin"}'
+    extractors:
+      - type: "json"
+        name: "api_token"
+        json: "/auth/token"
+  
+  - method: "GET"
+    path: "/api/dashboard"
     headers:
-      Content-Type: "application/x-www-form-urlencoded"
-    matchers:
-      - type: "status"
-        part: "status"
-        status: [200]
+      Authorization: "Bearer {{api_token}}"
+```
+
+---
+
+### Extractors — CSS Selector HTML Extraction
+
+Extract attributes or inner text from HTML elements natively using CSS selectors:
+
+```yaml
+id: css-selector-example
+info:
+  name: "CSS Selector CSRF Check"
+  severity: "Info"
+requests:
+  - method: "GET"
+    path: "/register"
+    extractors:
+      - type: "css"
+        name: "csrf_val"
+        css: "input[name=csrf_token]"
+        attribute: "value"
+ 
+  - method: "POST"
+    path: "/register"
+    body: "username=test&csrf_token={{csrf_val}}"
 ```
 
 ---
@@ -605,19 +633,47 @@ cargo run --bin valayam-cli -- -t ./templates_repo/ -u https://target.com \
   -o results.json
 ```
 
+## Distributed Architecture
+ 
+### 1. gRPC Mode
+ 
+You can run a remote worker node serving requests via gRPC:
+ 
+```bash
+# 1. Start the worker node (listens on 50051)
+cargo run --bin valayam-worker -- --port 50051
+ 
+# 2. Delegate scans from the CLI
+cargo run --bin valayam-cli -- -u https://httpbin.org -t ./templates_repo/ --worker http://127.0.0.1:50051
+```
+ 
+### 2. Task Queue Mode (Redis & RabbitMQ)
+ 
+Run workers in asynchronous queue mode pulling scans from message brokers:
+ 
+```bash
+# Redis Broker
+cargo run --bin valayam-worker -- --broker redis://127.0.0.1:6379
+ 
+# RabbitMQ Broker
+cargo run --bin valayam-worker -- --broker amqp://localhost:5672
+```
+ 
+---
+ 
 ## AI Orchestration
-
-Valayam includes a Python-based AI orchestration layer.
-
+ 
+Valayam includes a Python-based autonomous AI orchestration layer that supports gRPC client execution and multi-step recon loops.
+ 
 ```bash
 cd services/ai
 python -m venv venv
 source venv/bin/activate  # or `.\venv\Scripts\Activate.ps1` on Windows
 pip install -r requirements.txt
-
+ 
 # Set OpenAI key
 export OPENAI_API_KEY="sk-..."
-
-# Run a dynamic AI-generated scan
-python agent.py -u https://example.com -i "Check for exposed .git directories and sensitive config files"
+ 
+# Run in gRPC Mode (delegates executions to remote worker over gRPC)
+python agent.py -u https://example.com -i "Perform a full port scan and verify web applications" --worker localhost:50051
 ```
