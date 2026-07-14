@@ -2,6 +2,9 @@ id: http-only-example
 info:
   name: "HTTP Only Example"
   severity: "Info"
+  compliance:
+    owasp: "A05:2021"
+    cwe: "CWE-16"
 requests:
   - method: "GET"
     path: "/"

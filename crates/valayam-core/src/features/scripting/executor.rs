@@ -64,7 +64,8 @@ pub async fn execute(
                         template_name,
                         template_severity,
                         target: target_owned,
-                        payload: "[script finding]".to_string(),
+                        payload: "Rhai script execution matched".to_string(),
+                        compliance: Default::default(),
                     })
                 },
                 Ok(false) => {

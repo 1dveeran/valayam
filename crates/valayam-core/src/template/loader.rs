@@ -126,5 +126,463 @@ pub async fn execute_template(
         }
     }
 
+    // Phase 6: Cloud Probing
+    if !template.cloud.is_empty() {
+        for cloud_t in &template.cloud {
+            if let Some(result) = crate::features::cloud_sec::executor::execute_cloud_probe(
+                client,
+                target_url,
+                cloud_t,
+            )
+            .await
+            {
+                return Some(result);
+            }
+        }
+    }
+
+    // Phase 7: Stateful Logic & Authorization Testing (IDOR)
+    if !template.logic.is_empty() {
+        if let Some(auth) = &template.auth {
+            if let Some(result) = crate::features::auth_logic::executor::execute(
+                client,
+                target_url,
+                &template.logic,
+                auth,
+                &template.id,
+                &template.info,
+                &variables,
+            )
+            .await
+            {
+                return Some(result);
+            }
+        }
+    }
+
+    // Phase 8: Deep Analysis & Evasion
+    if !template.deep_analysis.is_empty() {
+        if let Some(result) = crate::features::deep_analysis::executor::execute(
+            client,
+            target_url,
+            &template.deep_analysis,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 9: IaC & SBOM Audit
+    if !template.iac_audit.is_empty() {
+        if let Some(result) = crate::features::iac_audit::executor::execute(
+            &template.iac_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.sbom_audit.is_empty() {
+        if let Some(result) = crate::features::sbom_audit::executor::execute(
+            &template.sbom_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 10: gRPC & GraphQL Audit
+    if !template.grpc_audit.is_empty() {
+        if let Some(result) = crate::features::grpc_audit::executor::execute(
+            &template.grpc_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.graphql_audit.is_empty() {
+        if let Some(result) = crate::features::graphql_audit::executor::execute(
+            &template.graphql_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 11: Drift Detect & Cred Monitor
+    if !template.drift_detect.is_empty() {
+        if let Some(result) = crate::features::drift_detect::executor::execute(
+            &template.drift_detect,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.cred_monitor.is_empty() {
+        if let Some(result) = crate::features::cred_monitor::executor::execute(
+            &template.cred_monitor,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 12: Zero-Trust & Identity Security
+    if !template.oauth_audit.is_empty() {
+        if let Some(result) = crate::features::oauth_audit::executor::execute(
+            &template.oauth_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.idp_audit.is_empty() {
+        if let Some(result) = crate::features::idp_audit::executor::execute(
+            &template.idp_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 13: Multi-Cloud Post-Exploitation
+    if !template.aws_escalate.is_empty() {
+        if let Some(result) = crate::features::aws_escalate::executor::execute(
+            &template.aws_escalate,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.azure_gcp_escalate.is_empty() {
+        if let Some(result) = crate::features::azure_gcp_escalate::executor::execute(
+            &template.azure_gcp_escalate,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 14: Browser Exploitation
+    if !template.browser_audit.is_empty() {
+        if let Some(result) = crate::features::browser_audit::executor::execute(
+            &template.browser_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 15: Hardware & IoT Protocol Security
+    if !template.iot_audit.is_empty() {
+        if let Some(result) = crate::features::iot_audit::executor::execute(
+            &template.iot_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.scada_audit.is_empty() {
+        if let Some(result) = crate::features::scada_audit::executor::execute(
+            &template.scada_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 20: Autonomous Red Teaming & Auto-Exploitation
+    if !template.auto_redteam.is_empty() {
+        if let Some(result) = crate::features::auto_redteam::executor::execute(
+            &template.auto_redteam,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.implant_deploy.is_empty() {
+        if let Some(result) = crate::features::implant_deploy::executor::execute(
+            &template.implant_deploy,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 21: Client-Side Security Auditing
+    if !template.client_secret_audit.is_empty() {
+        if let Some(result) = crate::features::client_secret_audit::executor::execute(
+            &template.client_secret_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.dom_redirect_audit.is_empty() {
+        if let Some(result) = crate::features::dom_redirect_audit::executor::execute(
+            &template.dom_redirect_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 22: Content Security Policy & CORS
+    if !template.cors_audit.is_empty() {
+        if let Some(result) = crate::features::cors_audit::executor::execute(
+            &template.cors_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.csp_audit.is_empty() {
+        if let Some(result) = crate::features::csp_audit::executor::execute(
+            &template.csp_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 23: WAF Rule Validation
+    if !template.waf_bypass_verify.is_empty() {
+        if let Some(result) = crate::features::waf_bypass_verify::executor::execute(
+            &template.waf_bypass_verify,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.header_scorecard.is_empty() {
+        if let Some(result) = crate::features::header_scorecard::executor::execute(
+            &template.header_scorecard,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 24: Threat Intelligence & IP Reputation
+    if !template.reputation_audit.is_empty() {
+        if let Some(result) = crate::features::reputation_audit::executor::execute(
+            &template.reputation_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.ct_log_audit.is_empty() {
+        if let Some(result) = crate::features::ct_log_audit::executor::execute(
+            &template.ct_log_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 25: Automated Reporting & Remediation Generation
+    if !template.remediation_gen.is_empty() {
+        if let Some(result) = crate::features::remediation_gen::executor::execute(
+            &template.remediation_gen,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    // Phase 26: Container & Kubernetes Security Auditing
+    if !template.container_audit.is_empty() {
+        if let Some(result) = crate::features::container_audit::executor::execute(
+            &template.container_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.k8s_audit.is_empty() {
+        if let Some(result) = crate::features::k8s_audit::executor::execute(
+            &template.k8s_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 27: Source Code & Secrets Scanning (SAST)
+    if !template.sast_taint.is_empty() {
+        if let Some(result) = crate::features::sast_taint::executor::execute(
+            &template.sast_taint,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.sast_secrets.is_empty() {
+        if let Some(result) = crate::features::sast_secrets::executor::execute(
+            &template.sast_secrets,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 28: Network & Port Security
+    if !template.subdomain_takeover.is_empty() {
+        if let Some(result) = crate::features::subdomain_takeover::executor::execute(
+            &template.subdomain_takeover,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.port_scan.is_empty() {
+        if let Some(result) = crate::features::port_scan::executor::execute(
+            &template.port_scan,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 29: API Schema Compliance & Data Privacy
+    if !template.schema_drift.is_empty() {
+        if let Some(result) = crate::features::schema_drift::executor::execute(
+            &template.schema_drift,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.pii_leak_audit.is_empty() {
+        if let Some(result) = crate::features::pii_leak_audit::executor::execute(
+            &template.pii_leak_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
+    // Phase 30: CI/CD Pipeline & Supply Chain Security
+    if !template.cicd_audit.is_empty() {
+        if let Some(result) = crate::features::cicd_audit::executor::execute(
+            &template.cicd_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.dependency_audit.is_empty() {
+        if let Some(result) = crate::features::dependency_audit::executor::execute(
+            &template.dependency_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+
     None
 }

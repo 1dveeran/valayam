@@ -172,6 +172,7 @@ pub async fn execute(
                 template_severity: template_info.severity.clone(),
                 target: target_url.to_string(),
                 payload: resolved_path,
+                compliance: Default::default(),
             });
         }
     }

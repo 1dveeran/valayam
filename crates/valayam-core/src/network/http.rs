@@ -53,7 +53,7 @@ impl StealthHttpClient {
         })
     }
 
-    fn get_client(&self) -> &Client {
+    pub fn get_client(&self) -> &Client {
         let idx = self.client_idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % self.clients.len();
         &self.clients[idx]
     }

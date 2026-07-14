@@ -54,6 +54,7 @@ pub async fn execute(
                     template_severity: template_info.severity.clone(),
                     target: host_to_scan,
                     payload,
+                    compliance: Default::default(),
                 });
             }
         } else {
@@ -85,6 +86,7 @@ pub async fn execute(
                                         pattern,
                                         banner_text.trim()
                                     ),
+                                    compliance: Default::default(),
                                 });
                             }
                         }

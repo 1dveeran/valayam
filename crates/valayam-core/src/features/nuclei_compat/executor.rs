@@ -109,6 +109,7 @@ impl NucleiExecutor {
                 template_severity: template.info.severity,
                 payload: finding_payload,
                 timestamp: chrono::Utc::now(),
+                compliance: Default::default(),
             })
         } else {
             None

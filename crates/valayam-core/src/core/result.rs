@@ -12,4 +12,6 @@ pub struct ScanResult {
     pub template_severity: String,
     pub target: String,
     pub payload: String,
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub compliance: std::collections::HashMap<String, String>,
 }

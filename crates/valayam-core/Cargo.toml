@@ -31,7 +31,14 @@ tracing = "0.1.44"
 tonic = { workspace = true }
 prost = { workspace = true }
 scraper = { workspace = true }
-
+wasmparser = { workspace = true }
+sourcemap = { workspace = true }
+zip = { workspace = true }
+rusqlite = { workspace = true }
+hcl-rs = { workspace = true }
+graphql-parser = { workspace = true }
+jsonwebtoken = { workspace = true }
+rumqttc = { workspace = true }
 [build-dependencies]
 tonic-build = { workspace = true }
 

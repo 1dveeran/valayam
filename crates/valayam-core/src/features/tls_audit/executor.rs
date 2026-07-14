@@ -65,6 +65,7 @@ pub async fn execute(
                             template_severity: template_info.severity.clone(),
                             target: format!("{}:{}", host, rule.port),
                             payload: format!("Server negotiated protocol {} which is lower than required minimum version {}", negotiated, min_v),
+                            compliance: Default::default(),
                         });
                     }
                 }
@@ -83,6 +84,7 @@ pub async fn execute(
                         "Issuer: {}, Subject: {}, Expires: {}, Self-signed: {}",
                         c.issuer, c.subject, c.not_after, c.is_self_signed
                     ),
+                    compliance: Default::default(),
                 });
             }
         }
@@ -149,6 +151,7 @@ pub async fn execute(
                     template_severity: template_info.severity.clone(),
                     target: format!("{}:{}", host, rule.port),
                     payload,
+                    compliance: Default::default(),
                 });
             }
         }

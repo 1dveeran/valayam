@@ -172,6 +172,11 @@ This is injected at the `StealthHttpClient` level, so all slices benefit without
 | `features/scripting/` | Sandboxed Rhai engine with HTTP/TCP/crypto builtins |
 | `features/nuclei_compat/` | Isolated Nuclei template parser + executor |
 | `features/crawler/` | Enterprise crawler supporting HTML, JS/SPA routes, WASM, WebSockets, OpenAPI, and PostgREST |
+| `features/fuzzer/` | Active query parameter mutation and anomaly detection engine |
+| `features/waf_detect/` | Signature-based WAF identification and active trigger probing |
+| `features/cloud_sec/` | Phase 10: Cloud metadata exploitation and container discovery |
+| `features/auth_logic/` | Phase 11: Stateful transaction replay and automated IDOR detection |
+| `features/deep_analysis/` | Phase 12: Local LLM payload generation and WASM decompiler |
 | `stealth/` | JA3 spoofing, proxy rotation, UA randomization |
-| `template/schema.rs` | Top-level `VulnerabilityTemplate` YAML schema |
+| `template/schema.rs` | Top-level `VulnerabilityTemplate` YAML schema including `compliance` mapping |
 | `template/loader.rs` | Orchestrates slice execution in sequence |

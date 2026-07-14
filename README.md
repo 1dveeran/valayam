@@ -44,6 +44,12 @@ cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo --work
 ### JSON Extractor Example
 You can parse structured JSON responses by using `type: json` with a JSON Pointer (starting with `/`):
 ```yaml
+id: json-api-extract
+info:
+  name: API Extraction
+  severity: High
+  compliance:
+    owasp: "A01:2021"
 requests:
   - method: "GET"
     path: "/api/user"
@@ -52,3 +58,12 @@ requests:
         name: "user_id"
         json: "/data/id"
 ```
+
+## Roadmap Phases
+
+*   **Phase 1-4:** Core HTTP, Extractors, Rate Limiting, TCP/UDP/DNS scanning.
+*   **Phase 5:** Distributed gRPC Architecture and Enterprise Crawler.
+*   **Phase 6:** Parameter Fuzzing, TLS auditing, WebSocket built-ins, and WAF Detection.
+*   **Phase 10:** Cloud Metadata SSRF Exploitation & Container API Probing.
+*   **Phase 11:** Stateful Logic Testing & Automated IDOR Detection.
+*   **Phase 12:** Deep WASM Taint Analysis & Local LLM payload generation.

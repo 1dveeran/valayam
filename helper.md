@@ -67,6 +67,9 @@ id: http-only-example
 info:
   name: "HTTP Only Example"
   severity: "Info"
+  compliance:
+    owasp: "A05:2021-Security Misconfiguration"
+    cwe: "CWE-16"
 requests:
   - method: "GET"
     path: "/"
@@ -93,6 +96,9 @@ info:
   name: "Authenticated API Check"
   severity: "High"
   description: "Logs in, extracts a bearer token, and queries a protected endpoint."
+  compliance:
+    owasp: "A07:2021-Identification and Authentication Failures"
+    pci_dss: "8.3.1"
 requests:
   # Step 1: Login and extract the token
   - method: "POST"
@@ -782,4 +788,72 @@ cargo run --bin valayam-cli -- -u https://example.com -t websocket-exploit.yaml
 The WAF detection module (`features/waf_detect/`) can be called programmatically to identify WAF products before running scans. It sends a clean GET request followed by a trigger probe containing XSS/SQLi signatures, then fingerprints the responses via header and body analysis.
 
 Detected WAFs include: **Cloudflare**, **Incapsula/Imperva**, **Akamai**, **Amazon CloudFront**, **Azure Front Door**, **ModSecurity**, **Barracuda**, **Fortinet FortiWeb**, **DDoS-Guard**, **PerimeterX/HUMAN**, and **Citrix NetScaler**.
+
+---
+
+## Future Advanced Workflows (Phases 10, 11, 12)
+
+### Cloud Metadata SSRF Testing (Phase 10)
+Automatically negotiate challenge-response metadata tokens:
+```yaml
+id: aws-imdsv2-bypass
+info:
+  name: "AWS IMDSv2 Bypass"
+cloud:
+  type: "aws-imds"
+  action: "extract_credentials"
+requests:
+  - method: "PUT"
+    path: "/latest/api/token"
+    headers:
+      X-aws-ec2-metadata-token-ttl-seconds: "21600"
+    extractors:
+      - type: regex
+        part: body
+        name: imds_token
+        regex:
+          - "(.*)"
+  - method: "GET"
+    path: "/latest/meta-data/iam/security-credentials/"
+    headers:
+      X-aws-ec2-metadata-token: "{{imds_token}}"
+```
+
+### Automated IDOR Detection (Phase 11)
+Identify Insecure Direct Object References by swapping tokens seamlessly.
+```yaml
+id: auto-idor-check
+info:
+  name: "User Profile IDOR"
+auth:
+  primary: "Bearer {{admin_token}}"
+  secondary: "Bearer {{user_token}}"
+logic:
+  - type: "idor"
+    path: "/api/users/{{admin_id}}/profile"
+    method: "GET"
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        regex: ["admin_secret_data"]
+```
+
+### Deep Analysis & Local AI Payload Generation (Phase 12)
+Generate payloads on the fly via local LLMs.
+```yaml
+id: ai-sqli-evasion
+info:
+  name: "AI WAF Bypass SQLi"
+ai:
+  model: "llama-3-8b-instruct"
+  goal: "Bypass WAF blocking single quotes and UNION"
+fuzz:
+  - part: "query"
+    keys: ["id"]
+    payload_generator: "ai"
+    matchers:
+      - type: status
+        status: [500]
+```
 

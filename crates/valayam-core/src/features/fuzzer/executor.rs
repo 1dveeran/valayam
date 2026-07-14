@@ -73,6 +73,7 @@ pub async fn execute(
                                             template_severity: template_info.severity.clone(),
                                             target: target_url.to_string(),
                                             payload: format!("Fuzz matched status {} on query key '{}' with payload '{}'", status_code, key, payload),
+                                            compliance: Default::default(),
                                         });
                                     }
                                 }
@@ -87,6 +88,7 @@ pub async fn execute(
                                                 template_severity: template_info.severity.clone(),
                                                 target: target_url.to_string(),
                                                 payload: format!("Fuzz matched regex '{}' on query key '{}' with payload '{}'", pattern, key, payload),
+                                                compliance: Default::default(),
                                             });
                                         }
                                     }
@@ -126,6 +128,7 @@ mod tests {
             name: "Fuzz Test".to_string(),
             severity: "High".to_string(),
             description: None,
+            compliance: std::collections::HashMap::new(),
         };
 
         // Mutation check: executing against a target with matching query param triggers requests

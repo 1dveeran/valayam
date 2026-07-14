@@ -135,3 +135,230 @@
 - **Active Trigger Probes**: Sends non-destructive XSS/SQLi payloads to provoke WAF blocking responses, then fingerprints the block page.
 - **Server Header Analysis**: Identifies CDN/WAF products from the `Server` response header.
 
+## Phase 7: Advanced Post-Exploitation & OOB Testing
+
+### 20. Out-of-Band (OOB) Testing (`features/oob/`)
+- **Built-in OOB Server**: Embedded DNS/HTTP server for tracking out-of-band callbacks to detect blind vulnerabilities (e.g., Blind SSRF, Blind SQLi).
+- **Correlation Engine**: Generates unique, short-lived correlation IDs to map incoming OOB interactions back to specific scan templates and targets.
+
+### 21. Exploitation Handlers (`features/shells/`)
+- **Shell Catchers**: Integrated, interactive bind and reverse shell listeners. Spawns async tasks to manage the TCP stream when a successful remote code execution (RCE) payload is triggered.
+
+## Phase 8: Enterprise Integration, Compliance & Reporting
+
+### 22. Reporting Engine (`valayam-cli/src/reporting/`)
+- **HTML & PDF Reports**: Generate standalone, visually appealing reports using a templating engine.
+- **Compliance Mapping**: Define framework alignments directly in your templates via the `compliance` dictionary (e.g. `owasp: "A01:2021", cwe: "CWE-89"`). The engine automatically enriches the `ScanResult` JSON logs with these mappings for SIEM integration and reporting to PCI-DSS, MITRE ATT&CK, and OWASP frameworks.
+
+### 23. CI/CD Native Integrations (`.github/workflows/`)
+- **Pipeline Integration**: Ready-to-use GitHub Actions (and configurations for GitLab CI/Jenkins) for continuous security scanning in staging environments.
+
+### 24. Real-time Notifications (`valayam-cli/src/notifications.rs`)
+- **Webhooks**: Built-in alerting to Slack, Microsoft Teams, and Discord for immediate notification of critical findings.
+
+## Phase 9: Decentralized Scanning & Threat Intelligence
+
+### 25. Peer-to-Peer Worker Network (`valayam-worker/src/broker/p2p.rs`)
+- **Decentralized Execution**: Ad-hoc libp2p mesh network to distribute scan tasks across multiple nodes without requiring a centralized broker, effectively bypassing geo-blocks and IP restrictions.
+
+### 26. Threat Intelligence Ingestion (`features/threat_intel/`)
+- **Automated Feed Parsing**: Automatically downloads and parses standard Threat Intel feeds (e.g., CISA KEV) to dynamically construct scanning templates for emerging threats.
+- **IOC Cross-referencing**: Checks extracted indicators from scans against known malicious databases.
+
+### 27. Anonymity Network Routing (`network/tor.rs`)
+- **Native Tor Support**: Routes traffic seamlessly through Tor/I2P proxy chains to enable scanning of `.onion` hidden services while maintaining high operational security.
+
+## Phase 10: Advanced Cloud & Container Security
+
+### 28. Cloud Metadata Exploitation (`features/cloud_sec/`)
+- **Automated Metadata Discovery**: Probes for AWS IMDSv1/v2, GCP, and Azure metadata endpoints via SSRF vulnerabilities.
+- **Token Harvesting**: Automatically negotiates IMDSv2 challenge-response tokens to extract IAM credentials from vulnerable instances.
+
+### 29. Container Infrastructure Discovery
+- **API Targeting**: Automated probing for exposed Docker sockets (`/var/run/docker.sock` over HTTP), Kubernetes API servers, Kubelet endpoints, and etcd instances.
+- **Serverless Fuzzing**: Specialized payload mutations targeting AWS Lambda, Azure Functions, and Cloudflare Workers event schemas.
+
+## Phase 11: Stateful Logic & Authorization Testing
+
+### 30. Automated IDOR Detection (`features/auth_logic/`)
+- **Cross-Session Replay**: Automatically replays authenticated requests using a secondary, lower-privileged session token to detect Insecure Direct Object References.
+- **Resource Ownership Mapping**: Evaluates if secondary sessions can read/write data belonging to the primary session.
+
+### 31. Stateful Flow Fuzzing
+- **Transaction Mapping**: Records and replays multi-step transactions (e.g., `AddToCart` -> `Checkout` -> `Pay`).
+- **Race Condition Testing**: Floods intermediate transaction states with concurrent requests to identify race conditions and logic bypasses.
+
+### 32. Mass Assignment & Parameter Pollution
+- **Extraneous Parameter Injection**: Automatically injects duplicated keys (`?user_id=1&user_id=2`) and privilege-escalation keys (`{"is_admin": true}`) into JSON bodies and query strings.
+
+## Phase 12: Deep Analysis & AI-Driven Evasion
+
+### 33. Local LLM Payload Generator (`features/deep_analysis/`)
+- **Dynamic Mutation**: Integrates with local, small-parameter models (e.g., via `llama.cpp`) to dynamically mutate SQLi and XSS payloads in real-time.
+- **WAF Learning**: Analyzes WAF block responses to autonomously adjust payloads and bypass filters without external API calls.
+
+### 34. Deep Client-Side Analysis
+- **WASM Decompilation**: Automatically decompiles exposed WebAssembly to run local taint analysis for hidden API endpoints and hardcoded secrets.
+- **Source Map Recovery**: Reconstructs original TypeScript/JavaScript source code from exposed Source Maps for deep DOM XSS analysis.
+
+### 35. Source Code & Artifact Recovery
+- **Backup Scraping**: Automated downloading and parsing of exposed `.git` directories, `.env` files, or backup archives (`backup.zip`) to extract static secrets and configuration parameters.
+
+## Phase 13: Advanced CI/CD & IaC Security
+
+### 36. Infrastructure as Code (IaC) Scanning (`features/iac_audit/`)
+- **Static Analysis**: Parse Terraform (`.tf`), Kubernetes YAML, and `Dockerfile` definitions for security misconfigurations (e.g., privileged containers, missing network policies, exposed secrets).
+- **Misconfiguration Matchers**: Custom rule engine to evaluate IaC structures without needing to deploy the infrastructure.
+
+### 37. SBOM Generation & Correlation (`features/sbom_audit/`)
+- **Dependency Parsing**: Extract dependencies from exposed `package.json`, `Cargo.toml`, `requirements.txt`, or `pom.xml`.
+- **Vulnerability Mapping**: Correlate extracted dependencies with known CVEs (using local or external NVD vulnerability databases) to flag vulnerable third-party components.
+
+## Phase 14: API Security & Advanced Protocol Fuzzing
+
+### 38. gRPC & Protobuf Analysis (`features/grpc_audit/`)
+- **Service Reflection Probing**: Interrogate gRPC endpoints that have Server Reflection enabled to automatically build request schemas.
+- **Protobuf Fuzzing**: Send dynamically mutated protobuf messages to bypass input validation or trigger backend crashes.
+
+### 39. GraphQL Introspection & Mutation Fuzzing (`features/graphql_audit/`)
+- **Schema Dumping**: Exploit exposed GraphQL introspection queries to dump the full API schema (types, queries, mutations).
+- **Automated Query Generation**: Generate and execute complex nested queries to test for Depth-Limiting vulnerabilities and unauthorized data access.
+
+## Phase 15: Continuous Monitoring & Reconnaissance
+
+### 40. Attack Surface Drift Detection (`features/drift_detect/`)
+- **Baseline Comparison**: Store previous scan states (open ports, discovered endpoints, WAF status) and compare them against current scans to alert on infrastructure changes (e.g., newly opened administrative ports).
+- **State Storage**: Native integration with SQLite or Redis for state persistence across recurring scans.
+
+### 41. Exposed Credentials Monitoring (`features/cred_monitor/`)
+- **Leaked Data Correlation**: Check the target's domain and email addresses against known breach databases (like HaveIBeenPwned API) to flag compromised credentials associated with the target organization.
+
+## Phase 16: Zero-Trust & Identity Security
+
+### 42. OAuth/OIDC Misconfiguration Audit (`features/oauth_audit/`)
+- **Flow Exploitation**: Automatically test OAuth authorization code flows for CSRF, open redirects, and implicit flow token leakage.
+- **JWT Manipulation**: Forging and manipulating JWT tokens (Algorithm Confusion, "None" algorithm, weak HMAC cracking) to escalate privileges.
+
+### 43. Identity Provider (IdP) Probing (`features/idp_audit/`)
+- **SAML Analysis**: Intercept and mutate SAML assertions (XML Signature Wrapping attacks).
+- **Directory Discovery**: Active directory enumeration against Azure AD and Okta endpoints.
+
+## Phase 17: Multi-Cloud Post-Exploitation
+
+### 44. AWS IAM Privilege Escalation (`features/aws_escalate/`)
+- **Automated Enumeration**: Use harvested AWS keys to enumerate IAM permissions (via `sts:GetCallerIdentity` and `iam:SimulateCustomPolicy`).
+- **Lateral Movement**: Test for common privilege escalation vectors (e.g., passing roles to EC2, updating Lambda code).
+
+### 45. Azure & GCP Lateral Movement (`features/azure_gcp_escalate/`)
+- **Azure AD Graph Abuse**: Enumerate Azure subscriptions, Service Principals, and exploit excessive directory read permissions.
+- **GCP Service Account Hunting**: Pivot through GCP Service Accounts to access Cloud Storage buckets and Compute instances.
+
+## Phase 18: Browser Exploitation & DOM Taint Tracking
+
+### 46. Headless Browser Orchestration (`features/browser_audit/`)
+- **Playwright/Puppeteer Integration**: Launch embedded headless browsers to navigate complex SPAs and trigger client-side vulnerabilities.
+- **Dynamic DOM XSS**: Automatically inject payloads into input fields and monitor the DOM for execution.
+
+### 47. Advanced Client-Side Taint Tracking
+- **Execution Hooking**: Intercept JS function calls (e.g., `eval`, `document.write`, `innerHTML`) within the headless browser to track data flow from sources (URL parameters) to sinks.
+
+## Phase 19: Hardware & IoT Protocol Security
+
+### 48. MQTT & CoAP Fuzzing (`features/iot_audit/`)
+- **Broker Probing**: Connect to unauthenticated MQTT brokers and subscribe to wildcard topics (`#`) to intercept sensitive telemetry data.
+- **CoAP Payload Fuzzing**: Send malformed Constrained Application Protocol packets to IoT devices to trigger denial of service or remote code execution.
+
+### 49. SCADA/ICS Discovery (`features/scada_audit/`)
+- **Modbus/DNP3 Probing**: Safely query industrial control systems on default ports (e.g., TCP 502) to extract PLC configurations and device metadata without disrupting physical operations.
+
+## Phase 20: Autonomous Red Teaming & Auto-Exploitation
+
+### 50. Goal-Oriented AI Planning (`features/auto_redteam/`)
+- **Attack Graphs**: Construct dynamic attack graphs mapping the target infrastructure.
+- **Autonomous Execution**: The AI agent autonomously chains vulnerabilities (e.g., an SSRF leading to Cloud Metadata exposure leading to AWS Lateral Movement) to achieve a high-level goal defined by the user (e.g., "Extract PII from backend database").
+
+### 51. Persistent Implant Deployment (`features/implant_deploy/`)
+- **Automated Rootkits**: Following successful RCE, automatically compile and deploy memory-safe Rust implants to maintain persistence.
+- **C2 Integration**: Bridge deployed implants back into Valayam's native OOB correlation engine for centralized command and control.
+
+## Phase 21: Client-Side Security Auditing
+
+### 52. Client-Side API Keys & Secret Leakage Auditing (`features/client_secret_audit/`)
+- **Key Harvesting**: Extract hardcoded credentials, API tokens, and AWS secrets from client-side JS bundles.
+- **Leakage Matching**: Regex heuristics tuned to catch specific service credentials (e.g. Firebase, Slack, GCP).
+
+### 53. DOM-based Open Redirect Verification (`features/dom_redirect_audit/`)
+- **Redirect Parsing**: Locate sinks where user inputs (e.g. `location.href`, `window.open`) are assigned directly from URL query parameters.
+
+## Phase 22: Content Security Policy (CSP) & CORS Auditing
+
+### 54. Dynamic CORS Misconfiguration Testing (`features/cors_audit/`)
+- **Origin Reflection**: Query endpoint with randomized Origin headers to detect `Access-Control-Allow-Origin: *` or reflective setups.
+- **Credential Checking**: Validate if authenticated CORS requests are permitted from external origins.
+
+### 55. Content Security Policy Bypass Validation (`features/csp_audit/`)
+- **Directive Analysis**: Audit `Content-Security-Policy` headers to highlight missing `default-src` or unsafe directives like `unsafe-inline`.
+
+## Phase 23: WAF Rule Validation
+
+### 56. Safe WAF Bypass Probes (`features/waf_bypass_verify/`)
+- **Defensive Probing**: Verify WAF resilience by testing non-destructive payload variants (XSS, path traversal) to confirm proper blocking behavior.
+
+### 57. Security Header Scorecard (`features/header_scorecard/`)
+- **Header Auditing**: Grade targets based on HSTS, X-Frame-Options, X-Content-Type-Options, and Referrer-Policy.
+
+## Phase 24: Threat Intelligence & IP Reputation Auditing
+
+### 58. IP Blocklist Validation (`features/reputation_audit/`)
+- **Reputation Auditing**: Check target hostnames and IPs against active threat intelligence databases (e.g. Spamhaus, AlienVault).
+
+### 59. Certificate Transparency Log Parsing (`features/ct_log_audit/`)
+- **CT Log Monitors**: Query public Certificate Transparency records to map target subdomains.
+
+## Phase 25: Automated Reporting & Remediation Generation
+
+### 60. Markdown Remediation Generator (`features/remediation_gen/`)
+- **Fix Suggestions**: Map found CVEs to actionable patch steps, generating markdown vulnerability fix sheets.
+
+### 61. MITRE ATT&CK Matrix Mapping (`features/mitre_mapping/`)
+- **Mapping Findings**: Associate each vulnerability finding with a specific MITRE ATT&CK technique code.
+
+## Phase 26: Container & Kubernetes Security Auditing
+
+### 62. Container Image Configuration Auditing (`features/container_audit/`)
+- **Dockerfile Analysis**: Parse Dockerfiles and image manifests for known anti-patterns (e.g. running as root, missing health checks, exposed sensitive ports).
+
+### 63. Kubernetes RBAC & Misconfiguration Auditing (`features/k8s_audit/`)
+- **Manifest Auditing**: Analyze K8s manifests (YAML) for overly permissive roles, missing network policies, or privileged pods.
+
+## Phase 27: Source Code & Secrets Scanning (SAST)
+
+### 64. Static Code Taint Analysis (`features/sast_taint/`)
+- **Source-to-Sink Tracing**: Run fast static analysis over provided source code directories to find direct insecure sinks (e.g. `system()`, `eval()`).
+
+### 65. Hardcoded Secrets Discovery (`features/sast_secrets/`)
+- **Entropy & Heuristics**: High-entropy regex scanning across entire repositories to find accidentally committed API keys, passwords, and tokens.
+
+## Phase 28: Network & Port Security
+
+### 66. Subdomain Takeover Validation (`features/subdomain_takeover/`)
+- **Dangling CNAMEs**: Verify dangling CNAME DNS records against known cloud provider fingerprints (e.g. GitHub Pages, AWS S3) to prevent hostile domain takeovers.
+
+### 67. Open Port & Service Fingerprinting (`features/port_scan/`)
+- **Safe TCP Probing**: Non-intrusive TCP port scanning to identify dangerously exposed administrative services (e.g. SSH, Telnet, raw Database ports).
+
+## Phase 29: API Schema Compliance & Data Privacy
+
+### 68. OpenAPI/Swagger Drift Detection (`features/schema_drift/`)
+- **Shadow Endpoint Discovery**: Compare active, discovered API endpoints against the provided formal OpenAPI specification to find undocumented shadow APIs.
+
+### 69. PII Data Exposure Auditing (`features/pii_leak_audit/`)
+- **Privacy Scanners**: Monitor HTTP responses for unmasked credit card numbers, SSNs, and other sensitive Personal Identifiable Information markers.
+
+## Phase 30: CI/CD Pipeline & Supply Chain Security
+
+### 70. CI/CD Pipeline Auditing (`features/cicd_audit/`)
+- **Workflow Security**: Parse GitHub Actions and GitLab CI YAML configurations to detect script injection vectors (`${{ github.event.issue.body }}`) or exposed secrets.
+
+### 71. Dependency Chain Verification (`features/dependency_audit/`)
+- **Lockfile Analysis**: Cross-reference dependency lockfiles (e.g., Cargo.lock, package-lock.json) with OSV (Open Source Vulnerabilities) databases to detect vulnerable third-party libraries.

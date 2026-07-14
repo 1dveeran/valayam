@@ -39,6 +39,7 @@ pub async fn execute(
                 template_severity: template_info.severity.clone(),
                 target: domain,
                 payload: format!("{} records: {}", rule.query_type, records_text),
+                compliance: Default::default(),
             });
         }
 
@@ -61,6 +62,7 @@ pub async fn execute(
                                 "DNS {} matched '{}': {}",
                                 rule.query_type, pattern, records_text
                             ),
+                            compliance: Default::default(),
                         });
                     }
                 }

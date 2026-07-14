@@ -46,3 +46,11 @@ async-trait = "0.1"
 redis = { version = "0.25", features = ["tokio-comp"] }
 lapin = "2.3"
 tokio-executor-trait = "2.1"
+wasmparser = "0.201"
+sourcemap = "8.0"
+zip = "0.6"
+rusqlite = { version = "0.31.0", features = ["bundled"] }
+hcl-rs = "0.16.2"
+graphql-parser = "0.4.0"
+jsonwebtoken = "9.3"
+rumqttc = "0.24"

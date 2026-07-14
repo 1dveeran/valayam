@@ -92,6 +92,9 @@ struct Args {
 
     #[arg(long, help = "Custom headers for crawler requests (format: Key:Value,Key2:Value2)")]
     crawl_headers: Option<String>,
+
+    #[arg(long, help = "Detect and fingerprint Web Application Firewalls (WAF) before scanning")]
+    waf_detect: bool,
 }
 
 #[tokio::main]
@@ -208,6 +211,21 @@ network:
 
     let http_client = Arc::new(StealthHttpClient::new(args.random_agent, proxy_rotator)?);
     let executor_nuclei = NucleiExecutor::new(Arc::clone(&http_client));
+
+    if args.waf_detect {
+        println!("[*] Starting WAF Detection on {}...", args.target);
+        let detections = valayam_core::features::waf_detect::detector::detect_waf(&http_client, &args.target).await;
+        if detections.is_empty() {
+            println!("[+] No WAF detected. The target appears to be unshielded.");
+        } else {
+            println!("[!] WAF Detected!");
+            for det in detections {
+                println!(" ├─ Product:  {}", det.product);
+                println!(" └─ Evidence: {}", det.evidence);
+            }
+        }
+        println!();
+    }
 
     // Initialize rate limiter if configured
     let rate_limiter = args.rate_limit.map(|rps| {

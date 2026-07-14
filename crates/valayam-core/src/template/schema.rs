@@ -4,6 +4,44 @@ use crate::features::network_scan::parser::NetworkRequestTemplate;
 use crate::features::scripting::parser::ScriptTemplate;
 use crate::features::tls_audit::parser::TlsAuditTemplate;
 use crate::features::fuzzer::parser::FuzzTemplate;
+use crate::features::auth_logic::parser::{AuthTemplate, LogicTemplate};
+use crate::features::cloud_sec::parser::CloudTemplate;
+use crate::features::deep_analysis::parser::DeepAnalysisTemplate;
+use crate::features::iac_audit::parser::IacAuditTemplate;
+use crate::features::sbom_audit::parser::SbomAuditTemplate;
+use crate::features::grpc_audit::parser::GrpcAuditTemplate;
+use crate::features::graphql_audit::parser::GraphqlAuditTemplate;
+use crate::features::drift_detect::parser::DriftDetectTemplate;
+use crate::features::cred_monitor::parser::CredMonitorTemplate;
+use crate::features::oauth_audit::parser::OauthAuditTemplate;
+use crate::features::idp_audit::parser::IdpAuditTemplate;
+use crate::features::aws_escalate::parser::AwsEscalateTemplate;
+use crate::features::azure_gcp_escalate::parser::AzureGcpEscalateTemplate;
+use crate::features::browser_audit::parser::BrowserAuditTemplate;
+use crate::features::iot_audit::parser::IotAuditTemplate;
+use crate::features::scada_audit::parser::ScadaAuditTemplate;
+use crate::features::auto_redteam::parser::AutoRedteamTemplate;
+use crate::features::implant_deploy::parser::ImplantDeployTemplate;
+use crate::features::client_secret_audit::parser::ClientSecretAuditTemplate;
+use crate::features::dom_redirect_audit::parser::DomRedirectAuditTemplate;
+use crate::features::cors_audit::parser::CorsAuditTemplate;
+use crate::features::csp_audit::parser::CspAuditTemplate;
+use crate::features::waf_bypass_verify::parser::WafBypassVerifyTemplate;
+use crate::features::header_scorecard::parser::HeaderScorecardTemplate;
+use crate::features::reputation_audit::parser::ReputationAuditTemplate;
+use crate::features::ct_log_audit::parser::CtLogAuditTemplate;
+use crate::features::remediation_gen::parser::RemediationGenTemplate;
+use crate::features::mitre_mapping::parser::MitreMappingTemplate;
+use crate::features::container_audit::parser::ContainerAuditTemplate;
+use crate::features::k8s_audit::parser::K8sAuditTemplate;
+use crate::features::sast_taint::parser::SastTaintTemplate;
+use crate::features::sast_secrets::parser::SastSecretsTemplate;
+use crate::features::subdomain_takeover::parser::SubdomainTakeoverTemplate;
+use crate::features::port_scan::parser::PortScanTemplate;
+use crate::features::schema_drift::parser::SchemaDriftTemplate;
+use crate::features::pii_leak_audit::parser::PiiLeakAuditTemplate;
+use crate::features::cicd_audit::parser::CicdAuditTemplate;
+use crate::features::dependency_audit::parser::DependencyAuditTemplate;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -13,6 +51,8 @@ use std::path::Path;
 pub struct VulnerabilityTemplate {
     pub id: String,
     pub info: TemplateInfo,
+    #[serde(default)]
+    pub auth: Option<AuthTemplate>,
     #[serde(default)]
     pub requests: Vec<HttpRequestTemplate>,
     #[serde(default)]
@@ -25,6 +65,84 @@ pub struct VulnerabilityTemplate {
     pub tls: Vec<TlsAuditTemplate>,
     #[serde(default)]
     pub fuzz: Vec<FuzzTemplate>,
+    #[serde(default)]
+    pub cloud: Vec<CloudTemplate>,
+    #[serde(default)]
+    pub logic: Vec<LogicTemplate>,
+    #[serde(default)]
+    pub deep_analysis: Vec<DeepAnalysisTemplate>,
+    #[serde(default)]
+    pub iac_audit: Vec<IacAuditTemplate>,
+    #[serde(default)]
+    pub sbom_audit: Vec<SbomAuditTemplate>,
+    #[serde(default)]
+    pub grpc_audit: Vec<GrpcAuditTemplate>,
+    #[serde(default)]
+    pub graphql_audit: Vec<GraphqlAuditTemplate>,
+    #[serde(default)]
+    pub drift_detect: Vec<DriftDetectTemplate>,
+    #[serde(default)]
+    pub cred_monitor: Vec<CredMonitorTemplate>,
+    #[serde(default)]
+    pub oauth_audit: Vec<OauthAuditTemplate>,
+    #[serde(default)]
+    pub idp_audit: Vec<IdpAuditTemplate>,
+    #[serde(default)]
+    pub aws_escalate: Vec<AwsEscalateTemplate>,
+    #[serde(default)]
+    pub azure_gcp_escalate: Vec<AzureGcpEscalateTemplate>,
+    #[serde(default)]
+    pub browser_audit: Vec<BrowserAuditTemplate>,
+    #[serde(default)]
+    pub iot_audit: Vec<IotAuditTemplate>,
+    #[serde(default)]
+    pub scada_audit: Vec<ScadaAuditTemplate>,
+    #[serde(default)]
+    pub auto_redteam: Vec<AutoRedteamTemplate>,
+    #[serde(default)]
+    pub implant_deploy: Vec<ImplantDeployTemplate>,
+    #[serde(default)]
+    pub client_secret_audit: Vec<ClientSecretAuditTemplate>,
+    #[serde(default)]
+    pub dom_redirect_audit: Vec<DomRedirectAuditTemplate>,
+    #[serde(default)]
+    pub cors_audit: Vec<CorsAuditTemplate>,
+    #[serde(default)]
+    pub csp_audit: Vec<CspAuditTemplate>,
+    #[serde(default)]
+    pub waf_bypass_verify: Vec<WafBypassVerifyTemplate>,
+    #[serde(default)]
+    pub header_scorecard: Vec<HeaderScorecardTemplate>,
+    #[serde(default)]
+    pub reputation_audit: Vec<ReputationAuditTemplate>,
+    #[serde(default)]
+    pub ct_log_audit: Vec<CtLogAuditTemplate>,
+    #[serde(default)]
+    pub remediation_gen: Vec<RemediationGenTemplate>,
+    #[serde(default)]
+    pub mitre_mapping: Vec<MitreMappingTemplate>,
+    #[serde(default)]
+    pub container_audit: Vec<ContainerAuditTemplate>,
+    #[serde(default)]
+    pub k8s_audit: Vec<K8sAuditTemplate>,
+    #[serde(default)]
+    pub sast_taint: Vec<SastTaintTemplate>,
+    #[serde(default)]
+    pub sast_secrets: Vec<SastSecretsTemplate>,
+    #[serde(default)]
+    pub subdomain_takeover: Vec<SubdomainTakeoverTemplate>,
+    #[serde(default)]
+    pub port_scan: Vec<PortScanTemplate>,
+    #[serde(default)]
+    pub schema_drift: Vec<SchemaDriftTemplate>,
+    #[serde(default)]
+    pub pii_leak_audit: Vec<PiiLeakAuditTemplate>,
+    #[serde(default)]
+    pub cicd_audit: Vec<CicdAuditTemplate>,
+    #[serde(default)]
+    pub dependency_audit: Vec<DependencyAuditTemplate>,
+    #[serde(default)]
+    pub oob_interaction: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -32,6 +150,8 @@ pub struct TemplateInfo {
     pub name: String,
     pub severity: String,
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub compliance: std::collections::HashMap<String, String>,
 }
 
 impl VulnerabilityTemplate {

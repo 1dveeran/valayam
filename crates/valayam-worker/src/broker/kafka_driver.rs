@@ -86,6 +86,7 @@ mod tests {
             template_name: "test".to_string(),
             template_severity: "Info".to_string(),
             payload: "test".to_string(),
+            compliance: Default::default(),
         };
 
         broker.push_result("task-123", result.clone()).await.unwrap();
