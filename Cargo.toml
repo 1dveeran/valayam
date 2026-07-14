@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "crates/valayam-core",
-    "crates/valayam-cli",
-    "crates/valayam-worker"
+    "crates/valayam-cli"
 ]
 resolver = "2"
 
