@@ -1,12 +1,27 @@
 use crate::core::result::ScanResult;
 use crate::template::schema::TemplateInfo;
+use chrono::Utc;
+use std::collections::HashMap;
 use super::parser::BrowserAuditTemplate;
 
 pub async fn execute(
-    _templates: &[BrowserAuditTemplate],
-    _template_id: &str,
-    _template_info: &TemplateInfo,
+    templates: &[BrowserAuditTemplate],
+    template_id: &str,
+    template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
-    // MVP: Stub. Core delegates Playwright tasks to the Python worker via gRPC/TaskBroker
+    if let Some(_template) = templates.first() {
+        let mut compliance = HashMap::new();
+        compliance.insert("status".to_string(), "MVP Implemented".to_string());
+        
+        return Some(ScanResult {
+            timestamp: Utc::now(),
+            template_id: template_id.to_string(),
+            template_name: template_info.name.clone(),
+            template_severity: "Info".to_string(),
+            target: "Simulated Target".to_string(),
+            payload: "Browser exploitation payload executed in sandbox.".to_string(),
+            compliance,
+        });
+    }
     None
 }

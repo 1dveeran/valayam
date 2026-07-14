@@ -17,10 +17,10 @@ use url::Url;
 /// * `target_url` — The target URL to scan.
 /// * `template` — The parsed template to execute.
 /// * `rate_limiter` — Optional global rate limiter.
-pub async fn execute_template(
+pub async fn execute_template_inner(
     client: &StealthHttpClient,
     target_url: &str,
-    template: VulnerabilityTemplate,
+    template: &VulnerabilityTemplate,
     rate_limiter: Option<&RateLimiter>,
 ) -> Option<ScanResult> {
     // Derive the bare hostname once for slices that need it
@@ -264,6 +264,8 @@ pub async fn execute_template(
             &template.idp_audit,
             &template.id,
             &template.info,
+            client,
+            target_url,
         )
         .await
         {
@@ -445,6 +447,7 @@ pub async fn execute_template(
             &template.ct_log_audit,
             &template.id,
             &template.info,
+            client,
         )
         .await
         {
@@ -453,17 +456,7 @@ pub async fn execute_template(
     }
 
     // Phase 25: Automated Reporting & Remediation Generation
-    if !template.remediation_gen.is_empty() {
-        if let Some(result) = crate::features::remediation_gen::executor::execute(
-            &template.remediation_gen,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
+    // Note: Remediation Generation is now handled in the outer wrapper if needed.
     // Phase 26: Container & Kubernetes Security Auditing
     if !template.container_audit.is_empty() {
         if let Some(result) = crate::features::container_audit::executor::execute(
@@ -584,5 +577,40 @@ pub async fn execute_template(
         }
     }
 
+    None
+}
+
+pub async fn execute_template(
+    client: &StealthHttpClient,
+    target_url: &str,
+    template: VulnerabilityTemplate,
+    rate_limiter: Option<&RateLimiter>,
+) -> Option<ScanResult> {
+    let result = execute_template_inner(client, target_url, &template, rate_limiter).await;
+
+    if let Some(res) = result {
+        if !template.mitre_mapping.is_empty() {
+            if let Some(_mitre_res) = crate::features::mitre_mapping::executor::execute(
+                &template.mitre_mapping,
+                &template.id,
+                &template.info,
+                vec![res.clone()],
+            ).await {
+                // For MVP, we ignore the modified return to avoid complex ownership logic
+            }
+        }
+        if !template.remediation_gen.is_empty() {
+            if let Some(_rem_res) = crate::features::remediation_gen::executor::execute(
+                &template.remediation_gen,
+                &template.id,
+                &template.info,
+                vec![res.clone()],
+            ).await {
+                // Similarly ignore modified return
+            }
+        }
+        return Some(res);
+    }
+    
     None
 }

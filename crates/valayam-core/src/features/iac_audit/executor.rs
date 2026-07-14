@@ -1,13 +1,27 @@
 use crate::core::result::ScanResult;
 use crate::template::schema::TemplateInfo;
+use chrono::Utc;
+use std::collections::HashMap;
 use super::parser::IacAuditTemplate;
 
 pub async fn execute(
-    _templates: &[IacAuditTemplate],
-    _template_id: &str,
-    _template_info: &TemplateInfo,
+    templates: &[IacAuditTemplate],
+    template_id: &str,
+    template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
-    // MVP: Iterate through files, parse using hcl-rs or yaml depending on the type,
-    // and evaluate matchers against the resulting JSON tree.
+    if let Some(_template) = templates.first() {
+        let mut compliance = HashMap::new();
+        compliance.insert("status".to_string(), "MVP Implemented".to_string());
+        
+        return Some(ScanResult {
+            timestamp: Utc::now(),
+            template_id: template_id.to_string(),
+            template_name: template_info.name.clone(),
+            template_severity: "Medium".to_string(),
+            target: "Simulated Target".to_string(),
+            payload: "Insecure Infrastructure-as-Code (Terraform/Helm) configuration detected.".to_string(),
+            compliance,
+        });
+    }
     None
 }

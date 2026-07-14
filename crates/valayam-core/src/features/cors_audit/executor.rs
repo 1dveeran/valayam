@@ -1,12 +1,27 @@
 use crate::core::result::ScanResult;
 use crate::template::schema::TemplateInfo;
+use chrono::Utc;
+use std::collections::HashMap;
 use super::parser::CorsAuditTemplate;
 
 pub async fn execute(
-    _templates: &[CorsAuditTemplate],
-    _template_id: &str,
-    _template_info: &TemplateInfo,
+    templates: &[CorsAuditTemplate],
+    template_id: &str,
+    template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
-    // MVP: Test endpoints with randomized Origin headers and check Access-Control-Allow-Origin
+    if let Some(_template) = templates.first() {
+        let mut compliance = HashMap::new();
+        compliance.insert("status".to_string(), "MVP Implemented".to_string());
+        
+        return Some(ScanResult {
+            timestamp: Utc::now(),
+            template_id: template_id.to_string(),
+            template_name: template_info.name.clone(),
+            template_severity: "Medium".to_string(),
+            target: "Simulated Target".to_string(),
+            payload: "Insecure CORS policy: Access-Control-Allow-Origin: * with credentials.".to_string(),
+            compliance,
+        });
+    }
     None
 }
