@@ -1,7 +1,6 @@
 use crate::core::result::ScanResult;
 use crate::template::schema::TemplateInfo;
 use chrono::Utc;
-use std::collections::HashMap;
 use super::parser::ContainerAuditTemplate;
 
 pub async fn execute(
@@ -9,19 +8,19 @@ pub async fn execute(
     template_id: &str,
     template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
-    if let Some(_template) = templates.first() {
-        let mut compliance = HashMap::new();
-        compliance.insert("status".to_string(), "MVP Implemented".to_string());
-        
-        return Some(ScanResult {
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: "Medium".to_string(),
-            target: "Simulated Target".to_string(),
-            payload: "Container image running as root or containing vulnerable packages.".to_string(),
-            compliance,
-        });
+    for template in templates {
+        // MVP to Prod: We check if the target_image uses "latest" tag
+        if template.target_image.ends_with(":latest") || !template.target_image.contains(':') {
+            return Some(ScanResult {
+                timestamp: Utc::now(),
+                template_id: template_id.to_string(),
+                template_name: template_info.name.clone(),
+                template_severity: "Low".to_string(),
+                target: template.target_image.clone(),
+                payload: "Container Audit: Image uses the 'latest' tag or no tag, which can lead to unpredictable deployments and security drift.".to_string(),
+                compliance: Default::default(),
+            });
+        }
     }
     None
 }

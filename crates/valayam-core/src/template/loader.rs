@@ -4,6 +4,7 @@ use crate::core::variables::build_initial_context;
 use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer};
 use crate::network::http::StealthHttpClient;
 use super::schema::VulnerabilityTemplate;
+use std::sync::Arc;
 use url::Url;
 
 /// Orchestrates the execution of a single template against a target.
@@ -17,6 +18,7 @@ use url::Url;
 /// * `target_url` — The target URL to scan.
 /// * `template` — The parsed template to execute.
 /// * `rate_limiter` — Optional global rate limiter.
+#[tracing::instrument(skip(client, template, rate_limiter), fields(target = %target_url, template = %template.id))]
 pub async fn execute_template_inner(
     client: &StealthHttpClient,
     target_url: &str,
@@ -189,6 +191,8 @@ pub async fn execute_template_inner(
     }
     if !template.sbom_audit.is_empty() {
         if let Some(result) = crate::features::sbom_audit::executor::execute(
+            &target_url,
+            client,
             &template.sbom_audit,
             &template.id,
             &template.info,
@@ -202,6 +206,8 @@ pub async fn execute_template_inner(
     // Phase 10: gRPC & GraphQL Audit
     if !template.grpc_audit.is_empty() {
         if let Some(result) = crate::features::grpc_audit::executor::execute(
+            &target_url,
+            client,
             &template.grpc_audit,
             &template.id,
             &template.info,
@@ -213,6 +219,8 @@ pub async fn execute_template_inner(
     }
     if !template.graphql_audit.is_empty() {
         if let Some(result) = crate::features::graphql_audit::executor::execute(
+            &target_url,
+            client,
             &template.graphql_audit,
             &template.id,
             &template.info,
@@ -226,6 +234,8 @@ pub async fn execute_template_inner(
     // Phase 11: Drift Detect & Cred Monitor
     if !template.drift_detect.is_empty() {
         if let Some(result) = crate::features::drift_detect::executor::execute(
+            &target_url,
+            client,
             &template.drift_detect,
             &template.id,
             &template.info,
@@ -237,7 +247,31 @@ pub async fn execute_template_inner(
     }
     if !template.cred_monitor.is_empty() {
         if let Some(result) = crate::features::cred_monitor::executor::execute(
+            &target_url,
+            client,
             &template.cred_monitor,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.container_audit.is_empty() {
+        if let Some(result) = crate::features::container_audit::executor::execute(
+            &template.container_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    if !template.cicd_audit.is_empty() {
+        if let Some(result) = crate::features::cicd_audit::executor::execute(
+            &template.cicd_audit,
             &template.id,
             &template.info,
         )
@@ -250,6 +284,8 @@ pub async fn execute_template_inner(
     // Phase 12: Zero-Trust & Identity Security
     if !template.oauth_audit.is_empty() {
         if let Some(result) = crate::features::oauth_audit::executor::execute(
+            &target_url,
+            client,
             &template.oauth_audit,
             &template.id,
             &template.info,
@@ -276,6 +312,8 @@ pub async fn execute_template_inner(
     // Phase 13: Multi-Cloud Post-Exploitation
     if !template.aws_escalate.is_empty() {
         if let Some(result) = crate::features::aws_escalate::executor::execute(
+            &target_url,
+            client,
             &template.aws_escalate,
             &template.id,
             &template.info,
@@ -287,6 +325,8 @@ pub async fn execute_template_inner(
     }
     if !template.azure_gcp_escalate.is_empty() {
         if let Some(result) = crate::features::azure_gcp_escalate::executor::execute(
+            &target_url,
+            client,
             &template.azure_gcp_escalate,
             &template.id,
             &template.info,
@@ -297,9 +337,13 @@ pub async fn execute_template_inner(
         }
     }
 
+    // Phase 21: Client-Side Security Auditing
+
     // Phase 14: Browser Exploitation
     if !template.browser_audit.is_empty() {
         if let Some(result) = crate::features::browser_audit::executor::execute(
+            &target_url,
+            client,
             &template.browser_audit,
             &template.id,
             &template.info,
@@ -324,6 +368,7 @@ pub async fn execute_template_inner(
     }
     if !template.scada_audit.is_empty() {
         if let Some(result) = crate::features::scada_audit::executor::execute(
+            &target_url,
             &template.scada_audit,
             &template.id,
             &template.info,
@@ -361,6 +406,8 @@ pub async fn execute_template_inner(
     // Phase 21: Client-Side Security Auditing
     if !template.client_secret_audit.is_empty() {
         if let Some(result) = crate::features::client_secret_audit::executor::execute(
+            &target_url,
+            client,
             &template.client_secret_audit,
             &template.id,
             &template.info,
@@ -372,6 +419,8 @@ pub async fn execute_template_inner(
     }
     if !template.dom_redirect_audit.is_empty() {
         if let Some(result) = crate::features::dom_redirect_audit::executor::execute(
+            &target_url,
+            client,
             &template.dom_redirect_audit,
             &template.id,
             &template.info,
@@ -385,6 +434,8 @@ pub async fn execute_template_inner(
     // Phase 22: Content Security Policy & CORS
     if !template.cors_audit.is_empty() {
         if let Some(result) = crate::features::cors_audit::executor::execute(
+            &target_url,
+            client,
             &template.cors_audit,
             &template.id,
             &template.info,
@@ -396,6 +447,8 @@ pub async fn execute_template_inner(
     }
     if !template.csp_audit.is_empty() {
         if let Some(result) = crate::features::csp_audit::executor::execute(
+            &target_url,
+            client,
             &template.csp_audit,
             &template.id,
             &template.info,
@@ -409,6 +462,8 @@ pub async fn execute_template_inner(
     // Phase 23: WAF Rule Validation
     if !template.waf_bypass_verify.is_empty() {
         if let Some(result) = crate::features::waf_bypass_verify::executor::execute(
+            &target_host,
+            client,
             &template.waf_bypass_verify,
             &template.id,
             &template.info,
@@ -420,6 +475,8 @@ pub async fn execute_template_inner(
     }
     if !template.header_scorecard.is_empty() {
         if let Some(result) = crate::features::header_scorecard::executor::execute(
+            &target_url,
+            client,
             &template.header_scorecard,
             &template.id,
             &template.info,
@@ -508,6 +565,7 @@ pub async fn execute_template_inner(
     // Phase 28: Network & Port Security
     if !template.subdomain_takeover.is_empty() {
         if let Some(result) = crate::features::subdomain_takeover::executor::execute(
+            &target_host,
             &template.subdomain_takeover,
             &template.id,
             &template.info,
@@ -519,6 +577,7 @@ pub async fn execute_template_inner(
     }
     if !template.port_scan.is_empty() {
         if let Some(result) = crate::features::port_scan::executor::execute(
+            &target_host,
             &template.port_scan,
             &template.id,
             &template.info,
@@ -530,19 +589,10 @@ pub async fn execute_template_inner(
     }
 
     // Phase 29: API Schema Compliance & Data Privacy
-    if !template.schema_drift.is_empty() {
-        if let Some(result) = crate::features::schema_drift::executor::execute(
-            &template.schema_drift,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
     if !template.pii_leak_audit.is_empty() {
         if let Some(result) = crate::features::pii_leak_audit::executor::execute(
+            &target_url,
+            client,
             &template.pii_leak_audit,
             &template.id,
             &template.info,
@@ -568,6 +618,21 @@ pub async fn execute_template_inner(
     if !template.dependency_audit.is_empty() {
         if let Some(result) = crate::features::dependency_audit::executor::execute(
             &template.dependency_audit,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            return Some(result);
+        }
+    }
+    
+    // Phase 31: Schema Drift / Shadow API detection
+    if !template.schema_drift.is_empty() {
+        if let Some(result) = crate::features::schema_drift::executor::execute(
+            &target_url,
+            client,
+            &template.schema_drift,
             &template.id,
             &template.info,
         )

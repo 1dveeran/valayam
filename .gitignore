@@ -4,9 +4,13 @@
 .vscode/
 .idea/
 .DS_Store
-/implementation_plan.md
+/impl*.md
+/mvp*.md
+/fix*.py
+/fill*.py
 /scan_logs.json
 /results.json
+/improve*.md
 
 # Python
 venv/

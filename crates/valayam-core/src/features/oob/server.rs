@@ -26,7 +26,14 @@ impl OobServer {
 
     /// Starts the HTTP and DNS listeners in the background.
     pub async fn start(&self) -> Result<(), String> {
-        // TODO: Implement actual hyper/hickory-dns server binding
+        // Mock HTTP/DNS server binding for MVP
+        let addr = self.bind_address.clone();
+        tokio::spawn(async move {
+            tracing::info!("Mock OOB Server listening on {}", addr);
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            }
+        });
         tracing::info!("OOB Server started on {}", self.bind_address);
         Ok(())
     }

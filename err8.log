@@ -1,0 +1,297 @@
+﻿cargo : warning: unused import: `std::sync::Arc`
+At line:1 char:1
++ cargo check -p valayam-cli 2>&1 | Out-File -FilePath err8.log -Encodi ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: unused import: `std::sync::Arc`:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ --> crates\valayam-core\src\features\waf_bypass_verify\executor.rs:5:5
+  |
+5 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::sync::Arc`
+ --> crates\valayam-core\src\template\loader.rs:7:5
+  |
+7 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> crates\valayam-core\src\features\schema_drift\executor.rs:41:16
+   |
+41 |             Ok(mut c) => {
+   |                ----^
+   |                |
+   |                help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `client`
+ --> crates\valayam-core\src\features\cred_monitor\executor.rs:9:5
+  |
+9 |     client: &StealthHttpClient,
+  |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_client`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `package`
+  --> crates\valayam-core\src\features\dependency_audit\vuln_db.rs:49:51
+   |
+49 |     pub fn check_package(&self, _ecosystem: &str, package: &str, _version: &str) -> Vec<VulnRecord> {
+   |                                                   ^^^^^^^ help: if this is intentional, prefix it with an 
+underscore: `_package`
+
+warning: field `db_path` is never read
+  --> crates\valayam-core\src\features\dependency_audit\vuln_db.rs:41:5
+   |
+40 | pub struct LocalVulnDb {
+   |            ----------- field in this struct
+41 |     db_path: String,
+   |     ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `valayam-core` (lib) generated 6 warnings (run `cargo fix --lib -p valayam-core` to apply 5 suggestions)
+    Checking valayam-cli v0.1.0 (C:\Users\venthan\Desktop\Project\Rust\valayam\crates\valayam-cli)
+error[E0432]: unresolved import `serde`
+ --> crates\valayam-cli\src\state.rs:3:5
+  |
+3 | use serde::{Deserialize, Serialize};
+  |     ^^^^^ use of unresolved module or unlinked crate `serde`
+  |
+  = help: if you wanted to use a crate named `serde`, use `cargo add serde` to add it to your `Cargo.toml`
+
+warning: unused import: `BufWriter`
+ --> crates\valayam-cli\src\orchestrator.rs:5:15
+  |
+5 | use std::io::{BufWriter, Write};
+  |               ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `valayam_core::core::result::ScanResult`
+ --> crates\valayam-cli\src\reporting\compliance.rs:1:5
+  |
+1 | use valayam_core::core::result::ScanResult;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `style`
+ --> crates\valayam-cli\src\reporting\pdf.rs:2:24
+  |
+2 | use genpdf::{elements, style, Document, SimplePageDecorator};
+  |                        ^^^^^
+
+error[E0609]: no field `target_url` on type `ScanResult`
+  --> crates\valayam-cli\src\orchestrator.rs:44:49
+   |
+44 |             println!(" Γö£ΓöÇ Target:   {}", result.target_url); // Assuming target_url based on finding
+   |                                                 ^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `timestamp`, `template_id`, `template_name`, `template_severity`, `target` ... and 2 
+others
+
+error[E0609]: no field `severity` on type `ScanResult`
+  --> crates\valayam-cli\src\orchestrator.rs:46:51
+   |
+46 |             println!(" Γö£ΓöÇ Severity: {:?}", result.severity);
+   |                                                   ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `timestamp`, `template_id`, `template_name`, `template_severity`, `target` ... and 2 
+others
+
+error[E0609]: no field `target_url` on type `&ScanResult`
+  --> crates\valayam-cli\src\reporting\sarif.rs:17:38
+   |
+17 | ...                   "uri": r.target_url
+   |                                ^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `timestamp`, `template_id`, `template_name`, `template_severity`, `target` ... and 2 
+others
+
+error[E0609]: no field `target_url` on type `&ScanResult`
+  --> crates\valayam-cli\src\reporting\pdf.rs:38:73
+   |
+38 |         let mut p2 = elements::Paragraph::new(format!("Target: {}", res.target_url));
+   |                                                                         ^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `timestamp`, `template_id`, `template_name`, `template_severity`, `target` ... and 2 
+others
+
+error[E0277]: the trait bound `ScanSnapshot: serde::Serialize` is not satisfied
+    --> crates\valayam-cli\src\state.rs:40:49
+     |
+  40 |         let data = serde_json::to_string_pretty(&snapshot)?;
+     |                    ---------------------------- ^^^^^^^^^ unsatisfied trait bound
+     |                    |
+     |                    required by a bound introduced by this call
+     |
+help: the trait `serde_core::ser::Serialize` is not implemented for `ScanSnapshot`
+    --> crates\valayam-cli\src\state.rs:6:1
+     |
+   6 | pub struct ScanSnapshot {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+     = note: for local types consider adding `#[derive(serde::Serialize)]` to your `ScanSnapshot` type
+     = note: for types from other crates check whether the crate offers a `serde` feature flag
+     = help: the following other types implement trait `serde_core::ser::Serialize`:
+               &'a T
+               &'a mut T
+               ()
+               (T,)
+               (T0, T1)
+               (T0, T1, T2)
+               (T0, T1, T2, T3)
+               (T0, T1, T2, T3, T4)
+             and 235 others
+note: required by a bound in `to_string_pretty`
+    --> C:\Users\venthan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.150\src\ser.rs:2266:17
+     |
+2264 | pub fn to_string_pretty<T>(value: &T) -> Result<String>
+     |        ---------------- required by a bound in this function
+2265 | where
+2266 |     T: ?Sized + Serialize,
+     |                 ^^^^^^^^^ required by this bound in `to_string_pretty`
+
+error[E0277]: the trait bound `ScanSnapshot: serde::Deserialize<'de>` is not satisfied
+    --> crates\valayam-cli\src\state.rs:57:38
+     |
+  57 |         let snapshot: ScanSnapshot = serde_json::from_str(&data)
+     |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+     |
+help: the trait `serde_core::de::Deserialize<'_>` is not implemented for `ScanSnapshot`
+    --> crates\valayam-cli\src\state.rs:6:1
+     |
+   6 | pub struct ScanSnapshot {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+     = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `ScanSnapshot` type
+     = note: for types from other crates check whether the crate offers a `serde` feature flag
+     = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
+               `&'a Path` implements `serde_core::de::Deserialize<'de>`
+               `&'a [u8]` implements `serde_core::de::Deserialize<'de>`
+               `&'a str` implements `serde_core::de::Deserialize<'de>`
+               `()` implements `serde_core::de::Deserialize<'de>`
+               `(T,)` implements `serde_core::de::Deserialize<'de>`
+               `(T0, T1)` implements `serde_core::de::Deserialize<'de>`
+               `(T0, T1, T2)` implements `serde_core::de::Deserialize<'de>`
+               `(T0, T1, T2, T3)` implements `serde_core::de::Deserialize<'de>`
+             and 239 others
+note: required by a bound in `serde_json::from_str`
+    --> C:\Users\venthan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.150\src\de.rs:2711:8
+     |
+2709 | pub fn from_str<'a, T>(s: &'a str) -> Result<T>
+     |        -------- required by a bound in this function
+2710 | where
+2711 |     T: de::Deserialize<'a>,
+     |        ^^^^^^^^^^^^^^^^^^^ required by this bound in `from_str`
+
+error[E0277]: the trait bound `OpenTelemetryLayer<Layered<..., ...>, ...>: Layer<...>` is not satisfied
+    --> crates\valayam-cli\src\main.rs:72:19
+     |
+  72 |             .with(telemetry_layer)
+     |              ---- ^^^^^^^^^^^^^^^ unsatisfied trait bound
+     |              |
+     |              required by a bound introduced by this call
+     |
+help: the trait `Layer<Layered<Filtered<tracing_subscriber::fmt::Layer<Registry, DefaultFields, 
+tracing_subscriber::fmt::format::Format<tracing_subscriber::fmt::format::Full>, fn() -> std::io::Stdout>, _, 
+Registry>, Registry, Registry>>` is not implemented for `OpenTelemetryLayer<Layered<Filtered<..., ..., ...>, ...>, 
+...>`
+      but trait 
+`Layer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, 
+LevelFilter, Registry>, Registry>, JsonFields, tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, _, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>>` is implemented for it
+    --> 
+C:\Users\venthan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tracing-opentelemetry-0.22.0\src\layer.rs:832:1
+     |
+ 832 | / impl<S, T> Layer<S> for OpenTelemetryLayer<S, T>
+ 833 | | where
+ 834 | |     S: Subscriber + for<'span> LookupSpan<'span>,
+ 835 | |     T: otel::Tracer + PreSampledTracer + 'static,
+     | |_________________________________________________^
+     = help: for that trait implementation, expected `Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, 
+LevelFilter, Registry>, Registry>`, found `Registry`
+note: required by a bound in `tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt::with`
+    --> C:\Users\venthan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tracing-subscriber-0.3.23\src\layer\mod.r
+s:1504:12
+     |
+1502 |     fn with<L>(self, layer: L) -> Layered<L, Self>
+     |        ---- required by a bound in this associated function
+1503 |     where
+1504 |         L: Layer<Self>,
+     |            ^^^^^^^^^^^ required by this bound in `__tracing_subscriber_SubscriberExt::with`
+     = note: the full name for the type has been written to 'C:\Users\venthan\Desktop\Project\Rust\valayam\target\debug
+\deps\valayam_cli-35c0d72695f843fa.long-type-7935792856976808391.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+
+error[E0599]: the method `init` exists for struct `Layered<OpenTelemetryLayer<Layered<..., ...>, ...>, ...>`, but its 
+trait bounds were not satisfied
+  --> crates\valayam-cli\src\main.rs:73:14
+   |
+70 | /         tracing_subscriber::registry()
+71 | |             .with(console_layer)
+72 | |             .with(telemetry_layer)
+73 | |             .init();
+   | |             -^^^^ method cannot be called due to unsatisfied trait bounds
+   | |_____________|
+   |
+   |
+  ::: C:\Users\venthan\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tracing-subscriber-0.3.23\src\layer\layered
+.rs:22:1
+   |
+22 |   pub struct Layered<L, I, S = I> {
+   |   ------------------------------- doesn't satisfy `_: Into<Dispatch>` or `_: SubscriberInitExt`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Layered<OpenTelemetryLayer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layered<Filtered<tracing_subscri
+ber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, JsonFields, 
+tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, LevelFilter, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+opentelemetry_sdk::trace::Tracer>, Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, 
+Registry>>: Into<Dispatch>`
+           which is required by `Layered<OpenTelemetryLayer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layered<Fil
+tered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, JsonFields, 
+tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, LevelFilter, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+opentelemetry_sdk::trace::Tracer>, Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, 
+Registry>>: SubscriberInitExt`
+           `&Layered<OpenTelemetryLayer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layered<Filtered<tracing_subscr
+iber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, JsonFields, 
+tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, LevelFilter, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+opentelemetry_sdk::trace::Tracer>, Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, 
+Registry>>: Into<Dispatch>`
+           which is required by `&Layered<OpenTelemetryLayer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layered<Fi
+ltered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, JsonFields, 
+tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, LevelFilter, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+opentelemetry_sdk::trace::Tracer>, Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, 
+Registry>>: SubscriberInitExt`
+           `&mut Layered<OpenTelemetryLayer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layered<Filtered<tracing_su
+bscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, JsonFields, 
+tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, LevelFilter, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+opentelemetry_sdk::trace::Tracer>, Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, 
+Registry>>: Into<Dispatch>`
+           which is required by `&mut Layered<OpenTelemetryLayer<Layered<Filtered<tracing_subscriber::fmt::Layer<Layere
+d<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>, JsonFields, 
+tracing_subscriber::fmt::format::Format<Json>, NonBlocking>, LevelFilter, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, Registry>>, 
+opentelemetry_sdk::trace::Tracer>, Layered<Filtered<tracing_subscriber::fmt::Layer<Registry>, LevelFilter, Registry>, 
+Registry>>: SubscriberInitExt`
+   = note: the full name for the type has been written to 'C:\Users\venthan\Desktop\Project\Rust\valayam\target\debug\d
+eps\valayam_cli-35c0d72695f843fa.long-type-11428994829298156742.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+Some errors have detailed explanations: E0277, E0432, E0599, E0609.
+For more information about an error, try `rustc --explain E0277`.
+warning: `valayam-cli` (bin "valayam-cli") generated 3 warnings
+error: could not compile `valayam-cli` (bin "valayam-cli") due to 9 previous errors; 3 warnings emitted

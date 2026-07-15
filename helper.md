@@ -840,20 +840,33 @@ logic:
 ```
 
 ### Deep Analysis & Local AI Payload Generation (Phase 12)
-Generate payloads on the fly via local LLMs.
+Execute deep static and dynamic evasion templates using local LLMs and WASM analysis.
+
+**1. LLM WAF Evasion**
 ```yaml
-id: ai-sqli-evasion
+id: ai-waf-evasion
 info:
-  name: "AI WAF Bypass SQLi"
-ai:
-  model: "llama-3-8b-instruct"
-  goal: "Bypass WAF blocking single quotes and UNION"
-fuzz:
-  - part: "query"
-    keys: ["id"]
-    payload_generator: "ai"
-    matchers:
-      - type: status
-        status: [500]
+  name: AI-Driven WAF Evasion
+deep_analysis:
+  - analysis_type: "llm_mutation"
+    prompt: "Mutate this payload to bypass a standard WAF: <script>alert(1)</script>"
+```
+
+**2. WASM Hardcoded Secrets Extraction**
+```yaml
+id: wasm-secrets
+info:
+  name: WASM Decompilation Secrets
+deep_analysis:
+  - analysis_type: "wasm_decompile"
+```
+
+**3. Source Map Taint Tracking**
+```yaml
+id: sourcemap-audit
+info:
+  name: Source Map Secrets Exposure
+deep_analysis:
+  - analysis_type: "source_map"
 ```
 

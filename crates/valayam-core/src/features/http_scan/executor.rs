@@ -93,7 +93,7 @@ pub async fn execute(
         // ── Send HTTP request ──
         tracing::debug!(target = %target_url, method = %req_rule.method, path = %resolved_path, "Sending HTTP request");
         
-        let Ok(resp) = client
+        let resp = match client
             .send_request(
                 target_url,
                 &req_rule.method,
@@ -102,9 +102,12 @@ pub async fn execute(
                 resolved_body.as_deref(),
             )
             .await
-        else {
-            tracing::debug!("Request failed or timed out to {}", target_url);
-            continue; // Silently skip connection timeouts/failures
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(target = %target_url, error = %e, "Request failed or timed out");
+                continue;
+            }
         };
 
         let status = resp.status().as_u16();
@@ -118,9 +121,12 @@ pub async fn execute(
             })
             .collect();
 
-        let Ok(body_bytes) = resp.bytes().await else {
-            tracing::debug!("Failed to read response body from {}", target_url);
-            continue;
+        let body_bytes = match resp.bytes().await {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(target = %target_url, error = %e, "Failed to read response body");
+                continue;
+            }
         };
 
         tracing::trace!(

@@ -361,4 +361,5 @@
 - **Workflow Security**: Parse GitHub Actions and GitLab CI YAML configurations to detect script injection vectors (`${{ github.event.issue.body }}`) or exposed secrets.
 
 ### 71. Dependency Chain Verification (`features/dependency_audit/`)
-- **Lockfile Analysis**: Cross-reference dependency lockfiles (e.g., Cargo.lock, package-lock.json) with OSV (Open Source Vulnerabilities) databases to detect vulnerable third-party libraries.
+- **Lockfile Analysis**: Cross-reference dependency lockfiles (e.g., Cargo.lock, package-lock.json) with known CVEs.
+- **Offline VulnDB Integration**: Natively hooks into the offline `vuln-db.sqlite` artifact compiled by the Valayam Platform enterprise ingester to perform lightning-fast local vulnerability checks without triggering rate-limits or requiring active internet connections.

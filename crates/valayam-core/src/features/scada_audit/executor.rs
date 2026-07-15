@@ -1,27 +1,49 @@
 use crate::core::result::ScanResult;
 use crate::template::schema::TemplateInfo;
 use chrono::Utc;
-use std::collections::HashMap;
+use url::Url;
 use super::parser::ScadaAuditTemplate;
 
 pub async fn execute(
+    target_url: &str,
     templates: &[ScadaAuditTemplate],
     template_id: &str,
     template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
-    if let Some(_template) = templates.first() {
-        let mut compliance = HashMap::new();
-        compliance.insert("status".to_string(), "MVP Implemented".to_string());
+    for template in templates {
+        // Parse host from target_url
+        let host = if let Ok(parsed) = Url::parse(target_url) {
+            parsed.host_str().unwrap_or(target_url).to_string()
+        } else {
+            target_url.to_string()
+        };
         
-        return Some(ScanResult {
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: "High".to_string(),
-            target: "Simulated Target".to_string(),
-            payload: "Exposed Modbus/SCADA interface detected.".to_string(),
-            compliance,
-        });
+        let protocol = template.protocol.to_lowercase();
+        let port = match protocol.as_str() {
+            "modbus" => 502,
+            "dnp3" => 20000,
+            "s7" => 102,
+            "iec104" => 2404,
+            _ => {
+                tracing::warn!("Unsupported SCADA protocol: {}", protocol);
+                continue;
+            }
+        };
+
+        // Scan the specific SCADA port using the network TCP port scanner module
+        let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None).await;
+
+        if let Some(_open_port) = results.first() {
+            return Some(ScanResult {
+                timestamp: Utc::now(),
+                template_id: template_id.to_string(),
+                template_name: template_info.name.clone(),
+                template_severity: "Critical".to_string(),
+                target: host.clone(),
+                payload: format!("CRITICAL: Exposed {} SCADA interface detected on port {}!", protocol.to_uppercase(), port),
+                compliance: Default::default(),
+            });
+        }
     }
     None
 }

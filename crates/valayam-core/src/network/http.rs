@@ -1,13 +1,15 @@
 use reqwest::{Client, Method, Proxy};
 use std::collections::HashMap;
 use std::time::Duration;
+use std::sync::Arc;
 use crate::stealth::user_agent::random_user_agent;
 use crate::stealth::proxy::ProxyRotator;
 
+#[derive(Clone)]
 pub struct StealthHttpClient {
     clients: Vec<Client>,
     random_agent: bool,
-    client_idx: std::sync::atomic::AtomicUsize,
+    client_idx: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl StealthHttpClient {
@@ -17,7 +19,11 @@ impl StealthHttpClient {
         if let Some(rotator) = proxy_rotator {
             for proxy_url in rotator.proxies.iter() {
                 let mut builder = Client::builder()
-                    .timeout(Duration::from_secs(10))
+                    .timeout(Duration::from_secs(15))
+                    .connect_timeout(Duration::from_secs(5))
+                    .pool_idle_timeout(Duration::from_secs(90))
+                    .pool_max_idle_per_host(50)
+                    .tcp_keepalive(Duration::from_secs(60))
                     .danger_accept_invalid_certs(true);
                 
                 if !random_agent {
@@ -36,7 +42,11 @@ impl StealthHttpClient {
 
         if clients.is_empty() {
             let mut builder = Client::builder()
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(15))
+                .connect_timeout(Duration::from_secs(5))
+                .pool_idle_timeout(Duration::from_secs(90))
+                .pool_max_idle_per_host(100)
+                .tcp_keepalive(Duration::from_secs(60))
                 .danger_accept_invalid_certs(true);
                 
             if !random_agent {
@@ -49,7 +59,7 @@ impl StealthHttpClient {
         Ok(Self { 
             clients, 
             random_agent,
-            client_idx: std::sync::atomic::AtomicUsize::new(0),
+            client_idx: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         })
     }
 
@@ -59,6 +69,7 @@ impl StealthHttpClient {
     }
 
     /// Sends an HTTP request with optional body and custom headers.
+    #[tracing::instrument(skip(self, custom_headers, body))]
     pub async fn send_request(
         &self,
         base_url: &str,
