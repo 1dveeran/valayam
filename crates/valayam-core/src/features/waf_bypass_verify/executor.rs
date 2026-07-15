@@ -41,6 +41,52 @@ pub async fn execute(
                             ),
                             compliance: Default::default(),
                         });
+                    } else {
+                        // The payload WAS blocked. Let's try evasive permutations!
+                        let permutations = super::permutator::WafPermutator::generate_permutations(payload);
+                        
+                        for evaded_payload in permutations {
+                            let evaded_url = format!("{}/?q={}", host, evaded_payload);
+                            if let Ok(evaded_resp) = http_client.send_request(&host, "GET", &evaded_url, None, None).await {
+                                let ev_status = evaded_resp.status().as_u16();
+                                if ev_status != 403 && ev_status != 406 && ev_status != 429 {
+                                    return Some(ScanResult {
+                                        timestamp: Utc::now(),
+                                        template_id: template_id.to_string(),
+                                        template_name: format!("{} - Evasion Successful", template_info.name),
+                                        template_severity: "Critical".to_string(),
+                                        target: host.clone(),
+                                        payload: format!(
+                                            "WAF blocked initial payload, but evasive mutation '{}' successfully bypassed filtering (HTTP {}).",
+                                            evaded_payload, ev_status
+                                        ),
+                                        compliance: Default::default(),
+                                    });
+                                }
+                            }
+                        }
+
+                        // Also try HPP
+                        let hpp_urls = super::permutator::WafPermutator::generate_hpp_urls(&host, "q", payload);
+                        for hpp_url in hpp_urls {
+                            if let Ok(hpp_resp) = http_client.send_request(&host, "GET", &hpp_url, None, None).await {
+                                let hpp_status = hpp_resp.status().as_u16();
+                                if hpp_status != 403 && hpp_status != 406 && hpp_status != 429 {
+                                    return Some(ScanResult {
+                                        timestamp: Utc::now(),
+                                        template_id: template_id.to_string(),
+                                        template_name: format!("{} - HPP Evasion Successful", template_info.name),
+                                        template_severity: "Critical".to_string(),
+                                        target: host.clone(),
+                                        payload: format!(
+                                            "WAF blocked initial payload, but HTTP Parameter Pollution successfully bypassed filtering: {}",
+                                            hpp_url
+                                        ),
+                                        compliance: Default::default(),
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
                 Err(e) => {

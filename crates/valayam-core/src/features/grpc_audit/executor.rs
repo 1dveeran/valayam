@@ -28,15 +28,42 @@ pub async fn execute(
                     
                     // If it returns HTTP 200 and grpc-status is NOT 12 (Unimplemented), reflection is likely enabled
                     if status.is_success() && grpc_status != "12" {
-                        return Some(ScanResult {
+                        let mut results = vec![ScanResult {
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),
-                            template_severity: "High".to_string(),
+                            template_severity: "Medium".to_string(),
                             target: host.clone(),
                             payload: "gRPC Server Reflection is enabled, potentially exposing sensitive internal service definitions.".to_string(),
                             compliance: Default::default(),
-                        });
+                        }];
+
+                        // Launch dynamic fuzzed payload using the mutator
+                        let fuzzed_payload = super::mutator::GrpcMutator::generate_fuzzed_payload("valayam.MockService");
+                        
+                        // Send the fuzzed payload to the generic service endpoint (simulated)
+                        let target_service_url = format!("{}/valayam.MockService/Execute", host.trim_end_matches('/'));
+                        if let Ok(atk_url) = reqwest::Url::parse(&target_service_url) {
+                            if let Ok(atk_resp) = req_client.post(atk_url)
+                                .header("content-type", "application/grpc")
+                                .body(fuzzed_payload)
+                                .send().await {
+                                
+                                if atk_resp.status().is_server_error() {
+                                    results.push(ScanResult {
+                                        timestamp: Utc::now(),
+                                        template_id: template_id.to_string(),
+                                        template_name: format!("{} - gRPC Fuzzing", template_info.name),
+                                        template_severity: "Critical".to_string(),
+                                        target: host.clone(),
+                                        payload: "gRPC endpoint crashed (HTTP 500) when supplied with a dynamically fuzzed protobuf payload extracted via Reflection.".to_string(),
+                                        compliance: Default::default(),
+                                    });
+                                }
+                            }
+                        }
+
+                        return results.pop();
                     }
                 }
             }

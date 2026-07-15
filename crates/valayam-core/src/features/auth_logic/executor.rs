@@ -84,5 +84,23 @@ pub async fn execute(
             }
         }
     }
+
+    // Secondary Check: Offline JWT Brute Forcing
+    // Extract token from Bearer prefix if it exists
+    let raw_token = auth.primary.trim_start_matches("Bearer ").trim();
+    if raw_token.split('.').count() == 3 {
+        // Looks like a JWT
+        if let Some(cracked_secret) = super::jwt_cracker::JwtCracker::crack_jwt_secret(raw_token) {
+            return Some(ScanResult {
+                timestamp: chrono::Utc::now(),
+                template_id: template_id.to_string(),
+                template_name: format!("{} - Offline JWT Cracking", template_info.name),
+                template_severity: "Critical".to_string(),
+                target: target_url.to_string(),
+                payload: format!("Successfully cracked JWT secret offline! The signing key is: '{}'", cracked_secret),
+                compliance: template_info.compliance.clone(),
+            });
+        }
+    }
     None
 }

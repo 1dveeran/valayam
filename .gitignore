@@ -11,6 +11,7 @@
 /scan_logs.json
 /results.json
 /improve*.md
+/feature*.md
 
 # Python
 venv/
