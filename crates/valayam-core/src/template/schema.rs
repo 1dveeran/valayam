@@ -1,3 +1,6 @@
+// TODO: Finalize VulnerabilityTemplate schema.
+// - Implement strict field validation and linting on load.
+// - Expand schema to support Phase 10+ modules (e.g. Crawler, WAF detection).
 use crate::features::dns_audit::parser::DnsRequestTemplate;
 use crate::features::http_scan::parser::HttpRequestTemplate;
 use crate::features::network_scan::parser::NetworkRequestTemplate;

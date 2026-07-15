@@ -1,3 +1,6 @@
+// TODO: Harden Variable Substitution & DSL Helpers.
+// - Implement strict circular-dependency detection during resolution.
+// - Optimize Regex substitutions for zero-copy where possible.
 use regex::Regex;
 use std::collections::HashMap;
 

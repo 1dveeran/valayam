@@ -1,3 +1,10 @@
+// TODO: Implement Vertical Slices (Phases 1-30) as isolated features.
+// - Ensure each module owns its parser, executor, and matcher logic without cross-dependencies.
+// - Phase 1: http_scan, extractors, helpers.
+// - Phase 2: network_scan, dns_audit, tls_audit.
+// - Phase 3: scripting (Rhai engine), nuclei_compat.
+// - Phase 5+: crawler, waf_detect, fuzzer, cloud_sec, iac_audit, etc.
+// - Maintain strict downward dependency on core/ and network/ only.
 pub mod dns_audit;
 pub mod extractors;
 pub mod helpers;

@@ -1,3 +1,6 @@
+// TODO: Optimize Template Orchestration Pipeline.
+// - Ensure `{{variable}}` context flows thread-safely between phases.
+// - Add telemetry spans for performance monitoring of each execution slice.
 use crate::core::rate_limiter::RateLimiter;
 use crate::core::result::ScanResult;
 use crate::core::variables::build_initial_context;

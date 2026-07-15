@@ -1,3 +1,6 @@
+// TODO: Implement Dynamic Proxy Rotation.
+// - Add support for health-checking proxies before use.
+// - Integrate cloud provider APIs (AWS, GCP) for ephemeral IP rotation.
 use rand::seq::SliceRandom;
 use std::fs;
 

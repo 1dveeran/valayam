@@ -1,3 +1,6 @@
+// TODO: Enhance StealthHttpClient for WAF Evasion.
+// - Integrate JA3/JA4 TLS spoofing at the `reqwest`/`rustls` layer.
+// - Add logic to detect and transparently follow meta-refreshes.
 use reqwest::{Client, Method, Proxy};
 use std::collections::HashMap;
 use std::time::Duration;

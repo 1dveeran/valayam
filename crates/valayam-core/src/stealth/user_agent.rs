@@ -1,3 +1,6 @@
+// TODO: Upgrade User-Agent Rotation logic.
+// - Integrate Machine Learning based generation for statistically normal UAs.
+// - Sync UAs with corresponding TLS fingerprints to avoid detection.
 use rand::seq::SliceRandom;
 
 /// Pool of real browser User-Agent strings for stealth rotation.

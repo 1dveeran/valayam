@@ -1,3 +1,6 @@
+// TODO: Upgrade TCP Port Scanning primitives.
+// - Implement advanced banner grabbing with HTTP GET fallbacks.
+// - Add raw socket support for SYN scans to bypass stateful firewalls.
 use futures::future::join_all;
 use std::collections::HashSet;
 use std::time::Duration;

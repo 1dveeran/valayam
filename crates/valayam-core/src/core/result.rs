@@ -1,3 +1,6 @@
+// TODO: Expand ScanResult for Compliance & Reporting.
+// - Add `compliance` mapping fields (e.g. OWASP, MITRE ATT&CK).
+// - Support multiple output formats natively (JSON, SARIF).
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

@@ -1,3 +1,6 @@
+// TODO: Expand ScannerError enum.
+// - Map all Phase 1-30 slice errors to this central enum.
+// - Ensure error variants serialize cleanly for SIEM ingestion.
 use thiserror::Error;
 
 #[derive(Error, Debug)]

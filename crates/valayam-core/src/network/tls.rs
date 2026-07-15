@@ -1,3 +1,6 @@
+// TODO: Deepen TLS Auditing capabilities.
+// - Implement raw ClientHello probes to detect legacy SSLv3/TLSv1.0.
+// - Add cipher suite ranking and weak cipher detection.
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;

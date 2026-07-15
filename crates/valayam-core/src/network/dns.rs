@@ -1,3 +1,6 @@
+// TODO: Expand DNS Auditing capabilities.
+// - Add AXFR (Zone Transfer) probing.
+// - Implement robust Subdomain Takeover/Dangling CNAME verification logic.
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
 
