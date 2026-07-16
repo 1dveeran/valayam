@@ -15,9 +15,9 @@ pub async fn execute(
         let host = template.target.replace("{{Hostname}}", target_url);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&host) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             // Simulate SSRF check for AWS IMDSv1
-            if let Ok(resp) = req_client.get(reqwest_url.clone())
+            if let Ok(resp) = req_client.get(reqwest_url)
                 .query(&[("url", "http://169.254.169.254/latest/meta-data/")])
                 .send().await {
                 
@@ -30,6 +30,10 @@ pub async fn execute(
                             template_severity: "Critical".to_string(),
                             target: host.clone(),
                             payload: "AWS Escalate: SSRF vulnerability leading to AWS IMDSv1 metadata exposure detected.".to_string(),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

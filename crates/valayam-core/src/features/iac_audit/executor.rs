@@ -26,6 +26,10 @@ pub async fn execute(
                             template_severity: "High".to_string(),
                             target: template.target.clone(),
                             payload: "Terraform IaC Audit: Overly permissive CIDR block (0.0.0.0/0) detected.".to_string(),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }
@@ -40,6 +44,10 @@ pub async fn execute(
                             template_severity: "Medium".to_string(),
                             target: template.target.clone(),
                             payload: "Docker IaC Audit: Container might run as root (no explicit non-root USER defined).".to_string(),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

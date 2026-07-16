@@ -28,6 +28,10 @@ pub async fn execute(
                                     template_severity: "High".to_string(),
                                     target: template.target_manifest.clone(),
                                     payload: "Overly permissive Kubernetes RBAC role: 'cluster-admin' assigned in manifest.".to_string(),
+                                    cvss_score: None,
+                                    reference: None,
+                                    solution: None,
+                                    tags: Vec::new(),
                                     compliance: Default::default(),
                                 });
                             }
@@ -45,6 +49,10 @@ pub async fn execute(
                                     template_severity: "High".to_string(),
                                     target: template.target_manifest.clone(),
                                     payload: "Privileged container detected in Kubernetes manifest.".to_string(),
+                                    cvss_score: None,
+                                    reference: None,
+                                    solution: None,
+                                    tags: Vec::new(),
                                     compliance: Default::default(),
                                 });
                         }

@@ -20,6 +20,10 @@ pub async fn execute(
         template_name: format!("{} (Chained Payload Executed)", template_info.name),
         template_severity: template_info.severity.clone(),
         payload: "Dynamic reverse shell simulation".to_string(),
+        cvss_score: None,
+        reference: None,
+        solution: None,
+        tags: Vec::new(),
         compliance: Default::default(),
     })
 }

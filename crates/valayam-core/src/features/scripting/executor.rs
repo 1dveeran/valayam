@@ -65,6 +65,10 @@ pub async fn execute(
                         template_severity,
                         target: target_owned,
                         payload: "Rhai script execution matched".to_string(),
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         compliance: Default::default(),
                     })
                 },

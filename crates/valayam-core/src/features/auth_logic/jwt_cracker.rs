@@ -1,7 +1,8 @@
-use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm, TokenData, errors::ErrorKind};
+use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm, errors::ErrorKind};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct DummyClaims {
     sub: String,
     exp: usize,

@@ -20,7 +20,7 @@ pub async fn execute_cloud_probe(
             let mut headers = std::collections::HashMap::new();
             headers.insert("X-aws-ec2-metadata-token-ttl-seconds".to_string(), "21600".to_string());
             
-            let token = if let Ok(resp) = client.send_request("", "PUT", &token_url, Some(&headers), None).await {
+            let token = if let Ok(resp) = client.send_request("PUT", &token_url, Some(&headers), None).await {
                 if resp.status().is_success() {
                     resp.text().await.ok()
                 } else {
@@ -37,11 +37,11 @@ pub async fn execute_cloud_probe(
             }
 
             let role_url = format!("{}/latest/meta-data/iam/security-credentials/", target_url.trim_end_matches('/'));
-            if let Ok(resp) = client.send_request("", "GET", &role_url, Some(&meta_headers), None).await {
+            if let Ok(resp) = client.send_request("GET", &role_url, Some(&meta_headers), None).await {
                 if resp.status().is_success() {
                     if let Ok(role_name) = resp.text().await {
                         let cred_url = format!("{}{}", role_url, role_name.trim());
-                        if let Ok(cred_resp) = client.send_request("", "GET", &cred_url, Some(&meta_headers), None).await {
+                        if let Ok(cred_resp) = client.send_request("GET", &cred_url, Some(&meta_headers), None).await {
                             if cred_resp.status().is_success() {
                                 if let Ok(creds) = cred_resp.text().await {
                                     findings.push(format!("Extracted AWS IAM Credentials for role '{}':\n{}", role_name.trim(), creds));
@@ -57,7 +57,7 @@ pub async fn execute_cloud_probe(
             let mut headers = std::collections::HashMap::new();
             headers.insert("Metadata-Flavor".to_string(), "Google".to_string());
 
-            if let Ok(resp) = client.send_request("", "GET", &meta_url, Some(&headers), None).await {
+            if let Ok(resp) = client.send_request("GET", &meta_url, Some(&headers), None).await {
                 if resp.status().is_success() {
                     if let Ok(token) = resp.text().await {
                         findings.push(format!("Extracted GCP Default Service Account Token:\n{}", token));
@@ -67,7 +67,7 @@ pub async fn execute_cloud_probe(
         },
         "docker" => {
             let docker_url = format!("{}/containers/json", target_url.trim_end_matches('/'));
-            if let Ok(resp) = client.send_request("", "GET", &docker_url, None, None).await {
+            if let Ok(resp) = client.send_request("GET", &docker_url, None, None).await {
                 if resp.status().is_success() {
                     if let Ok(body) = resp.text().await {
                         if body.contains("\"Id\"") && body.contains("\"Image\"") {
@@ -80,7 +80,7 @@ pub async fn execute_cloud_probe(
         },
         "kubelet" => {
             let kubelet_url = format!("{}/pods", target_url.trim_end_matches('/'));
-            if let Ok(resp) = client.send_request("", "GET", &kubelet_url, None, None).await {
+            if let Ok(resp) = client.send_request("GET", &kubelet_url, None, None).await {
                 if resp.status().is_success() {
                     if let Ok(body) = resp.text().await {
                         if body.contains("\"kind\":\"PodList\"") {
@@ -94,8 +94,14 @@ pub async fn execute_cloud_probe(
         _ => {}
     }
 
-    if !findings.is_empty() {
+    if findings.is_empty() {
+        None
+    } else {
         Some(ScanResult {
+            cvss_score: None,
+            reference: None,
+            solution: None,
+            tags: Vec::new(),
             timestamp: chrono::Utc::now(),
             template_id: format!("cloud-{}-probe", provider),
             template_name: format!("{} API Discovery", template.provider),
@@ -104,8 +110,6 @@ pub async fn execute_cloud_probe(
             payload: findings.join("\n"),
             compliance: std::collections::HashMap::new(),
         })
-    } else {
-        None
     }
 }
 

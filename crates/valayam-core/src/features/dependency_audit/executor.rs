@@ -58,6 +58,10 @@ pub async fn execute(
                             template_severity: vuln.severity.clone(),
                             target: lockfile.to_string_lossy().to_string(),
                             payload: format!("Dependency Audit: Package {}@{} is vulnerable to {}", dep.name, dep.version, vuln.cve_id),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

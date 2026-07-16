@@ -12,6 +12,9 @@
 /results.json
 /improve*.md
 /feature*.md
+.claude/
+.agents/
+.gemini/
 
 # Python
 venv/

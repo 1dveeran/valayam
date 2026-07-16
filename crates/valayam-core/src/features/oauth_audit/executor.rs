@@ -15,7 +15,7 @@ pub async fn execute(
         let host = template.target.replace("{{Hostname}}", target_url);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&host) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             // Try to access the OAuth token/authorize endpoint
             if let Ok(resp) = req_client.get(reqwest_url.clone()).send().await {
                 let status = resp.status();
@@ -29,7 +29,7 @@ pub async fn execute(
                     
                     // Test for Implicit Flow (response_type=token)
                     let implicit_url = format!("{}/authorize?response_type=token&client_id=test&redirect_uri=https://example.com", target_url.trim_end_matches('/'));
-                    if let Ok(imp_resp) = client.send_request("", "GET", &implicit_url, None, None).await {
+                    if let Ok(imp_resp) = client.send_request("GET", &implicit_url, None, None).await {
                         let imp_status = imp_resp.status().as_u16();
                         // If the server doesn't immediately reject the implicit flow request (e.g. 400 Bad Request)
                         // and instead returns a login page (200) or redirects to login (302), it's likely supported.
@@ -54,6 +54,10 @@ pub async fn execute(
                             template_severity: if has_implicit_flow { "High".to_string() } else { "Medium".to_string() },
                             target: host.clone(),
                             payload: payload_msg,
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

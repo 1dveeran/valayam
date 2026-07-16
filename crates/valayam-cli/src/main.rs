@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".to_string());
     
-    let tracer = opentelemetry_otlp::new_pipeline()
+    let _tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(
             opentelemetry_otlp::new_exporter()
@@ -142,7 +142,12 @@ network:
         None
     };
 
-    let http_client = Arc::new(StealthHttpClient::new(args.random_agent, proxy_rotator)?);
+    let http_client = Arc::new(StealthHttpClient::new(
+        proxy_rotator.is_some(),
+        args.random_agent,
+        None,
+        true,
+    )?);
     let executor_nuclei = NucleiExecutor::new(Arc::clone(&http_client));
 
     if args.waf_detect {
@@ -168,7 +173,7 @@ network:
     // Initialize rate limiter if configured
     let rate_limiter = args.rate_limit.map(|rps| {
         println!("[+] Rate limiting enabled: {} requests/second", rps);
-        Arc::new(RateLimiter::new(rps))
+        Arc::new(RateLimiter::new_simple(rps))
     });
 
     // 1.5 Initialize gRPC Client if requested

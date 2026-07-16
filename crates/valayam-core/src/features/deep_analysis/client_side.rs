@@ -9,7 +9,7 @@ pub async fn analyze(
 ) -> Option<ScanResult> {
     if template.analysis_type == "wasm_decompile" {
         // Fetch WASM file
-        if let Ok(res) = client.get_client().get(target_url).send().await {
+        if let Ok(res) = client.client().get(target_url).send().await {
             if let Ok(bytes) = res.bytes().await {
                 let mut found_strings = Vec::new();
                 for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
@@ -29,6 +29,10 @@ pub async fn analyze(
                 
                 if !found_strings.is_empty() {
                     return Some(ScanResult {
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         timestamp: chrono::Utc::now(),
                         template_id: "deep-analysis-wasm".to_string(),
                         template_name: "WASM Hardcoded Secrets".to_string(),
@@ -42,7 +46,7 @@ pub async fn analyze(
         }
     } else if template.analysis_type == "source_map" {
         // Fetch .map file
-        if let Ok(res) = client.get_client().get(target_url).send().await {
+        if let Ok(res) = client.client().get(target_url).send().await {
             if let Ok(bytes) = res.bytes().await {
                 if let Ok(map) = sourcemap::decode(bytes.as_ref()) {
                     if let sourcemap::DecodedMap::Regular(sm) = map {
@@ -50,6 +54,10 @@ pub async fn analyze(
                             if let Some(content) = sm.get_source_contents(src_id) {
                                 if content.contains("process.env.API_KEY") || content.contains("AWS_ACCESS_KEY_ID") {
                                     return Some(ScanResult {
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                                         timestamp: chrono::Utc::now(),
                                         template_id: "deep-analysis-sourcemap".to_string(),
                                         template_name: "Source Map Secrets Exposure".to_string(),

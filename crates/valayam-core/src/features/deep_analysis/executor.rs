@@ -32,6 +32,10 @@ pub async fn execute(
                 // Simulate calculating Shannon entropy of HTTP responses
                 // This would drop the ScanResult if the variance is high (likely false positive).
                 return Some(ScanResult {
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                     timestamp: chrono::Utc::now(),
                     target: target_url.to_string(),
                     template_id: _template_id.to_string(),

@@ -20,7 +20,7 @@ pub async fn mutate_and_test(
     });
     
     let response = client
-        .get_client()
+        .client()
         .post(llm_endpoint)
         .json(&request_body)
         .send()
@@ -33,7 +33,7 @@ pub async fn mutate_and_test(
             
             // Fire the mutated payload at the target URL
             let test_req = client
-                .get_client()
+                .client()
                 .post(target_url)
                 .body(mutated_payload.to_string())
                 .send()
@@ -42,6 +42,10 @@ pub async fn mutate_and_test(
             if let Ok(res) = test_req {
                 if res.status().is_success() {
                     return Some(ScanResult {
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         timestamp: chrono::Utc::now(),
                         template_id: "deep-analysis-llm".to_string(),
                         template_name: "LLM Mutator WAF Bypass".to_string(),

@@ -7,7 +7,6 @@ use crate::core::variables::build_initial_context;
 use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer};
 use crate::network::http::StealthHttpClient;
 use super::schema::VulnerabilityTemplate;
-use std::sync::Arc;
 use url::Url;
 
 /// Orchestrates the execution of a single template against a target.

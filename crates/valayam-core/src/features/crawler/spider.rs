@@ -87,7 +87,7 @@ impl Crawler {
                     }
 
                     // Perform request
-                    if let Ok(resp) = client_clone.send_request("", "GET", &probe_url_str, headers_clone.as_ref(), None).await {
+                    if let Ok(resp) = client_clone.send_request("GET", &probe_url_str, headers_clone.as_ref(), None).await {
                         if resp.status().is_success() {
                             let mut disc = discovered_clone.lock().await;
                             disc.insert(probe_url_str.clone());
@@ -149,7 +149,7 @@ impl Crawler {
         tracing::debug!(url = %url_str, depth = depth, "Crawling page");
 
         // Fetch page
-        let response = match self.client.send_request("", "GET", &url_str, self.crawl_headers.as_ref(), None).await {
+        let response = match self.client.send_request("GET", &url_str, self.crawl_headers.as_ref(), None).await {
             Ok(resp) => resp,
             Err(_) => return,
         };

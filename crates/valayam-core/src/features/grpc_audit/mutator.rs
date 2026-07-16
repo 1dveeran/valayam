@@ -3,7 +3,7 @@ pub struct GrpcMutator;
 impl GrpcMutator {
     /// Simulates parsing gRPC reflection descriptors and returning a fuzzed protobuf payload.
     /// In a real implementation, this would use `prost` to build dynamic messages.
-    pub fn generate_fuzzed_payload(service_name: &str) -> Vec<u8> {
+    pub fn generate_fuzzed_payload(_service_name: &str) -> Vec<u8> {
         let mut payload = Vec::new();
         // A mock fuzzed payload: large repeated strings and boundary integers.
         let fuzzed_str = "A".repeat(10000);

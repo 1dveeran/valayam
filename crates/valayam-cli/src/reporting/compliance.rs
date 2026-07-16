@@ -1,4 +1,3 @@
-use valayam_core::core::result::ScanResult;
 use std::collections::HashMap;
 
 /// Maps vulnerabilities to standard compliance frameworks.

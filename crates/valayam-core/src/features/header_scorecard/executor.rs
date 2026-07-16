@@ -15,7 +15,7 @@ pub async fn execute(
         let host = template.target.replace("{{Hostname}}", target_url);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&host) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             if let Ok(resp) = req_client.get(reqwest_url).send().await {
                 let headers = resp.headers();
                 let mut missing = Vec::new();
@@ -33,6 +33,10 @@ pub async fn execute(
                         template_severity: "Low".to_string(),
                         target: host.clone(),
                         payload: format!("Missing recommended security headers: {:?}", missing),
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         compliance: Default::default(),
                     });
                 }

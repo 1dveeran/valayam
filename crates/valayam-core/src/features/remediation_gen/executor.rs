@@ -37,6 +37,10 @@ pub async fn execute(
                 template_severity: "Info".to_string(),
                 target: "System".to_string(),
                 payload: format!("Successfully mapped {} findings to actionable remediation steps.", findings.len()),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance,
             });
         }

@@ -48,6 +48,10 @@ pub async fn execute(
                 template_severity: "Critical".to_string(),
                 target: template.target_dir.clone(),
                 payload: format!("SAST Secrets: Found {} hardcoded secrets in source files.", findings.len()),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             });
         }

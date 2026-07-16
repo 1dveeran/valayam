@@ -18,7 +18,7 @@ pub async fn execute(
             // Check for gRPC reflection
             let reflection_url = format!("{}/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo", host.trim_end_matches('/'));
             if let Ok(reqwest_url) = reqwest::Url::parse(&reflection_url) {
-                let req_client = client.get_client();
+                let req_client = client.client();
                 
                 // We send a POST request which is typical for gRPC over HTTP/2. Even if it fails with invalid protobuf, 
                 // the server might return HTTP 200 with grpc-status != 12 (UNIMPLEMENTED), indicating the endpoint exists.
@@ -35,6 +35,10 @@ pub async fn execute(
                             template_severity: "Medium".to_string(),
                             target: host.clone(),
                             payload: "gRPC Server Reflection is enabled, potentially exposing sensitive internal service definitions.".to_string(),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         }];
 
@@ -57,6 +61,10 @@ pub async fn execute(
                                         template_severity: "Critical".to_string(),
                                         target: host.clone(),
                                         payload: "gRPC endpoint crashed (HTTP 500) when supplied with a dynamically fuzzed protobuf payload extracted via Reflection.".to_string(),
+                                        cvss_score: None,
+                                        reference: None,
+                                        solution: None,
+                                        tags: Vec::new(),
                                         compliance: Default::default(),
                                     });
                                 }

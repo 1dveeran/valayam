@@ -2,7 +2,7 @@ use crate::cli::Args;
 use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;

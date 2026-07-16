@@ -26,6 +26,10 @@ pub async fn execute(
                 template_severity: "High".to_string(),
                 target: domain.clone(),
                 payload: format!("Domain {} found on active threat intelligence blocklists.", domain),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance,
             });
         }

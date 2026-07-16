@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 /// Executes all TLS audit rules from a template.
 ///
+///
 /// Supports special matcher types:
 /// - `type: "expired"` — matches if the certificate is past its expiry date
 /// - `type: "self_signed"` — matches if the certificate is self-signed
@@ -16,6 +17,10 @@ use std::collections::HashMap;
 /// - `type: "tls_version"` — regex match against the negotiated TLS version
 /// - `type: "legacy_tls"` — active probe to see if server supports SSLv3, TLSv1.0, TLSv1.1
 /// - `type: "regex"` — regex match against issuer, subject, serial, version, or cipher
+/// - `type: "san"` — matches if Subject Alternative Name contains the pattern
+/// - `type: "weak_key"` — matches if public key is weak (e.g., RSA < 2048 bits)
+/// - `type: "is_ca"` — matches if certificate is a CA certificate
+/// - `type: "basic_constraints"` — matches basic constraints properties
 pub async fn execute(
     tls_rules: &[TlsAuditTemplate],
     template_id: &str,
@@ -26,7 +31,7 @@ pub async fn execute(
         let host = resolve_variables(&rule.host, variables);
 
         tracing::debug!(target = %host, port = %rule.port, "Starting TLS certificate inspection");
-        
+
         let mut cert_info = None;
         let mut legacy_versions = Vec::new();
 
@@ -65,6 +70,10 @@ pub async fn execute(
                             template_severity: template_info.severity.clone(),
                             target: format!("{}:{}", host, rule.port),
                             payload: format!("Server negotiated protocol {} which is lower than required minimum version {}", negotiated, min_v),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }
@@ -81,9 +90,13 @@ pub async fn execute(
                     template_severity: template_info.severity.clone(),
                     target: format!("{}:{}", host, rule.port),
                     payload: format!(
-                        "Issuer: {}, Subject: {}, Expires: {}, Self-signed: {}",
-                        c.issuer, c.subject, c.not_after, c.is_self_signed
+                        "Issuer: {}, Subject: {}, Expires: {}, Self-signed: {}, SANs: {:?}, Public Key: {} {}bit",
+                        c.issuer, c.subject, c.not_after, c.is_self_signed, c.subject_alternative_names, c.public_key_algorithm, c.public_key_bits.unwrap_or(0)
                     ),
+                    cvss_score: None,
+                    reference: None,
+                    solution: None,
+                    tags: Vec::new(),
                     compliance: Default::default(),
                 });
             }
@@ -96,7 +109,9 @@ pub async fn execute(
                 "self_signed" => cert_info.as_ref().map_or(false, |c| c.is_self_signed),
                 "weak_cipher" => {
                     cert_info.as_ref().and_then(|c| c.cipher_suite.as_ref()).map_or(false, |cipher| {
-                        cipher.contains("CBC") || cipher.contains("RC4") || cipher.contains("3DES") || cipher.contains("DES")
+                        cipher.contains("CBC") || cipher.contains("RC4") || cipher.contains("3DES") || cipher.contains("DES") ||
+                        cipher.contains("NULL") || cipher.contains("MD5") ||
+                        cipher.contains("RC2") || cipher.contains("IDEA")
                     })
                 },
                 "tls_version" => {
@@ -106,19 +121,72 @@ pub async fn execute(
                         })
                     })
                 },
+                "san" => {
+                    cert_info.as_ref().map_or(false, |c| {
+                        matcher.regex.iter().any(|pattern| {
+                            let re = Regex::new(pattern).unwrap_or_else(|_| Regex::new(".*").unwrap());
+                            c.subject_alternative_names.iter().any(|san| re.is_match(san))
+                        })
+                    })
+                },
+                "weak_key" => {
+                    cert_info.as_ref().map_or(false, |c| {
+                        match c.public_key_algorithm.as_str() {
+                            "RSA" => {
+                                if let Some(bits) = c.public_key_bits {
+                                    bits < 2048
+                                } else {
+                                    false // unknown key size, assume not weak for safety
+                                }
+                            }
+                            "DSA" => {
+                                if let Some(bits) = c.public_key_bits {
+                                    bits < 2048
+                                } else {
+                                    false
+                                }
+                            }
+                            _ => false,
+                        }
+                    })
+                },
+                "is_ca" => cert_info.as_ref().map_or(false, |c| c.is_ca),
+                "basic_constraints" => {
+                    cert_info.as_ref().map_or(false, |c| {
+                        matcher.regex.iter().any(|pattern| {
+                            let re = Regex::new(pattern).unwrap_or_else(|_| Regex::new(".*").unwrap());
+                            let mut match_str = String::new();
+                            if c.is_ca {
+                                match_str.push_str("CA:true");
+                            }
+                            if let Some(path_len) = c.path_len_constraint {
+                                if !match_str.is_empty() { match_str.push_str(", "); }
+                                match_str.push_str(&format!("pathlen:{}", path_len));
+                            }
+                            re.is_match(&match_str)
+                        })
+                    })
+                },
                 "regex" => {
                     if let Some(c) = cert_info.as_ref() {
                         let search_text = match matcher.part.as_str() {
-                            "issuer" => &c.issuer,
-                            "subject" => &c.subject,
-                            "serial" => &c.serial,
-                            "version" => c.tls_version.as_deref().unwrap_or(""),
-                            "cipher" => c.cipher_suite.as_deref().unwrap_or(""),
-                            _ => &c.issuer,
+                            "issuer" => c.issuer.to_string(),
+                            "subject" => c.subject.to_string(),
+                            "serial" => c.serial.to_string(),
+                            "version" => c.tls_version.as_deref().unwrap_or("").to_string(),
+                            "cipher" => c.cipher_suite.as_deref().unwrap_or("").to_string(),
+                            "san" => c.subject_alternative_names.join(", "),
+                            "public_key" => format!(
+                                "{} {}",
+                                c.public_key_algorithm,
+                                c.public_key_bits.map(|b| b.to_string()).unwrap_or_else(|| "unknown".to_string())
+                            ),
+                            "is_ca" => c.is_ca.to_string(),
+                            _ => c.issuer.to_string(),
                         };
                         matcher.regex.iter().any(|pattern| {
                             Regex::new(pattern)
-                                .map(|re| re.is_match(search_text))
+                                .map(|re| re.is_match(&search_text))
                                 .unwrap_or(false)
                         })
                     } else {
@@ -136,12 +204,44 @@ pub async fn execute(
                     "weak_cipher" => format!("Weak cipher negotiated: {}", cert_info.as_ref().unwrap().cipher_suite.as_deref().unwrap_or("Unknown")),
                     "tls_version" => format!("TLS version matched: {}", cert_info.as_ref().unwrap().tls_version.as_deref().unwrap_or("Unknown")),
                     "legacy_tls" => format!("Legacy protocols supported: {:?}", legacy_versions),
-                    _ => format!(
-                        "TLS match on {}: issuer={}, expires={}",
-                        host, 
-                        cert_info.as_ref().map(|c| c.issuer.as_str()).unwrap_or(""), 
-                        cert_info.as_ref().map(|c| c.not_after.as_str()).unwrap_or("")
-                    ),
+                    "san" => format!("SAN matched: {} (in {:?})", matcher.regex.join(", "), cert_info.as_ref().unwrap().subject_alternative_names),
+                    "weak_key" => {
+                        let c = cert_info.as_ref().unwrap();
+                        let bits_str = match c.public_key_bits {
+                            Some(bits) => bits.to_string(),
+                            None => "unknown".to_string(),
+                        };
+                        format!("Weak public key: {} {}bit", c.public_key_algorithm, bits_str)
+                    },
+                    "is_ca" => if cert_info.as_ref().unwrap().is_ca { "Certificate is a CA certificate".to_string() } else { "Certificate is not a CA certificate".to_string() },
+                    "basic_constraints" => {
+                        let c = cert_info.as_ref().unwrap();
+                        let mut desc = String::new();
+                        if c.is_ca {
+                            desc.push_str("CA:true");
+                        }
+                        if let Some(path_len) = c.path_len_constraint {
+                            if !desc.is_empty() { desc.push_str(", "); }
+                            desc.push_str(&format!("pathlen:{}", path_len));
+                        }
+                        format!("Basic constraints: {}", if desc.is_empty() { "None" } else { &desc })
+ },
+                    _ => {
+                        let c = cert_info.as_ref();
+                        let issuer = c.map(|c| c.issuer.as_str()).unwrap_or("").to_string();
+                        let not_after = c.map(|c| c.not_after.as_str()).unwrap_or("").to_string();
+                        let sans = c.map(|c| c.subject_alternative_names.clone()).unwrap_or_default();
+                        let (alg, bits) = c.map(|c| {
+                            (
+                                c.public_key_algorithm.as_str(),
+                                c.public_key_bits.map(|b| b.to_string()).unwrap_or_else(|| "unknown".to_string())
+                            )
+                        }).unwrap_or(("Unknown", "unknown".to_string()));
+                        format!(
+                            "TLS match on {}: issuer={}, expires={}, SANs: {:?}, Public Key: {} {}bit",
+                            host, issuer, not_after, sans, alg, bits
+                        )
+                    },
                 };
 
                 return Some(ScanResult {
@@ -151,6 +251,10 @@ pub async fn execute(
                     template_severity: template_info.severity.clone(),
                     target: format!("{}:{}", host, rule.port),
                     payload,
+                    cvss_score: None,
+                    reference: None,
+                    solution: None,
+                    tags: Vec::new(),
                     compliance: Default::default(),
                 });
             }

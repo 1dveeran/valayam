@@ -15,7 +15,7 @@ pub async fn execute(
         let host = template.target.replace("{{Hostname}}", target_url);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&host) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             // Simulate SSRF check for GCP/Azure Metadata
             let payload_url = if template.provider == "gcp" {
                 "http://metadata.google.internal/computeMetadata/v1/"
@@ -36,6 +36,10 @@ pub async fn execute(
                             template_severity: "Critical".to_string(),
                             target: host.clone(),
                             payload: format!("Azure/GCP Escalate: SSRF vulnerability leading to {} metadata exposure detected.", template.provider),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

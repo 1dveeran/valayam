@@ -15,7 +15,7 @@ pub async fn execute(
         let host = template.target.replace("{{Hostname}}", target_url);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&host) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             if let Ok(resp) = req_client.get(reqwest_url).send().await {
                 if let Ok(body) = resp.text().await {
                     // For MVP to Production: Simulate comparing current response body to a stored baseline
@@ -33,6 +33,10 @@ pub async fn execute(
                             template_severity: "Medium".to_string(),
                             target: host.clone(),
                             payload: format!("Configuration drift detected! Baseline: {:x}, Current: {:x}", simulated_baseline, current_hash),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

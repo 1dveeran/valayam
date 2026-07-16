@@ -19,7 +19,13 @@ pub async fn execute(
         let domain = resolve_variables(&rule.domain, variables);
         
         tracing::debug!(target = %domain, query_type = %rule.query_type, "Starting DNS resolution");
-        let records = dns::resolve(&domain, &rule.query_type).await;
+        let records = match dns::resolve(&domain, &rule.query_type).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(target = %domain, error = %e, "DNS resolution failed");
+                continue;
+            }
+        };
 
         if records.is_empty() {
             tracing::trace!("No DNS records found for {}", domain);
@@ -39,6 +45,10 @@ pub async fn execute(
                 template_severity: template_info.severity.clone(),
                 target: domain,
                 payload: format!("{} records: {}", rule.query_type, records_text),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             });
         }
@@ -57,11 +67,15 @@ pub async fn execute(
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),
                             template_severity: template_info.severity.clone(),
-                            target: domain,
+                            target: domain.clone(),
                             payload: format!(
                                 "DNS {} matched '{}': {}",
                                 rule.query_type, pattern, records_text
                             ),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

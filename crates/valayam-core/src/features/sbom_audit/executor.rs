@@ -20,7 +20,7 @@ pub async fn execute(
         let url = format!("{}/{}", base, file_type);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&url) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             if let Ok(resp) = req_client.get(reqwest_url).send().await {
                 if resp.status().is_success() {
                     return Some(ScanResult {
@@ -30,6 +30,10 @@ pub async fn execute(
                         template_severity: "Medium".to_string(),
                         target: host.clone(),
                         payload: format!("Exposed SBOM/Manifest file detected at: {}", url),
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         compliance: Default::default(),
                     });
                 }

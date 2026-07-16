@@ -16,7 +16,7 @@ pub async fn execute(
         let host = template.target.replace("{{Hostname}}", target_url);
 
         if let Ok(reqwest_url) = reqwest::Url::parse(&host) {
-            let req_client = client.get_client();
+            let req_client = client.client();
             if let Ok(resp) = req_client.get(reqwest_url).send().await {
                 if let Ok(body) = resp.text().await {
                     // Look for common DOM-based open redirect patterns in the JS body
@@ -31,6 +31,10 @@ pub async fn execute(
                             template_severity: "High".to_string(),
                             target: host.clone(),
                             payload: "DOM-based Open Redirect vulnerability pattern detected in JavaScript.".to_string(),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     }

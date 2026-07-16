@@ -59,6 +59,10 @@ pub async fn execute(
                     template_severity: "High".to_string(),
                     target: addr,
                     payload: "IoT/MQTT Broker is exposed and accepting connections on port 1883.".to_string(),
+                    cvss_score: None,
+                    reference: None,
+                    solution: None,
+                    tags: Vec::new(),
                     compliance,
                 });
             }

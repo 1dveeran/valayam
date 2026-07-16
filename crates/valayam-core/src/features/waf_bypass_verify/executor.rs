@@ -2,7 +2,6 @@ use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
 use crate::template::schema::TemplateInfo;
 use chrono::Utc;
-use std::sync::Arc;
 use urlencoding::encode;
 use super::parser::WafBypassVerifyTemplate;
 
@@ -22,7 +21,7 @@ pub async fn execute(
 
             tracing::debug!(target = %host, payload = %payload, "Sending WAF evasion payload");
 
-            match http_client.send_request(&host, "GET", &test_url, None, None).await {
+            match http_client.send_request("GET", &test_url, None, None).await {
                 Ok(response) => {
                     let status = response.status().as_u16();
 
@@ -39,6 +38,10 @@ pub async fn execute(
                                 "Payload '{}' bypassed WAF filtering. Target returned HTTP {}.",
                                 payload, status
                             ),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance: Default::default(),
                         });
                     } else {
@@ -47,7 +50,7 @@ pub async fn execute(
                         
                         for evaded_payload in permutations {
                             let evaded_url = format!("{}/?q={}", host, evaded_payload);
-                            if let Ok(evaded_resp) = http_client.send_request(&host, "GET", &evaded_url, None, None).await {
+                            if let Ok(evaded_resp) = http_client.send_request("GET", &evaded_url, None, None).await {
                                 let ev_status = evaded_resp.status().as_u16();
                                 if ev_status != 403 && ev_status != 406 && ev_status != 429 {
                                     return Some(ScanResult {
@@ -60,6 +63,10 @@ pub async fn execute(
                                             "WAF blocked initial payload, but evasive mutation '{}' successfully bypassed filtering (HTTP {}).",
                                             evaded_payload, ev_status
                                         ),
+                                        cvss_score: None,
+                                        reference: None,
+                                        solution: None,
+                                        tags: Vec::new(),
                                         compliance: Default::default(),
                                     });
                                 }
@@ -69,7 +76,7 @@ pub async fn execute(
                         // Also try HPP
                         let hpp_urls = super::permutator::WafPermutator::generate_hpp_urls(&host, "q", payload);
                         for hpp_url in hpp_urls {
-                            if let Ok(hpp_resp) = http_client.send_request(&host, "GET", &hpp_url, None, None).await {
+                            if let Ok(hpp_resp) = http_client.send_request("GET", &hpp_url, None, None).await {
                                 let hpp_status = hpp_resp.status().as_u16();
                                 if hpp_status != 403 && hpp_status != 406 && hpp_status != 429 {
                                     return Some(ScanResult {
@@ -82,6 +89,10 @@ pub async fn execute(
                                             "WAF blocked initial payload, but HTTP Parameter Pollution successfully bypassed filtering: {}",
                                             hpp_url
                                         ),
+                                        cvss_score: None,
+                                        reference: None,
+                                        solution: None,
+                                        tags: Vec::new(),
                                         compliance: Default::default(),
                                     });
                                 }

@@ -4241,6 +4241,7 @@ dependencies = [
  "hickory-resolver",
  "hmac",
  "jsonwebtoken",
+ "lazy_static",
  "md5",
  "prost 0.12.6",
  "rand 0.8.7",

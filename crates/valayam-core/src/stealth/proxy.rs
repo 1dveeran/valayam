@@ -13,6 +13,14 @@ pub struct ProxyRotator {
 }
 
 impl ProxyRotator {
+    /// Create a new empty `ProxyRotator` (no proxies).
+    pub fn new() -> Self {
+        Self {
+            proxies: Vec::new(),
+            index: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        }
+    }
+
     /// Loads proxies from a file (one per line).
     /// Empty lines and lines starting with `#` are skipped.
     pub fn load_from_file(path: &str) -> Result<Self, String> {

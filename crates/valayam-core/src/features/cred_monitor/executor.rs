@@ -6,7 +6,7 @@ use super::parser::CredMonitorTemplate;
 
 pub async fn execute(
     target_url: &str,
-    client: &StealthHttpClient,
+    _client: &StealthHttpClient,
     templates: &[CredMonitorTemplate],
     template_id: &str,
     template_info: &TemplateInfo,
@@ -24,6 +24,10 @@ pub async fn execute(
                 template_severity: "High".to_string(),
                 target: domain.clone(),
                 payload: format!("Credential Monitor: Found potentially leaked credentials for domain {} or emails {:?}", domain, template.emails),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             });
         }

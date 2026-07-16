@@ -38,6 +38,7 @@ impl ApiVulnDb {
 }
 
 pub struct LocalVulnDb {
+    #[allow(dead_code)]
     db_path: String,
 }
 
@@ -46,7 +47,7 @@ impl LocalVulnDb {
         Self { db_path }
     }
 
-    pub fn check_package(&self, _ecosystem: &str, package: &str, _version: &str) -> Vec<VulnRecord> {
+    pub fn check_package(&self, _ecosystem: &str, _package: &str, _version: &str) -> Vec<VulnRecord> {
         // Option B: Local DB was using sqlite, removed to keep core stateless.
         // In an enterprise setup, this would load a JSON/CSV index into memory or use the API.
         tracing::warn!("LocalVulnDb sqlite backend has been deprecated. Please use ApiVulnDb.");

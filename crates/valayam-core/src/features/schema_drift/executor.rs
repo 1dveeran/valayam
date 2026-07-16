@@ -38,7 +38,7 @@ pub async fn execute(
         let crawler = Crawler::new(Arc::new(http_client.clone()), &host, 1, None, None);
         
         match crawler {
-            Ok(mut c) => {
+            Ok(c) => {
                 let discovered_urls = c.run().await;
                 
                 let mut shadow_apis = Vec::new();
@@ -78,6 +78,10 @@ pub async fn execute(
                             shadow_apis.len(),
                             shadow_apis
                         ),
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         compliance: Default::default(),
                     });
                 }

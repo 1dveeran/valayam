@@ -57,7 +57,7 @@ pub async fn execute(
                     let url_str = mutate_query_url(&base_url, &query_params, key, payload);
 
                     // Send mutated request
-                    if let Ok(resp) = client.send_request("", "GET", &url_str, None, None).await {
+                    if let Ok(resp) = client.send_request("GET", &url_str, None, None).await {
                         let status_code = resp.status().as_u16();
                         let body_text = resp.text().await.unwrap_or_default();
 
@@ -67,6 +67,10 @@ pub async fn execute(
                                 if let Some(ref statuses) = matcher.status {
                                     if statuses.contains(&status_code) {
                                         return Some(ScanResult {
+                                            cvss_score: None,
+                                            reference: None,
+                                            solution: None,
+                                            tags: Vec::new(),
                                             timestamp: Utc::now(),
                                             template_id: template_id.to_string(),
                                             template_name: template_info.name.clone(),
@@ -82,6 +86,10 @@ pub async fn execute(
                                     if let Ok(re) = regex::Regex::new(pattern) {
                                         if re.is_match(&body_text) {
                                             return Some(ScanResult {
+                                            cvss_score: None,
+                                            reference: None,
+                                            solution: None,
+                                            tags: Vec::new(),
                                                 timestamp: Utc::now(),
                                                 template_id: template_id.to_string(),
                                                 template_name: template_info.name.clone(),

@@ -28,7 +28,7 @@ pub async fn execute(
 
         for endpoint in idp_endpoints {
             let test_url = format!("{}{}", url.trim_end_matches('/'), endpoint);
-            if let Ok(resp) = client.send_request(base_url, "GET", &test_url, None, None).await {
+            if let Ok(resp) = client.send_request("GET", &test_url, None, None).await {
                 if resp.status().is_success() {
                     findings.push(endpoint.to_string());
                 }
@@ -46,6 +46,10 @@ pub async fn execute(
                 template_severity: "Medium".to_string(),
                 target: url,
                 payload: format!("Exposed Identity Provider (IDP) discovery/sign-on endpoints detected: {:?}", findings),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance,
             });
         }

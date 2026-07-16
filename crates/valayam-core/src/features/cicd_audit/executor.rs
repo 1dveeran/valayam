@@ -31,6 +31,10 @@ pub async fn execute(
                                         template_severity: "High".to_string(),
                                         target: path.to_string_lossy().to_string(),
                                         payload: "CI/CD Audit: GitHub Action workflow uses 'pull_request_target' with 'actions/checkout', which is vulnerable to malicious PRs (Pwn Request).".to_string(),
+                                        cvss_score: None,
+                                        reference: None,
+                                        solution: None,
+                                        tags: Vec::new(),
                                         compliance: Default::default(),
                                     });
                                 }

@@ -18,6 +18,10 @@ pub async fn execute(
                 template_severity: "Low".to_string(),
                 target: template.target_image.clone(),
                 payload: "Container Audit: Image uses the 'latest' tag or no tag, which can lead to unpredictable deployments and security drift.".to_string(),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             });
         }

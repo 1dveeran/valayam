@@ -1,5 +1,5 @@
 use valayam_core::core::result::ScanResult;
-use genpdf::{elements, style, Document, SimplePageDecorator};
+use genpdf::{elements, Document, SimplePageDecorator};
 use std::fs::File;
 
 pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box<dyn std::error::Error>> {

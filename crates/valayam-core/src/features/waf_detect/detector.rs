@@ -53,7 +53,7 @@ pub async fn detect_waf(
     let mut detections = Vec::new();
 
     // Phase 1: Baseline request (clean GET) — check headers
-    if let Ok(resp) = client.send_request("", "GET", target_url, None, None).await {
+    if let Ok(resp) = client.send_request("GET", target_url, None, None).await {
         let headers = resp.headers().clone();
         let body = resp.text().await.unwrap_or_default().to_lowercase();
 
@@ -101,7 +101,7 @@ pub async fn detect_waf(
 
     // Phase 2: Trigger request (send known attack signature to provoke WAF block)
     let trigger_url = format!("{}?test=<script>alert(1)</script>&id=1%20OR%201=1", target_url);
-    if let Ok(resp) = client.send_request("", "GET", &trigger_url, None, None).await {
+    if let Ok(resp) = client.send_request("GET", &trigger_url, None, None).await {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default().to_lowercase();
 

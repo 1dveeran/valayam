@@ -78,7 +78,7 @@ async fn process_http_request(
     let body_str = String::from_utf8_lossy(&body_bytes).to_string();
 
     let reqwest_method = ReqwestMethod::from_str(method.as_str()).unwrap_or(ReqwestMethod::GET);
-    let mut req_builder = stealth_client.get_client().request(reqwest_method, &full_uri);
+    let mut req_builder = stealth_client.client().request(reqwest_method, &full_uri);
 
     for (k, v) in req.headers() {
         if let Ok(k_name) = reqwest::header::HeaderName::from_bytes(k.as_str().as_bytes()) {

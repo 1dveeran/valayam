@@ -14,7 +14,7 @@ pub async fn execute(
     for template in templates {
         let crt_sh_url = format!("https://crt.sh/?q=%.{}&output=json", template.query_domain);
 
-        if let Ok(resp) = client.send_request("https://crt.sh", "GET", &crt_sh_url, None, None).await {
+        if let Ok(resp) = client.send_request("GET", &crt_sh_url, None, None).await {
             if resp.status().is_success() {
                 if let Ok(body) = resp.text().await {
                     // MVP: Just check if we got a JSON array back that is not empty
@@ -29,6 +29,10 @@ pub async fn execute(
                             template_severity: "Info".to_string(),
                             target: template.query_domain.clone(),
                             payload: "Subdomains discovered via Certificate Transparency logs (crt.sh).".to_string(),
+                            cvss_score: None,
+                            reference: None,
+                            solution: None,
+                            tags: Vec::new(),
                             compliance,
                         });
                     }

@@ -21,10 +21,10 @@ pub async fn execute(
 ) -> Option<ScanResult> {
     for template in templates {
         let domain = template.target.replace("{{Hostname}}", target_host);
-        
-        let cnames = dns::resolve(&domain, "CNAME").await;
-        
-        for cname in cnames {
+
+        let cnames = dns::resolve(&domain, "CNAME").await.unwrap_or_default();
+
+        for cname in &cnames {
             for &vuln in VULNERABLE_CNAMES {
                 if cname.contains(vuln) {
                     return Some(ScanResult {
@@ -34,6 +34,10 @@ pub async fn execute(
                         template_severity: template_info.severity.clone(),
                         target: domain.clone(),
                         payload: format!("Dangling CNAME record detected pointing to {}. Vulnerable to subdomain takeover.", cname),
+                        cvss_score: None,
+                        reference: None,
+                        solution: None,
+                        tags: Vec::new(),
                         compliance: Default::default(),
                     });
                 }

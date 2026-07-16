@@ -31,7 +31,7 @@ pub async fn execute(
         };
 
         // Scan the specific SCADA port using the network TCP port scanner module
-        let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None).await;
+        let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None, false).await;
 
         if let Some(_open_port) = results.first() {
             return Some(ScanResult {
@@ -41,6 +41,10 @@ pub async fn execute(
                 template_severity: "Critical".to_string(),
                 target: host.clone(),
                 payload: format!("CRITICAL: Exposed {} SCADA interface detected on port {}!", protocol.to_uppercase(), port),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             });
         }

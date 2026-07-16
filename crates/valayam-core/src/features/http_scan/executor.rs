@@ -95,7 +95,6 @@ pub async fn execute(
         
         let resp = match client
             .send_request(
-                target_url,
                 &req_rule.method,
                 &resolved_path,
                 resolved_headers.as_ref(),
@@ -178,6 +177,10 @@ pub async fn execute(
                 template_severity: template_info.severity.clone(),
                 target: target_url.to_string(),
                 payload: resolved_path,
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             });
         }

@@ -396,6 +396,36 @@ tls:
 cargo run --bin valayam-cli -- -t tls-audit.yaml -u https://example.com
 ```
 
+#### Available TLS Matcher Types
+
+Valayam TLS auditing supports these special matcher types:
+
+| Matcher Type | Description | Example |
+|--------------|-------------|---------|
+| `expired` | Certificate has passed its validity period | `- type: "expired"` |
+| `self_signed` | Certificate is self-signed (not issued by a trusted CA) | `- type: "self_signed"` |
+| `weak_cipher` | Negotiated cipher suite is considered weak (CBC, RC4, 3DES, etc.) | `- type: "weak_cipher"` |
+| `tls_version` | Regex match against negotiated TLS version | `- type: "tls_version" - part: "version" - regex: ["^TLSv1\\.0$", "^TLSv1\\.1$"]` |
+| `legacy_tls` | Active probe for SSLv3, TLSv1.0, TLSv1.1 support | `- type: "legacy_tls"` |
+| `san` | Regex match against Subject Alternative Names | `- type: "san" - regex: ["\\.example\\.com$", "\\.internal$"]` |
+| `weak_key` | Public key is weak (RSA < 2048 bits, DSA < 2048 bits) | `- type: "weak_key"` |
+| `is_ca` | Certificate is a CA certificate | `- type: "is_ca"` |
+| `basic_constraints` | Match against basic constraints extension (CA:true, pathlen:N) | `- type: "basic_constraints" - regex: ["CA:true", "pathlen:\\d+"]` |
+| `regex` | Generic regex match against certificate/TLS fields | `- type: "regex" - part: "issuer" - regex: ["Let's Encrypt"]` |
+
+#### Available TLS Match Parts (for `regex` type)
+
+| Part | Description |
+|------|-------------|
+| `issuer` | Certificate issuer DN |
+| `subject` | Certificate subject DN |
+| `serial` | Certificate serial number |
+| `version` | Negotiated TLS version (e.g., "TLSv1.2") |
+| `cipher` | Negotiated cipher suite (e.g., "TLS_AES_256_GCM_SHA384") |
+| `san` | Subject Alternative Names (comma-separated list) |
+| `public_key` | Public key algorithm and size (e.g., "RSA 2048") |
+| `is_ca` | Boolean: whether certificate is a CA |
+
 ---
 
 ### Rhai Script — Multi-Step Workflow

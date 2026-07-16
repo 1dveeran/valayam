@@ -33,7 +33,6 @@ impl NucleiExecutor {
                 let Ok(resp) = self
                     .client
                     .send_request(
-                        target_url,
                         &req_rule.method,
                         &resolved_path,
                         req_rule.headers.as_ref(),
@@ -109,6 +108,10 @@ impl NucleiExecutor {
                 template_severity: template.info.severity,
                 payload: finding_payload,
                 timestamp: chrono::Utc::now(),
+                cvss_score: None,
+                reference: None,
+                solution: None,
+                tags: Vec::new(),
                 compliance: Default::default(),
             })
         } else {

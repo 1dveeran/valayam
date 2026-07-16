@@ -4,3 +4,4 @@
 // - tls_fingerprint: Inject JA3/JA4 TLS spoofing via customized rustls cipher ordering to evade WAFs.
 pub mod user_agent;
 pub mod proxy;
+pub mod tls;
