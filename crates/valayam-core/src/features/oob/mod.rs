@@ -1,7 +1,10 @@
-// TODO: Implement Out-of-Band (OOB) Testing (Phase 7).
-// - Built-in DNS/HTTP server for blind vulnerability detection (Blind SSRF, Blind SQLi).
-// - Correlation Engine for generating unique, short-lived IDs.
-// - Map incoming OOB interactions back to specific scan templates and targets.
+// TODO: Enhance Out-of-Band (OOB) Testing (Phase 7).
+// - Add TLS termination for HTTPS callbacks.
+// - Implement WebSocket notifications for real-time interaction alerts.
+// - Add geographic and network path correlation for callback verification.
+// - Support multiple concurrent callback domains for deconfliction.
+// Currently implemented: Real HTTP/DNS server with correlation ID tracking, hit storage, and cleanup.
+// Components: server (production), executor (in progress), correlation (stub).
 pub mod correlation;
 pub mod executor;
 pub mod server;

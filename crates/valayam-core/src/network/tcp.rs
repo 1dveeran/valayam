@@ -215,14 +215,8 @@ fn detect_service_from_banner(port: u16, banner: &str) -> ServiceInfo {
 fn extract_version_from_ssh_banner(banner: &str) -> Option<String> {
     // SSH-2.0-OpenSSH_7.4p1 Ubuntu-10
     let re = regex::Regex::new(r"SSH-\d+\.\d+-([^ \r\n]+)").ok()?;
-    re.captures(banner).and_then(|cap| {
-        cap.get(1).map(|m| {
-            let ver = m.as_str().to_string();
-            // Clean up common suffixes
-            let ver = ver.replace("p", "_p").replace("-", "_");
-            ver
-        })
-    })
+    re.captures(banner)
+        .and_then(|cap| cap.get(1).map(|m| m.as_str().to_string()))
 }
 
 /// Extract version from FTP banner
@@ -517,8 +511,6 @@ struct HttpServiceInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::Mutex;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_parse_ports() {
@@ -533,7 +525,7 @@ mod tests {
     }
 
     #[tokio::test]
-    fn test_detect_service_from_banner() {
+    async fn test_detect_service_from_banner() {
         // Test HTTP detection
         let info = detect_service_from_banner(80, "HTTP/1.1 200 OK\r\nServer: Apache/2.4.41\r\n");
         assert!(info.is_web_service);
@@ -547,12 +539,12 @@ mod tests {
         assert_eq!(info.product.as_deref(), Some("OpenSSH"));
 
         // Test MySQL detection
-        let info = detect_service_from_banner(3306, "\x4a\x00\x00\x00\x0a\x35\x2e\x37\x2e\x33\x33");
+        let _info = detect_service_from_banner(3306, "\x4a\x00\x00\x00\x0a\x35\x2e\x37\x2e\x33\x33");
         // Note: This is a simplified test - real MySQL packet parsing would be more complex
     }
 
     #[tokio::test]
-    fn test_extract_version_from_ssh_banner() {
+    async fn test_extract_version_from_ssh_banner() {
         let version = extract_version_from_ssh_banner("SSH-2.0-OpenSSH_7.4p1 Ubuntu-10ubuntu1").expect("Should extract version");
         assert_eq!(version, "OpenSSH_7.4p1");
 

@@ -4240,6 +4240,7 @@ dependencies = [
  "hcl-rs",
  "hickory-resolver",
  "hmac",
+ "http 1.4.2",
  "jsonwebtoken",
  "lazy_static",
  "md5",

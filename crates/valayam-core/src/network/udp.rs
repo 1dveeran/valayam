@@ -357,7 +357,6 @@ pub async fn scan_ports(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::UdpSocket;
 
     #[tokio::test]
     async fn test_parse_ports() {

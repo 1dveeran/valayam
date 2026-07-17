@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_crawler_new_with_headers() {
-        let client = Arc::new(StealthHttpClient::new(false, None).unwrap());
+        let client = Arc::new(StealthHttpClient::new(false, false, None, false).unwrap());
         let mut headers = HashMap::new();
         headers.insert("Authorization".to_string(), "Bearer secret".to_string());
         

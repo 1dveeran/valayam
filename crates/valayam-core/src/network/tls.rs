@@ -1,7 +1,8 @@
 // TODO: Deepen TLS Auditing capabilities.
-// - Implement raw ClientHello probes to detect legacy SSLv3/TLSv1.0.
+// - Implement raw SSLv2 ClientHello probes (real, not our current wrapper).
 // - Add cipher suite ranking and weak cipher detection.
-// TEST EDIT
+// - Support STARTTLS for SMTP/IMAP/FTP over TLS.
+// - Implement OCSP stapling verification during handshake.
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -648,7 +649,6 @@ fn is_in_weak_category(suite: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[tokio::test]
     async fn test_tls_scanning() {

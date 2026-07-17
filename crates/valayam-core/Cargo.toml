@@ -29,6 +29,7 @@ rand = { workspace = true }
 hmac = { workspace = true }
 tracing = "0.1.44"
 tracing-opentelemetry = "0.22"
+http = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
 scraper = { workspace = true }

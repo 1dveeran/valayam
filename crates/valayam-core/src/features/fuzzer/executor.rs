@@ -119,7 +119,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fuzz_query_mutation() {
-        let client = StealthHttpClient::new(false, None).unwrap();
+        let client = StealthHttpClient::new(false, false, None, false).unwrap();
         let rule = FuzzTemplate {
             part: "query".to_string(),
             keys: vec!["q".to_string()],
