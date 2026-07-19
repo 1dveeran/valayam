@@ -120,6 +120,9 @@ pub enum ScannerError {
     #[error("Plugin initialization failed: {0}")]
     PluginInitializationError(String),
 
+    #[error("Plugin execution failed: {0}")]
+    PluginExecutionError(String),
+
     // Capture the original error for debugging while maintaining type safety
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
@@ -187,6 +190,7 @@ impl ScannerError {
             ScannerError::Utf8Error(_) => "UTF8_ERROR",
             ScannerError::PluginNotFound(_) => "PLUGIN_NOT_FOUND",
             ScannerError::PluginInitializationError(_) => "PLUGIN_INITIALIZATION_ERROR",
+            ScannerError::PluginExecutionError(_) => "PLUGIN_EXECUTION_ERROR",
             ScannerError::Other(_) => "OTHER_ERROR",
         }
     }

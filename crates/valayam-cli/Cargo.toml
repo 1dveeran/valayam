@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 valayam-core = { path = "../valayam-core" }
+tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true }
 clap = { workspace = true }
 walkdir = { workspace = true }

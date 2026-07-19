@@ -6,12 +6,18 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
+
 use valayam_core::core::rate_limiter::RateLimiter;
+use valayam_core::core::registry::PluginRegistry;
+use valayam_core::core::executor::ScanExecutor;
+use valayam_core::core::traits::{FindingOwned, Reporter};
+use valayam_core::core::reporters::{console::ConsoleReporter, json::JsonReporter, composite::CompositeReporter};
+use valayam_core::core::plugins::*;
 use valayam_core::features::nuclei_compat::executor::NucleiExecutor;
 use valayam_core::features::nuclei_compat::parser::NucleiTemplate;
 use valayam_core::network::http::StealthHttpClient;
 use valayam_core::rpc::scanner_client::ScannerClient;
-use valayam_core::template::loader::execute_template;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
 pub async fn run_scan(
@@ -32,51 +38,18 @@ pub async fn run_scan(
     }
     spinner.set_message(format!("Scanning {} targets...", targets.len()));
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<valayam_core::core::result::ScanResult>(1000);
-    let output_path = args.output.clone();
-    let format = args.format.to_lowercase();
-    let concurrency = args.concurrency;
-    let writer_task = tokio::spawn(async move {
-        let mut findings = Vec::new();
+    // ── 1. Create bounded MPSC channel ──
+    let (finding_tx, mut finding_rx) = tokio::sync::mpsc::channel::<FindingOwned>(1000);
 
-        while let Some(result) = rx.recv().await {
-            println!("\n[🚨 VULNERABILITY DETECTED]");
-            println!(" ├─ Target:   {}", result.target); 
-            println!(" ├─ Template: {} ({})", result.template_name, result.template_id);
-            println!(" ├─ Severity: {}", result.template_severity);
-            
-            findings.push(result);
-        }
-        
-        if let Some(path) = &output_path {
-            match format.as_str() {
-                "sarif" => {
-                    if let Ok(file) = fs::File::create(path) {
-                        let sarif_val = crate::reporting::sarif::generate_sarif(&findings);
-                        let _ = serde_json::to_writer_pretty(file, &sarif_val);
-                    }
-                }
-                "pdf" => {
-                    let _ = crate::reporting::pdf::generate_pdf(&findings, path);
-                }
-                _ => { // default to jsonl
-                    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
-                        for finding in &findings {
-                            if let Ok(json_string) = serde_json::to_string(&finding) {
-                                let _ = writeln!(file, "{}", json_string);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        findings.len()
-    });
-
+    // ── 2. Create cancellation token (wired to Ctrl+C) ──
+    let cancel = CancellationToken::new();
+    let cancel_clone = cancel.clone();
+    let cancel_for_handler = cancel.clone();
+    
+    // We will still handle ctrl-c to save state
     let db = crate::state::StateDB::new(".valayam_state").expect("Failed to initialize state DB");
     let state_id = args.resume.unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs().to_string());
-
+    
     let mut actual_targets = targets.clone();
     if let Some((pending, _completed)) = db.load_state(&state_id).unwrap_or(None) {
         println!("[+] Resuming scan from state ID: {}. Loaded {} pending targets.", state_id, pending.len());
@@ -84,6 +57,62 @@ pub async fn run_scan(
     } else {
         println!("[+] Starting new scan with state ID: {}", state_id);
     }
+    
+    let pending_for_shutdown = actual_targets.clone();
+    tokio::spawn(async move {
+        if let Ok(_) = tokio::signal::ctrl_c().await {
+            tracing::warn!("received Ctrl+C, initiating graceful shutdown...");
+            let _ = db.save_state(&state_id, &pending_for_shutdown, &[]);
+            cancel_for_handler.cancel();
+        }
+    });
+
+    // ── 3. Build PluginRegistry ──
+    let registry = {
+        let mut reg = PluginRegistry::new();
+        // Core protocols
+        reg.register(HttpScanPlugin::new(http_client.clone()));
+        reg.register(NetworkScanPlugin::new());
+        reg.register(DnsAuditPlugin::new());
+        reg.register(TlsAuditPlugin::new());
+        reg.register(ScriptingPlugin::new());
+        reg.register(FuzzerPlugin::new(http_client.clone()));
+        // Cloud & Extended
+        reg.register(CloudSecPlugin::new(http_client.clone()));
+        Arc::new(reg)
+    };
+
+    // ── 4. Initialize all plugins (fail-fast on bad config) ──
+    registry.init_all().await?;
+
+    // ── 5. Build reporters ──
+    let mut reporters: Vec<Box<dyn Reporter>> = vec![Box::new(ConsoleReporter)];
+    if let Some(ref path) = args.output {
+        // Assume jsonl for now. In a real app we might pick reporter based on args.format
+        reporters.push(Box::new(JsonReporter::new(path)?));
+    }
+    let composite = CompositeReporter::new(reporters);
+
+    // ── 6. Spawn Consumer task ──
+    let consumer_handle = tokio::spawn(async move {
+        let mut count = 0usize;
+        while let Some(finding) = finding_rx.recv().await {
+            if let Err(e) = composite.process_finding(&finding).await {
+                tracing::error!(error = %e, "reporter failed");
+            }
+            count += 1;
+        }
+        let _ = composite.flush().await;
+        count
+    });
+
+    // ── 7. Build Executor ──
+    let executor = ScanExecutor::new(
+        finding_tx.clone(),
+        registry.clone(),
+        rate_limiter.clone(),
+        cancel.clone(),
+    );
 
     let mut tasks = Vec::new();
     for target in &actual_targets {
@@ -92,30 +121,19 @@ pub async fn run_scan(
         }
     }
 
-    let tx_clone = tx.clone();
+    let concurrency = args.concurrency;
     let grpc_client_arc = grpc_client.map(Arc::new);
-    let rl_ref = rate_limiter.clone();
-
-    // To track pending for shutdown, we could use an Arc<Mutex> but for MVP we will just save the raw list
-    let pending_for_shutdown = actual_targets.clone();
-    let shutdown_signal = async move {
-        if let Ok(_) = tokio::signal::ctrl_c().await {
-            tracing::warn!("Received Ctrl+C, saving state {} and shutting down gracefully...", state_id);
-            let _ = db.save_state(&state_id, &pending_for_shutdown, &[]);
-        }
-    };
 
     let stream = futures::stream::iter(tasks).map(|(target_url, file_path_clone)| {
-        let client = Arc::clone(&http_client);
+        let exec = executor.clone();
         let exec_nuclei = executor_nuclei.clone();
-        let rl = rl_ref.clone();
-        let tx = tx_clone.clone();
         let grpc_client_clone = grpc_client_arc.clone();
+        let finding_tx_clone = finding_tx.clone();
 
         async move {
             let path_str = file_path_clone.to_string_lossy().to_string();
 
-            let result = if is_nuclei {
+            if is_nuclei {
                 let template = match NucleiTemplate::load(&file_path_clone) {
                     Ok(t) => t,
                     Err(e) => {
@@ -123,7 +141,11 @@ pub async fn run_scan(
                         return;
                     }
                 };
-                exec_nuclei.execute_scan(&target_url, template).await
+                if let Some(res) = exec_nuclei.execute_scan(&target_url, template).await {
+                    // Nuclei executor returns legacy ScanResult. Convert it to FindingOwned.
+                    let finding = valayam_core::core::scan_result_bridge::scan_result_to_finding(res);
+                    let _ = finding_tx_clone.send(finding).await;
+                }
             } else {
                 if let Some(grpc_arc) = grpc_client_clone {
                     let mut client = (*grpc_arc).clone();
@@ -145,47 +167,45 @@ pub async fn run_scan(
                             let resp = response.into_inner();
                             for finding_json in resp.findings_json {
                                 if let Ok(scan_res) = serde_json::from_str::<valayam_core::core::result::ScanResult>(&finding_json) {
-                                    let _ = tx.send(scan_res).await;
+                                    let finding = valayam_core::core::scan_result_bridge::scan_result_to_finding(scan_res);
+                                    let _ = finding_tx_clone.send(finding).await;
                                 }
                             }
-                            None
                         }
-                        Err(e) => {
-                            tracing::error!("gRPC error for template {}: {}", path_str, e);
-                            None
-                        }
+                        Err(e) => tracing::error!("gRPC error for template {}: {}", path_str, e),
                     }
                 } else {
                     let template = match VulnerabilityTemplate::load(&file_path_clone) {
-                        Ok(t) => t,
+                        Ok(t) => Arc::new(t),
                         Err(e) => {
                             tracing::error!("Failed to load Native template {}: {}", path_str, e);
                             return;
                         }
                     };
-                    execute_template(&client, &target_url, template, rl.as_ref().map(|r| r.as_ref())).await
+                    
+                    let metrics = exec.execute(&target_url, template).await;
+                    for m in metrics {
+                        tracing::debug!(
+                            plugin = %m.plugin_name,
+                            outcome = %m.outcome,
+                            duration_ms = m.duration.as_millis() as u64,
+                            findings = m.finding_count,
+                        );
+                    }
                 }
-            };
-
-            if let Some(finding) = result {
-                let _ = tx.send(finding).await;
             }
         }
     });
 
-    tokio::select! {
-        _ = stream.buffer_unordered(concurrency).collect::<Vec<()>>() => {
-            // Completed naturally
-        }
-        _ = shutdown_signal => {
-            println!("\n[!] Scan interrupted by user. Flushing results...");
-        }
-    }
+    stream.buffer_unordered(concurrency).collect::<Vec<()>>().await;
 
-    drop(tx);
-    drop(tx_clone);
+    // Drop executor and tx to close the channel, allowing consumer to finish
+    drop(executor);
+    drop(finding_tx);
 
-    let findings_count = writer_task.await.unwrap_or(0);
+    registry.shutdown_all().await;
+
+    let findings_count = consumer_handle.await.unwrap_or(0);
     spinner.finish_and_clear();
 
     if findings_count == 0 {
@@ -193,7 +213,7 @@ pub async fn run_scan(
     } else {
         println!("\n[+] Scan completed. {} vulnerabilities detected.", findings_count);
         if args.output.is_some() {
-            println!("    Results appended to output file in JSONL format.");
+            println!("    Results appended to output file.");
         }
     }
 

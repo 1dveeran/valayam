@@ -51,6 +51,7 @@ use std::path::Path;
 /// Top-level template structure that composes types from all feature slices.
 /// This is the single entry point for YAML deserialization of native templates.
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct VulnerabilityTemplate {
     pub id: String,
     pub info: TemplateInfo,
@@ -271,7 +272,7 @@ invalid_key: true
         writeln!(file, "{}", yaml).unwrap();
 
         let result = VulnerabilityTemplate::load(file.path());
-        assert!(result.is_ok(), "Serde ignores unknown fields by default unless specified");
+        assert!(result.is_err(), "Serde should reject unknown fields");
     }
 
     #[test]

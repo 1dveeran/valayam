@@ -5,6 +5,8 @@ edition.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
+async-trait = { workspace = true }
+tokio-util = { version = "0.7", features = ["rt"] }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 reqwest = { workspace = true }

@@ -647,6 +647,7 @@ pub async fn execute_template_inner(
     None
 }
 
+#[deprecated(note = "Use ScanExecutor with PluginRegistry instead. This is maintained for valayam-platform backward compatibility.")]
 pub async fn execute_template(
     client: &StealthHttpClient,
     target_url: &str,
