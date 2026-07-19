@@ -21,7 +21,7 @@ pub struct MitreTechnique {
     pub detection: &'static str,
 }
 
-/// Lookup MITRE techniques by CWE ID or finding keyword.
+// Lookup MITRE techniques by CWE ID or finding keyword.
 lazy_static! {
     /// CWE-to-MITRE techniques mapping.
     /// Each CWE maps to one or more relevant MITRE ATT&CK techniques.
@@ -389,11 +389,9 @@ mod tests {
         let template = MitreMappingTemplate { enable_mapping: true };
         let findings = vec![make_finding("XSS vulnerability in search", Some("CWE-79"))];
         let info = TemplateInfo {
-            id: "test".to_string(),
             name: "Test Template".to_string(),
-            author: "test".to_string(),
             severity: "High".to_string(),
-            description: "test".to_string(),
+            description: Some("test".to_string()),
             ..Default::default()
         };
 
@@ -408,7 +406,7 @@ mod tests {
     async fn test_sqli_mapping() {
         let template = MitreMappingTemplate { enable_mapping: true };
         let findings = vec![make_finding("SQL injection in login", None)];
-        let info = TemplateInfo { id: "test".to_string(), name: "Test".to_string(), author: "test".to_string(), severity: "High".to_string(), description: "test".to_string(), ..Default::default() };
+        let info = TemplateInfo { name: "Test".to_string(), severity: "High".to_string(), description: Some("test".to_string()), ..Default::default() };
 
         let result = execute(&[template], "test", &info, findings).await;
         assert!(result.is_some());
@@ -421,7 +419,7 @@ mod tests {
     async fn test_no_mapping_when_disabled() {
         let template = MitreMappingTemplate { enable_mapping: false };
         let findings = vec![make_finding("test", Some("CWE-79"))];
-        let info = TemplateInfo { id: "test".to_string(), name: "Test".to_string(), author: "test".to_string(), severity: "High".to_string(), description: "test".to_string(), ..Default::default() };
+        let info = TemplateInfo { name: "Test".to_string(), severity: "High".to_string(), description: Some("test".to_string()), ..Default::default() };
 
         let result = execute(&[template], "test", &info, findings).await;
         assert!(result.is_none());

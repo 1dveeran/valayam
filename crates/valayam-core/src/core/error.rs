@@ -16,6 +16,9 @@ pub enum ScannerError {
     #[error("Failed to parse YAML template: {0}")]
     TemplateParseError(#[from] serde_yaml::Error),
 
+    #[error("Template validation failed: {0}")]
+    TemplateValidationError(String),
+
     // HTTP Client Errors
     #[error("Failed to build HTTP client: {0}")]
     HttpClientError(#[from] reqwest::Error),
@@ -159,6 +162,7 @@ impl ScannerError {
         match self {
             ScannerError::TemplateReadError(_) => "TEMPLATE_READ_ERROR",
             ScannerError::TemplateParseError(_) => "TEMPLATE_PARSE_ERROR",
+            ScannerError::TemplateValidationError(_) => "TEMPLATE_VALIDATION_ERROR",
             ScannerError::HttpClientError(_) => "HTTP_CLIENT_ERROR",
             ScannerError::InvalidHttpMethod(_) => "INVALID_HTTP_METHOD",
             ScannerError::ScriptEngineInitError(_) => "SCRIPT_INIT_ERROR",

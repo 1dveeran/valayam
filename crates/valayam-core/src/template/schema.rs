@@ -148,7 +148,7 @@ pub struct VulnerabilityTemplate {
     pub oob_interaction: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct TemplateInfo {
     pub name: String,
     pub severity: String,
@@ -172,7 +172,57 @@ impl VulnerabilityTemplate {
         }
 
         let template: VulnerabilityTemplate = serde_yaml::from_str(content)?;
+        template.validate()?;
         Ok(template)
+    }
+
+    /// Validate the template for required fields and consistency.
+    /// Returns an error with a description of what is invalid.
+    pub fn validate(&self) -> Result<(), crate::core::error::ScannerError> {
+        use crate::core::error::ScannerError;
+
+        if self.id.trim().is_empty() {
+            return Err(ScannerError::TemplateValidationError(
+                "template id must not be empty".to_string()
+            ));
+        }
+
+        if self.info.name.trim().is_empty() {
+            return Err(ScannerError::TemplateValidationError(
+                "template info.name must not be empty".to_string()
+            ));
+        }
+
+        // Validate severity is a recognized value
+        let valid_severities = ["info", "low", "medium", "high", "critical"];
+        let sev = self.info.severity.to_lowercase();
+        if !sev.is_empty() && !valid_severities.contains(&sev.as_str()) {
+            return Err(ScannerError::TemplateValidationError(
+                format!("invalid severity '{}'. Must be one of: {:?}", self.info.severity, valid_severities)
+            ));
+        }
+
+        // At least one request/network/dns/tls/script or feature-specific block must be defined
+        let has_any_definition = !self.requests.is_empty()
+            || !self.network.is_empty()
+            || !self.dns.is_empty()
+            || !self.tls.is_empty()
+            || !self.scripts.is_empty()
+            || !self.fuzz.is_empty()
+            || !self.cloud.is_empty()
+            || !self.logic.is_empty()
+            || !self.deep_analysis.is_empty()
+            || !self.iac_audit.is_empty()
+            || !self.drift_detect.is_empty()
+            || !self.oob_interaction;
+
+        if !has_any_definition {
+            return Err(ScannerError::TemplateValidationError(
+                "template must define at least one request, network, dns, tls, script, or feature block".to_string()
+            ));
+        }
+
+        Ok(())
     }
 }
 

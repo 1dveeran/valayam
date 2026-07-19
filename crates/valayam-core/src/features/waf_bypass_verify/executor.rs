@@ -27,6 +27,7 @@ struct BypassTechnique {
 }
 
 /// Standard attack payloads that WAFs are expected to block.
+#[cfg_attr(not(test), allow(dead_code))]
 const BASE_PAYLOADS: &[&str] = &[
     // XSS
     "<script>alert(1)</script>",
