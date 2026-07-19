@@ -480,14 +480,14 @@ impl_scan_plugin!(CtLogAuditPlugin, "ct_log_audit", ct_log_audit,
 // But we'll provide dummy plugins just so they compile if someone wants to wire them up.
 
 impl_scan_plugin!(RemediationGenPlugin, "remediation_gen", remediation_gen,
-    |ctx, template, _finding_tx| {
+    |ctx, _template, _finding_tx| {
         // Post processing isn't fully wired in parallel execution context yet
         PluginOutcome::NoMatch
     }
 );
 
 impl_scan_plugin!(MitreMappingPlugin, "mitre_mapping", mitre_mapping,
-    |ctx, template, _finding_tx| {
+    |ctx, _template, _finding_tx| {
         // Post processing isn't fully wired in parallel execution context yet
         PluginOutcome::NoMatch
     }

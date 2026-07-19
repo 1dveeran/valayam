@@ -96,4 +96,48 @@ pub struct Args {
 
     #[arg(long, help = "Resume a previously interrupted scan using its state ID")]
     pub resume: Option<String>,
+
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+}
+
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// Plugin management utilities
+    Plugin {
+        #[command(subcommand)]
+        action: PluginCommands,
+    },
+}
+
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum PluginCommands {
+    /// Package a plugin directory into a .vpa archive
+    Package {
+        /// The directory containing the plugin source and plugin.yaml
+        dir: String,
+        /// The output .vpa file path
+        #[arg(short, long)]
+        output: Option<String>,
+        /// Optional path to an ED25519 private key to sign the plugin (creates signature.sig)
+        #[arg(long)]
+        sign: Option<String>,
+    },
+    /// Initialize a new plugin directory with boilerplate code
+    Init {
+        /// The name of the plugin
+        name: String,
+        /// The programming language to use (e.g. python, go)
+        #[arg(long, default_value = "python")]
+        lang: String,
+        /// The runtime to use (grpc or wasm)
+        #[arg(long, default_value = "grpc")]
+        runtime: String,
+    },
+    /// Generate a new ED25519 keypair for signing plugins
+    GenerateKey {
+        /// The output path prefix for the generated keys (e.g., 'plugin_key' generates 'plugin_key.pem' and 'plugin_key.pub')
+        #[arg(short, long, default_value = "valayam_plugin_key")]
+        output: String,
+    },
 }

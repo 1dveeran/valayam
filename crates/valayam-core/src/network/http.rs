@@ -21,14 +21,18 @@ struct ProxiedClientPool {
     clients: Mutex<HashMap<String, Client>>,
     /// Next proxy to use (round-robin)
     current_proxy: Mutex<Option<String>>,
+    timeout: u32,
+    default_headers: Option<reqwest::header::HeaderMap>,
 }
 
 impl ProxiedClientPool {
-    fn new(rotator: ProxyRotator) -> Self {
+    fn new(rotator: ProxyRotator, timeout: u32, default_headers: Option<reqwest::header::HeaderMap>) -> Self {
         Self {
             rotator: Arc::new(Mutex::new(rotator)),
             clients: Mutex::new(HashMap::new()),
             current_proxy: Mutex::new(None),
+            timeout,
+            default_headers,
         }
     }
 
@@ -58,13 +62,17 @@ impl ProxiedClientPool {
             }
         };
 
-        let client = match Client::builder()
+        let mut client_builder = Client::builder()
             .proxy(proxy)
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true)
-            .timeout(Duration::from_secs(30))
-            .build()
-        {
+            .timeout(Duration::from_secs(self.timeout as u64));
+
+        if let Some(ref hdrs) = self.default_headers {
+            client_builder = client_builder.default_headers(hdrs.clone());
+        }
+
+        let client = match client_builder.build() {
             Ok(c) => c,
             Err(e) => {
                 warn!(proxy = %proxy_address, error = %e, "Failed to build proxied client");
@@ -126,23 +134,55 @@ pub struct StealthHttpClient {
 }
 
 impl StealthHttpClient {
-    /// Create a new StealthHttpClient with optional stealth features.
     pub fn new(
         use_proxy_rotation: bool,
         use_user_agent_rotation: bool,
         ja3_ja4_profile: Option<Ja3Ja4Profile>,
         follow_meta_refresh: bool,
     ) -> Result<Self, ScannerError> {
+        Self::new_with_options(use_proxy_rotation, use_user_agent_rotation, ja3_ja4_profile, follow_meta_refresh, None, None)
+    }
+
+    /// Create a new StealthHttpClient with stealth features and advanced options.
+    pub fn new_with_options(
+        use_proxy_rotation: bool,
+        use_user_agent_rotation: bool,
+        ja3_ja4_profile: Option<Ja3Ja4Profile>,
+        follow_meta_refresh: bool,
+        timeout_opt: Option<u32>,
+        default_headers: Option<HashMap<String, String>>,
+    ) -> Result<Self, ScannerError> {
+        let timeout = timeout_opt.unwrap_or(30);
+        
+        // Convert HashMap to HeaderMap
+        let mut headers_map = None;
+        if let Some(hdrs) = default_headers {
+            let mut hm = reqwest::header::HeaderMap::new();
+            for (k, v) in hdrs {
+                if let (Ok(key), Ok(value)) = (
+                    reqwest::header::HeaderName::try_from(&k),
+                    reqwest::header::HeaderValue::from_str(&v),
+                ) {
+                    hm.insert(key, value);
+                }
+            }
+            headers_map = Some(hm);
+        }
+
         // Build base client
-        let client_builder = Client::builder()
+        let mut client_builder = Client::builder()
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true)
-            .timeout(Duration::from_secs(30));
+            .timeout(Duration::from_secs(timeout as u64));
+
+        if let Some(ref hm) = headers_map {
+            client_builder = client_builder.default_headers(hm.clone());
+        }
 
         // Add proxy rotation if enabled
         let (proxy_client_pool, proxy_rotator) = if use_proxy_rotation {
             let rotator = ProxyRotator::new();
-            let pool = ProxiedClientPool::new(rotator.clone());
+            let pool = ProxiedClientPool::new(rotator.clone(), timeout, headers_map);
             (
                 Some(Arc::new(pool)),
                 Some(Arc::new(Mutex::new(rotator))),

@@ -123,14 +123,63 @@ pub enum PluginOutcome {
     Failed { error: crate::core::error::ScannerError, retryable: bool },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum PluginOutcomeKind {
+    /// Plugin found no vulnerabilities.
+    #[serde(rename = "no_match")]
+    NoMatch,
+    /// Plugin found vulnerabilities.
+    #[serde(rename = "matched")]
+    Matched,
+    /// Plugin skipped execution.
+    #[serde(rename = "skipped")]
+    Skipped,
+    /// Plugin execution failed with an error.
+    #[serde(rename = "failed")]
+    Failed,
+    /// Plugin timed out.
+    #[serde(rename = "timed_out")]
+    TimedOut,
+    /// Plugin panicked.
+    #[serde(rename = "crashed")]
+    Crashed,
+}
+
+impl std::fmt::Display for PluginOutcomeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoMatch => write!(f, "no_match"),
+            Self::Matched => write!(f, "matched"),
+            Self::Skipped => write!(f, "skipped"),
+            Self::Failed => write!(f, "failed"),
+            Self::TimedOut => write!(f, "timed_out"),
+            Self::Crashed => write!(f, "crashed"),
+        }
+    }
+}
+
+/// Per-plugin execution metrics collected during a scan.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PluginMetrics {
     pub plugin_name: String,
     pub target: String,
-    pub outcome: String,
+    pub outcome: PluginOutcomeKind,
     pub duration: Duration,
     pub finding_count: usize,
 }
+
+/// Result of a plugin health check.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PluginHealth {
+    pub plugin_name: String,
+    pub is_healthy: bool,
+    pub error: Option<String>,
+    pub last_checked_ms: u64,
+}
+
+/// Minimum API version required for plugin compatibility.
+/// Plugins declaring a lower version will be rejected at registration.
+pub const MINIMUM_API_VERSION: &str = "1.0";
 
 // ─── ScanPlugin Trait (Enterprise Lifecycle) ────────────────────────────
 
@@ -138,11 +187,13 @@ pub struct PluginMetrics {
 /// No `RefUnwindSafe` bound needed here, handled at the call site.
 #[async_trait::async_trait]
 pub trait ScanPlugin: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn version(&self) -> &'static str { "0.1.0" }
+    fn name(&self) -> &str;
+    fn version(&self) -> &str { "0.1.0" }
+    fn api_version(&self) -> &str { "1.0" }
 
     fn is_applicable(&self, template: &crate::template::schema::VulnerabilityTemplate) -> bool;
 
+    /// Validate the plugin's configuration against a template.
     fn validate_config(&self, _template: &crate::template::schema::VulnerabilityTemplate) -> Result<(), crate::core::error::ScannerError> { Ok(()) }
     async fn init(&self) -> Result<(), crate::core::error::ScannerError> { Ok(()) }
 
@@ -150,7 +201,11 @@ pub trait ScanPlugin: Send + Sync {
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome;
 
     async fn shutdown(&self) -> Result<(), crate::core::error::ScannerError> { Ok(()) }
-    
+
+    /// Perform a health check. Returns `Ok(())` if healthy, or an error describing
+    /// what is wrong. Called by `PluginRegistry::health_check_all()`.
+    async fn health_check(&self) -> Result<(), crate::core::error::ScannerError> { Ok(()) }
+
     fn depends_on(&self) -> &[&'static str] { &[] }
     fn timeout(&self) -> Duration { Duration::from_secs(60) }
 }

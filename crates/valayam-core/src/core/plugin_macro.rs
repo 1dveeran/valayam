@@ -20,7 +20,7 @@ macro_rules! impl_scan_plugin {
 
         #[async_trait::async_trait]
         impl $crate::core::traits::ScanPlugin for $struct_name {
-            fn name(&self) -> &'static str { $name }
+            fn name(&self) -> &str { $name }
 
             fn is_applicable(
                 &self,
@@ -56,7 +56,7 @@ macro_rules! impl_scan_plugin {
 
         #[async_trait::async_trait]
         impl $crate::core::traits::ScanPlugin for $struct_name {
-            fn name(&self) -> &'static str { $name }
+            fn name(&self) -> &str { $name }
 
             fn is_applicable(
                 &self,
@@ -98,7 +98,7 @@ macro_rules! impl_scan_plugin {
 
         #[async_trait::async_trait]
         impl $crate::core::traits::ScanPlugin for $struct_name {
-            fn name(&self) -> &'static str { $name }
+            fn name(&self) -> &str { $name }
 
             fn is_applicable(
                 &self,

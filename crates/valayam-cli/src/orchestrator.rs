@@ -117,12 +117,24 @@ pub async fn run_scan(
         reg.register(CicdAuditPlugin::new());
         reg.register(DependencyAuditPlugin::new());
         
-        // Dynamically load external plugins from ./plugins directory
-        if let Err(e) = reg.load_external_plugins(std::path::Path::new("plugins")) {
-            tracing::warn!("Failed to load external plugins from ./plugins: {}", e);
+        let reg_arc = Arc::new(reg);
+        
+        // Dynamically load external plugins from ./plugins directory and watch for hot-reloads
+        let plugins_dir = std::path::Path::new("plugins");
+        if plugins_dir.exists() {
+            match reg_arc.clone().start_hot_reload(plugins_dir.to_path_buf()) {
+                Ok(watcher) => {
+                    // Leak the watcher into a lazy_static or simply let it run if it's stored.
+                    // Wait, we need to keep it alive. We can store it in a static Mutex, or leak it.
+                    // For a CLI that runs and exits, leaking is fine for the duration of the scan.
+                    Box::leak(Box::new(watcher));
+                    tracing::info!("Hot-reloading enabled for ./plugins");
+                }
+                Err(e) => tracing::warn!("Failed to start hot-reload for ./plugins: {}", e),
+            }
         }
-
-        Arc::new(reg)
+        
+        reg_arc
     };
 
     // ── 4. Initialize all plugins (fail-fast on bad config) ──

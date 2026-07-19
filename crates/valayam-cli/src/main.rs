@@ -5,6 +5,7 @@ pub mod notifications;
 pub mod reporting;
 pub mod cert_auth;
 pub mod state;
+pub mod plugin_cli;
 
 use clap::Parser;
 use std::fs;
@@ -75,7 +76,31 @@ async fn main() -> anyhow::Result<()> {
     // Extract template path, defaulting to a generated native demo template if neither flag is provided
     let default_template = "./templates_repo/demo-template.yaml".to_string();
     
-    let (template_path, is_nuclei) = if let Some(t) = &args.template {
+    let (template_path, is_nuclei) = if let Some(cli::Commands::Plugin { action }) = &args.command {
+        match action {
+            cli::PluginCommands::Package { dir, output, sign } => {
+                if let Err(e) = crate::plugin_cli::package_plugin(dir, output.as_deref(), sign.as_deref()) {
+                    tracing::error!("Failed to package plugin: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+            cli::PluginCommands::Init { name, lang, runtime } => {
+                if let Err(e) = crate::plugin_cli::init_plugin(name, lang, runtime) {
+                    tracing::error!("Failed to init plugin: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+            cli::PluginCommands::GenerateKey { output } => {
+                if let Err(e) = crate::plugin_cli::generate_key(output) {
+                    tracing::error!("Failed to generate plugin key: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+        }
+    } else if let Some(t) = &args.template {
         (t.as_str(), false)
     } else if let Some(n) = &args.nuclei_template {
         (n.as_str(), true)

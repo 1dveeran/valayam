@@ -8,7 +8,7 @@ valayam-core = { path = "../valayam-core" }
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true }
 clap = { workspace = true }
-walkdir = { workspace = true }
+walkdir.workspace = true
 indicatif = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
@@ -33,6 +33,9 @@ hyper = { version = "0.14", features = ["full"] }
 serde_yaml = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 genpdf = "0.2.0"
+zip.workspace = true
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+rand.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
