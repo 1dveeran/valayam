@@ -109,3 +109,29 @@ impl Default for ScanResult {
         }
     }
 }
+
+impl ScanResult {
+    pub fn new(
+        template_id: &str,
+        template_info: &crate::template::schema::TemplateInfo,
+        target_url: &str,
+    ) -> Self {
+        Self {
+            timestamp: Utc::now(),
+            template_id: template_id.to_string(),
+            template_name: template_info.name.clone(),
+            template_severity: template_info.severity.clone(),
+            target: target_url.to_string(),
+            payload: String::new(),
+            compliance: template_info.compliance.clone(),
+            cvss_score: None,
+            solution: None,
+            reference: None,
+            tags: Vec::new(),
+        }
+    }
+
+    pub fn set_extracted(&mut self, key: &str, value: String) {
+        self.payload = format!("{}: {}", key, value);
+    }
+}

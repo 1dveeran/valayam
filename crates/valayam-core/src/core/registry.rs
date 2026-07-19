@@ -812,6 +812,7 @@ mod tests {
             pii_leak_audit: vec![],
             cicd_audit: vec![],
             dependency_audit: vec![],
+            easm: vec![],
             oob_interaction: false,
         })
     }

@@ -53,6 +53,7 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 rand_core = { version = "0.6.4", features = ["std"] }
 notify = "6.1.1"
 opentelemetry = { version = "0.21.0", features = ["trace"] }
+petgraph = { version = "0.8.3", features = ["serde-1"] }
 
 [features]
 sarif = []

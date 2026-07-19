@@ -4,7 +4,7 @@
 use crate::core::rate_limiter::RateLimiter;
 use crate::core::result::ScanResult;
 use crate::core::variables::build_initial_context;
-use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer};
+use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer, easm};
 use crate::network::http::StealthHttpClient;
 use super::schema::VulnerabilityTemplate;
 use url::Url;
@@ -35,6 +35,24 @@ pub async fn execute_template_inner(
 
     // Build the shared variable context seeded with built-in variables
     let mut variables = build_initial_context(target_url, &target_host);
+
+    // Phase 0: External Attack Surface Management (EASM)
+    if !template.easm.is_empty() {
+        if let Some(result) = easm::executor::execute(
+            client.inner(),
+            target_url,
+            &target_host,
+            &template.easm,
+            &template.id,
+            &template.info,
+        )
+        .await
+        {
+            // Usually we'd branch out the target here. 
+            // For now, we return the subdomains found.
+            return Some(result);
+        }
+    }
 
     // Phase 1: HTTP Requests (with extractors & helpers)
     if !template.requests.is_empty() {

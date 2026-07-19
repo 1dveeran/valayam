@@ -363,3 +363,57 @@
 ### 71. Dependency Chain Verification (`features/dependency_audit/`)
 - **Lockfile Analysis**: Cross-reference dependency lockfiles (e.g., Cargo.lock, package-lock.json) with known CVEs.
 - **Offline VulnDB Integration**: Natively hooks into the offline `vuln-db.sqlite` artifact compiled by the Valayam Platform enterprise ingester to perform lightning-fast local vulnerability checks without triggering rate-limits or requiring active internet connections.
+
+## Phase 31: Extensible Plugin Engine
+
+### 72. Plugin Registry (`core/registry.rs`)
+- **WASM Execution**: Sandboxed execution of WebAssembly plugins via `wasmtime`, enabling safe, dynamic extension of scanning logic.
+- **gRPC Plugins**: Distributed plugins running as standalone processes across multiple languages (Python, Go) integrated seamlessly into the engine.
+
+## Phase 32: Multi-Sink Reporting Engine
+
+### 73. Composite Reporters (`core/reporters/`)
+- **Multi-Destination Sinks**: Broadcast scan findings concurrently to multiple outputs using `CompositeReporter`.
+- **JSON & Console Integrations**: Stream structured data (`JsonReporter`) to pipelines while keeping a human-readable stream (`ConsoleReporter`).
+
+## Phase 33: Production Web UI
+
+### 74. Next.js React Dashboard (`services/web-ui/`)
+- **Centralized Scan Management**: Launch, monitor, and analyze distributed scans visually.
+## Phase 34: Graph-Based Attack Path Visualization
+### 75. Attack Graph Engine (`features/attack_graph/`)
+- **Vulnerability Correlation**: Maps relationships between disparate findings (e.g., SSRF -> AWS Metadata -> S3 Bucket Access) using a graph structure.
+- **Neo4j/Memgraph Integration**: Exports scan graphs directly to graph databases for blast-radius visualization.
+
+## Phase 35: External Attack Surface Management (EASM)
+### 76. OSINT & Smart Recon (`features/easm/`)
+- **Continuous Discovery**: Automated subdomain enumeration, ASN mapping, and Shodan/Censys integrations.
+- **Pre-Scan Secret Scraping**: Scrapes GitHub/GitLab organizations for leaked credentials before launching active scans.
+
+## Phase 36: eBPF Internal Security Agent
+### 77. Valayam Node Agent (`worker/ebpf/`)
+- **Kernel-Level Monitoring**: Uses eBPF (`aya` or `libbpf-rs`) to monitor process behavior, syscalls, and raw socket data dynamically on internal assets.
+- **Telemetry Streaming**: Streams malicious lateral movement indicators back to the API Gateway in real-time.
+
+## Phase 37: Web3 & Smart Contract Auditing
+### 78. Blockchain Security (`features/web3_audit/`)
+- **RPC Endpoint Fuzzing**: Fuzzes JSON-RPC endpoints for Ethereum and Solana nodes.
+- **WASM/EVM Static Analysis**: Native static analysis of compiled smart contracts for reentrancy and uninitialized proxies.
+
+## Phase 38: Mobile Application Static Analysis
+### 79. APK/IPA Unpacking (`features/mobile_audit/`)
+- **Decompilation Pipeline**: Unzips and decompiles `.apk`/`.ipa` files to extract hardcoded API keys, deep links, and insecure TLS configurations.
+- **Dynamic Template Generation**: Autogenerates Valayam templates based on discovered REST endpoints within mobile binaries.
+
+## Phase 39: Cloud-Native Serverless Fuzzing
+### 80. Serverless Probing (`features/serverless_fuzz/`)
+- **Direct Invocation Fuzzing**: Targets AWS Lambda, Azure Functions, and GCP Cloud Run endpoints directly.
+- **Schema Mapping**: Fuzzes EventBridge structures, SQS payloads, and SNS topics.
+
+## Phase 40: AI-Driven Auto-Exploitation
+### 81. Autonomous PoC Generation (`features/auto_exploit/`)
+- **Safe Exploitation**: Local LLM autonomously crafts safe Proof-of-Concept (PoC) scripts (e.g., in Python/Rhai) to validate vulnerabilities like Blind SQLi without causing data destruction.
+
+## Phase 41: Interactive "Human-in-the-Loop" Scanning
+### 82. UI Proxy Interception (`services/web-ui/proxy/`)
+- **Manual Intervention**: Pauses automated worker nodes upon hitting complex authentication flows (e.g., Captchas) and routes the session to the Next.js UI for manual user completion before resuming.

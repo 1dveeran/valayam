@@ -54,3 +54,5 @@ pub mod schema_drift;
 pub mod pii_leak_audit;
 pub mod cicd_audit;
 pub mod dependency_audit;
+pub mod easm;
+pub mod attack_graph;

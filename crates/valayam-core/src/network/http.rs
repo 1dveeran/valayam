@@ -287,6 +287,11 @@ impl StealthHttpClient {
     pub fn client(&self) -> &Client {
         &self.client
     }
+
+    /// Alias for client() to fix compilation errors
+    pub fn inner(&self) -> &Client {
+        &self.client
+    }
 }
 
 /// Send a request via a proxied client with success/failure tracking.

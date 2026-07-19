@@ -66,7 +66,17 @@ requests:
 *   **Phase 6**: Parameter Fuzzing, TLS auditing, WebSocket built-ins, and WAF Detection.
 *   **Phase 7**: Enterprise Architecture Transition (Valayam Platform API Gateway & Worker Nodes).
 *   **Phase 8**: Enterprise Vulnerability Ingestion Pipeline (`valayam-platform/apps/vuln-ingester`).
-*   **Phase 9**: Next.js Web UI Data Integration.
+*   **Phase 9**: Next.js Production Web UI for centralized scan management and data visualization.
 *   **Phase 10**: Cloud Metadata SSRF Exploitation & Container API Probing.
 *   **Phase 11**: Stateful Logic Testing & Automated IDOR Detection.
-*   **Phase 12**: Deep WASM Taint Analysis & Local LLM payload generation (Completed!).
+*   **Phase 12**: Deep WASM Taint Analysis & Local LLM payload generation.
+*   **Phase 13+**: Advanced plugins (WASM/gRPC) and Extensible `CompositeReporter` architecture.
+
+## Plugin Ecosystem
+Valayam supports a robust plugin system via `PluginRegistry`. 
+- **WASM Plugins**: Secure, sandboxed WebAssembly execution (e.g. `valayam-plugin-wasm-example`).
+- **gRPC Plugins**: Distributed plugins running as separate processes.
+Manage plugins using the CLI: `valayam plugin package`, `init`, and `generate-key`.
+
+## Reporting
+The core uses an extensible `CompositeReporter` allowing findings to be routed simultaneously to multiple sinks (e.g., `ConsoleReporter`, `JsonReporter`, Webhooks, SIEMs).

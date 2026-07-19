@@ -197,6 +197,7 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
         pii_leak_audit: vec![],
         cicd_audit: vec![],
         dependency_audit: vec![],
+        easm: vec![],
         oob_interaction: false,
     };
 

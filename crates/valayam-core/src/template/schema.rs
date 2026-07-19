@@ -45,6 +45,7 @@ use crate::features::schema_drift::parser::SchemaDriftTemplate;
 use crate::features::pii_leak_audit::parser::PiiLeakAuditTemplate;
 use crate::features::cicd_audit::parser::CicdAuditTemplate;
 use crate::features::dependency_audit::parser::DependencyAuditTemplate;
+use crate::features::easm::parser::EasmTemplate;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -146,6 +147,8 @@ pub struct VulnerabilityTemplate {
     #[serde(default)]
     pub dependency_audit: Vec<DependencyAuditTemplate>,
     #[serde(default)]
+    pub easm: Vec<EasmTemplate>,
+    #[serde(default)]
     pub oob_interaction: bool,
 }
 
@@ -215,6 +218,7 @@ impl VulnerabilityTemplate {
             || !self.deep_analysis.is_empty()
             || !self.iac_audit.is_empty()
             || !self.drift_detect.is_empty()
+            || !self.easm.is_empty()
             || !self.oob_interaction;
 
         if !has_any_definition {

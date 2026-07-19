@@ -12,7 +12,8 @@ valayam/
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── core/                # error.rs, result.rs, variables.rs, rate_limiter.rs
+│   │       ├── core/                # error.rs, result.rs, variables.rs, rate_limiter.rs, registry.rs
+│   │       │   └── reporters/       # composite.rs, json.rs, console.rs
 │   │       ├── network/             # http.rs, tcp.rs, udp.rs, dns.rs, tls.rs
 │   │       ├── stealth/             # proxy.rs, user_agent.rs
 │   │       ├── template/            # schema.rs, loader.rs
@@ -23,18 +24,22 @@ valayam/
 │   │   └── src/
 │   │       └── main.rs              # CLI parsing (clap), orchestrator invocation, JSON output
 │   │
-│   └── valayam-worker/              # Distributed worker node (gRPC & TaskBroker queue mode)
-│       ├── Cargo.toml
-│       └── src/
-│           ├── main.rs
-│           └── broker/              # Redis, RabbitMQ, Kafka drivers
+│   ├── valayam-worker/              # Distributed worker node (gRPC & TaskBroker queue mode)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs
+│   │       └── broker/              # Redis, RabbitMQ, Kafka drivers
+│   │
+│   ├── valayam-plugin-wasm-example/ # Example WASM Plugin for Valayam engine
+│   └── valayam-plugin-grpc-example/ # Example gRPC Plugin for distributed execution
 │
 ├── services/
-│   └── ai/                          # Python AI Orchestration Layer
-│       ├── requirements.txt
-│       ├── valayam_client.py        # Python gRPC client & subprocess fallback
-│       ├── agent.py                 # Autonomous multi-step recon loop agent
-│       └── valayam_pb2.py           # Generated gRPC stubs
+│   ├── ai/                          # Python AI Orchestration Layer
+│   │   ├── requirements.txt
+│   │   ├── valayam_client.py        # Python gRPC client & subprocess fallback
+│   │   ├── agent.py                 # Autonomous multi-step recon loop agent
+│   │   └── valayam_pb2.py           # Generated gRPC stubs
+│   └── web-ui/                      # Production Next.js React Application
 ```
 
 ## Dependency Flow
@@ -43,7 +48,8 @@ valayam/
 graph BT
     subgraph Core["valayam-core"]
         subgraph Foundation
-            CoreData["core/<br/>error, result, variables, rate_limiter"]
+            CoreData["core/<br/>error, result, variables, rate_limiter, registry"]
+            Reporters["core/reporters/<br/>composite, json, console"]
             Network["network/<br/>http, tcp, udp, dns, tls, stealth"]
         end
 
@@ -103,12 +109,15 @@ graph BT
     CLI --> Stealth
     CLI --> CoreData
     CLI --> Worker
+    CLI --> Reporters
 
     Worker --> Template
     Worker --> CoreData
 
     AIAgent -.->|gRPC| Worker
     AIAgent -.->|Subprocess fallback| CLI
+    
+    WebUI -.->|API| CLI
 ```
 
 ## Design Principles
@@ -138,7 +147,8 @@ HTTP Requests → Network Scan → DNS Audit → TLS Audit → Scripts
 Each phase receives and can mutate the shared variable context.
 
 ### 4. Foundation Layers
-- **`core/`** — Pure data types and utilities. No I/O, no network calls.
+- **`core/`** — Pure data types, utilities, variable resolution, and plugin management via `registry.rs`. No heavy network business logic.
+- **`core/reporters/`** — Multi-sink output abstraction (`CompositeReporter`, `JsonReporter`) routing scan results dynamically.
 - **`network/`** — Protocol-level primitives shared by all slices. Thin wrappers around `reqwest`, `tokio::net`, `hickory-resolver`, `rustls`.
 
 ### 5. Stealth Layer
@@ -160,6 +170,8 @@ This is injected at the `StealthHttpClient` level, so all slices benefit without
 | `core/result.rs` | `ScanResult` struct serialized to JSON |
 | `core/variables.rs` | `{{var}}` substitution + `{{helper()}}` evaluation |
 | `core/rate_limiter.rs` | Global token-bucket RPS limiter (governor) |
+| `core/registry.rs` | Dynamic PluginRegistry for securely loading WASM and gRPC modules |
+| `core/reporters/` | Pluggable output multiplexer (`CompositeReporter`) |
 | `network/http.rs` | Async HTTP client with stealth features |
 | `network/tcp.rs` | TCP connect scan + banner grabbing |
 | `network/udp.rs` | UDP probe + response capture |

@@ -56,6 +56,23 @@ cargo run --bin valayam-cli -- -u https://api.example.com -t ./templates_repo/sw
 
 ---
 
+## Plugin Management
+
+Valayam supports an extensible plugin architecture (WASM and gRPC) allowing you to execute custom modules seamlessly. Use the `plugin` subcommand to manage them:
+
+```bash
+# Initialize a new WASM plugin project
+cargo run --bin valayam-cli -- plugin init my_plugin --lang rust --runtime wasm
+
+# Generate an ED25519 signing keypair
+cargo run --bin valayam-cli -- plugin generate-key --output my_key
+
+# Package and sign the plugin into a .vpa archive
+cargo run --bin valayam-cli -- plugin package ./my_plugin --output my_plugin.vpa --sign my_key.pem
+```
+
+---
+
 ## Template Examples
 
 ### HTTP-Only Template

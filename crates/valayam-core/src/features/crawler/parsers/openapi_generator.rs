@@ -106,6 +106,7 @@ pub fn generate_template_from_openapi(openapi_content: &str) -> Result<Vulnerabi
         pii_leak_audit: vec![],
         cicd_audit: vec![],
         dependency_audit: vec![],
+        easm: vec![],
         oob_interaction: false,
     })
 }
