@@ -33,3 +33,6 @@ hyper = { version = "0.14", features = ["full"] }
 serde_yaml = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 genpdf = "0.2.0"
+
+[dev-dependencies]
+tempfile.workspace = true

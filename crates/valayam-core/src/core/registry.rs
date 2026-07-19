@@ -37,6 +37,39 @@ impl PluginRegistry {
         self.plugins.push(Arc::new(plugin));
     }
 
+    /// Dynamically load plugins from a directory.
+    pub fn load_external_plugins(&mut self, dir_path: &std::path::Path) -> std::io::Result<()> {
+        if !dir_path.exists() {
+            return Ok(()); // No external plugins directory
+        }
+
+        for entry in std::fs::read_dir(dir_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    if ext == "wasm" {
+                        tracing::info!(file = %path.display(), "Loading external WASM plugin");
+                        let plugin = crate::core::wasm_plugin::WasmPluginBridge::new(file_name, path);
+                        self.register(plugin);
+                    } else if ext == "exe" || ext == "sh" || ext == "bat" || ext == "cmd" || (ext == "py" && !file_name.contains("_pb2")) || (std::env::consts::FAMILY == "unix" && ext == "") {
+                        tracing::info!(file = %path.display(), "Loading external gRPC plugin");
+                        let plugin = crate::core::grpc_plugin::GrpcPluginBridge::new(file_name, path);
+                        self.register(plugin);
+                    }
+                } else if std::env::consts::FAMILY == "unix" {
+                    // Files without extension on unix might be executables
+                    let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    tracing::info!(file = %path.display(), "Loading external gRPC plugin");
+                    let plugin = crate::core::grpc_plugin::GrpcPluginBridge::new(file_name, path);
+                    self.register(plugin);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Initialize all plugins. Call once at startup.
     pub async fn init_all(&self) -> Result<(), ScannerError> {
         for plugin in &self.plugins {

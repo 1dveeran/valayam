@@ -16,3 +16,5 @@ pub mod result;
 pub mod scan_result_bridge;
 pub mod traits;
 pub mod variables;
+pub mod grpc_plugin;
+pub mod wasm_plugin;

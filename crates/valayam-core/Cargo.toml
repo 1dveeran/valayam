@@ -45,6 +45,8 @@ jsonwebtoken = { workspace = true }
 rumqttc = { workspace = true }
 toml = { workspace = true }
 lazy_static = { workspace = true }
+wasmtime = "18.0.2"
+wasmtime-wasi = "18.0.2"
 
 [features]
 sarif = []

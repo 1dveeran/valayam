@@ -79,6 +79,49 @@ pub async fn run_scan(
         reg.register(FuzzerPlugin::new(http_client.clone()));
         // Cloud & Extended
         reg.register(CloudSecPlugin::new(http_client.clone()));
+        reg.register(AuthLogicPlugin::new(http_client.clone()));
+        reg.register(DeepAnalysisPlugin::new(http_client.clone()));
+        reg.register(IacAuditPlugin::new());
+        reg.register(SbomAuditPlugin::new(http_client.clone()));
+        reg.register(GrpcAuditPlugin::new(http_client.clone()));
+        reg.register(GraphqlAuditPlugin::new(http_client.clone()));
+        reg.register(DriftDetectPlugin::new(http_client.clone()));
+        reg.register(CredMonitorPlugin::new(http_client.clone()));
+        reg.register(OauthAuditPlugin::new(http_client.clone()));
+        reg.register(IdpAuditPlugin::new(http_client.clone()));
+        reg.register(AwsEscalatePlugin::new(http_client.clone()));
+        reg.register(AzureGcpEscalatePlugin::new(http_client.clone()));
+        reg.register(BrowserAuditPlugin::new(http_client.clone()));
+        reg.register(IotAuditPlugin::new());
+        reg.register(ScadaAuditPlugin::new());
+        reg.register(AutoRedteamPlugin::new());
+        reg.register(ImplantDeployPlugin::new());
+        reg.register(ClientSecretAuditPlugin::new(http_client.clone()));
+        reg.register(DomRedirectAuditPlugin::new(http_client.clone()));
+        reg.register(CorsAuditPlugin::new(http_client.clone()));
+        reg.register(CspAuditPlugin::new(http_client.clone()));
+        reg.register(WafBypassVerifyPlugin::new(http_client.clone()));
+        reg.register(HeaderScorecardPlugin::new(http_client.clone()));
+        reg.register(ReputationAuditPlugin::new());
+        reg.register(CtLogAuditPlugin::new(http_client.clone()));
+        reg.register(RemediationGenPlugin::new());
+        reg.register(MitreMappingPlugin::new());
+        reg.register(ContainerAuditPlugin::new());
+        reg.register(K8sAuditPlugin::new());
+        reg.register(SastTaintPlugin::new());
+        reg.register(SastSecretsPlugin::new());
+        reg.register(SubdomainTakeoverPlugin::new());
+        reg.register(PortScanPlugin::new());
+        reg.register(SchemaDriftPlugin::new(http_client.clone()));
+        reg.register(PiiLeakAuditPlugin::new(http_client.clone()));
+        reg.register(CicdAuditPlugin::new());
+        reg.register(DependencyAuditPlugin::new());
+        
+        // Dynamically load external plugins from ./plugins directory
+        if let Err(e) = reg.load_external_plugins(std::path::Path::new("plugins")) {
+            tracing::warn!("Failed to load external plugins from ./plugins: {}", e);
+        }
+
         Arc::new(reg)
     };
 

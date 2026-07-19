@@ -2,7 +2,7 @@
 members = [
     "crates/valayam-core",
     "crates/valayam-cli"
-]
+, "crates/valayam-plugin-grpc-example", "crates/valayam-plugin-wasm-example"]
 resolver = "2"
 
 [workspace.package]
