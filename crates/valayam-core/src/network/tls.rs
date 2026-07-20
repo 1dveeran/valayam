@@ -393,7 +393,7 @@ async fn get_connection_details(host: &str, port: u16) -> (Option<String>, Optio
     let cipher_suite = server_conn.negotiated_cipher_suite().map(|c| format!("{:?}", c.suite()));
 
     // Perform basic validation
-    let validation_result = validate_connection(&server_conn).await;
+    let validation_result = validate_connection(server_conn).await;
 
     (tls_version, cipher_suite, validation_result)
 }

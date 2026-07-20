@@ -131,7 +131,7 @@ impl RateLimiter {
         backoff.backoff_multiplier = std::cmp::min(base_multiplier, config.max_backoff);
 
         // If we have a Retry-After value, use it as minimum backoff
-        if let Some(retry_secs) = retry_after.filter(|&x| x > 0).map(|x| x as u32) {
+        if let Some(retry_secs) = retry_after.filter(|&x| x > 0).map(|x| x) {
             if retry_secs > backoff.backoff_multiplier {
                 backoff.backoff_multiplier = retry_secs;
             }

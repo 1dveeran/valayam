@@ -495,7 +495,7 @@ pub async fn execute(
 ) -> Option<ScanResult> {
     let config = ContainerAuditConfig::default();
 
-    for template in templates {
+    if let Some(template) = templates.iter().next() {
         let image = &template.target_image;
         let checks = &template.checks;
 

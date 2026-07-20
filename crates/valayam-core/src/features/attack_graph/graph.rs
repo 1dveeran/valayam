@@ -42,6 +42,12 @@ pub struct AttackGraph {
     pub node_map: HashMap<String, NodeIndex>,
 }
 
+impl Default for AttackGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AttackGraph {
     pub fn new() -> Self {
         Self {

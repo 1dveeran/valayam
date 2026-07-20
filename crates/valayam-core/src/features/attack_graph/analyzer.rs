@@ -1,8 +1,6 @@
-use super::graph::{AttackGraph, NodeData, EdgeData};
+use super::graph::{AttackGraph, NodeData};
 use petgraph::algo::dijkstra;
-use petgraph::graph::NodeIndex;
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Serialize)]
 pub struct CytoscapeGraph {

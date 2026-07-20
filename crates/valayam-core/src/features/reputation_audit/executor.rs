@@ -223,11 +223,10 @@ fn ip_in_known_cidrs(ip: IpAddr) -> bool {
                             return true;
                         }
                     }
-                    (IpAddr::V6(net), IpAddr::V6(test_ip)) => {
-                        if ipv6_in_prefix(test_ip, net, prefix) {
+                    (IpAddr::V6(net), IpAddr::V6(test_ip))
+                        if ipv6_in_prefix(test_ip, net, prefix) => {
                             return true;
                         }
-                    }
                     _ => {}
                 }
             }
@@ -356,13 +355,13 @@ async fn resolve_target(target: &str) -> Vec<IpAddr> {
         // Try IPv4
         if let Ok(response) = resolver.ipv4_lookup(&target) {
             for addr in response.iter() {
-                ips.push(IpAddr::V4((*addr).0));
+                ips.push(IpAddr::V4(addr.0));
             }
         }
         // Try IPv6
         if let Ok(response) = resolver.ipv6_lookup(&target) {
             for addr in response.iter() {
-                ips.push(IpAddr::V6((*addr).0));
+                ips.push(IpAddr::V6(addr.0));
             }
         }
         ips

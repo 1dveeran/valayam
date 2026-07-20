@@ -272,10 +272,10 @@ fn extract_mssql_version(_banner: &str) -> Option<String> {
 fn extract_redis_version(banner: &str) -> Option<String> {
     // Redis typically sends something like "redis_version:6.2.6\r\n"
     let re = regex::Regex::new(r"redis_version:?(\d+\.\d+\.\d+)").ok()?;
-    re.find(banner).map(|m| {
+    re.find(banner).and_then(|m| {
         let ver = m.as_str().split(':').nth(1).unwrap_or(m.as_str()).to_string();
         Some(ver)
-    }).flatten()
+    })
 }
 
 /// Extract MongoDB version
@@ -366,7 +366,7 @@ pub async fn scan_ports(
             }
 
             // Phase 3: Service detection if enabled
-            if let (Some(ref banner_text), true) = (banner.as_ref(), enable_service_detection) {
+            if let (Some(banner_text), true) = (banner.as_ref(), enable_service_detection) {
                 service_info = detect_service_from_banner(port, banner_text);
 
                 // Additional HTTP-specific checks
@@ -433,7 +433,7 @@ async fn probe_http_get(stream: &mut TcpStream) -> Option<String> {
     // Simple HTTP GET request
     let request = b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
 
-    if let Err(_) = stream.write_all(request).await {
+    if stream.write_all(request).await.is_err() {
         return None;
     }
 
@@ -464,7 +464,7 @@ async fn probe_http_service(stream: &mut TcpStream) -> Option<HttpServiceInfo> {
     // Try OPTIONS request to see what methods are allowed
     let options_request = b"OPTIONS / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
 
-    if let Err(_) = stream.write_all(options_request).await {
+    if stream.write_all(options_request).await.is_err() {
         return None;
     }
 

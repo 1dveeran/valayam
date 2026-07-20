@@ -41,7 +41,7 @@ fn extract_version_from_banner(banner: &str) -> Option<String> {
     ];
 
     for pattern in &patterns {
-        if let Ok(re) = regex::Regex::new(*pattern) {
+        if let Ok(re) = regex::Regex::new(pattern) {
             if let Some(mat) = re.find(banner) {
                 return Some(mat.as_str().to_string());
             }
@@ -176,7 +176,7 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             if banner.contains("Redis") {
                 let version = extract_version_from_banner(banner);
                 // Redis often sends just "Redis" followed by version on newline
-                if let None = version {
+                if version.is_none() {
                     if banner.lines().count() > 1 {
                         // Try to get version from second line
                         let lines: Vec<&str> = banner.lines().collect();
@@ -305,7 +305,7 @@ pub async fn execute(
 
         for port_result in &port_results {
             let (service, version) = identify_service_from_banner(port_result.port,
-                                                                &port_result.banner.as_deref().unwrap_or(""));
+                                                                port_result.banner.as_deref().unwrap_or(""));
 
             // Check for potential vulnerabilities
             let vuln_check = check_vulnerability(&service, &version);

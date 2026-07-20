@@ -128,7 +128,7 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
 
     let domain = parsed_uri.host_str().unwrap_or("unknown");
     let path = parsed_uri.path();
-    let safe_path = path.replace('/', "_").replace('.', "_");
+    let safe_path = path.replace(['/', '.'], "_");
     
     let template_id = format!("mitm-{}-{}-{}", domain, method.to_lowercase(), safe_path);
     let filename = format!("./intercepted_templates/{}.yaml", template_id);

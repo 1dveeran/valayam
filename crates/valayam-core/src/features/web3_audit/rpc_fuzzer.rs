@@ -30,7 +30,7 @@ impl EvmRpcFuzzer {
             Ok(res) => {
                 // If it returns a 500 error or stack trace instead of standard JSON-RPC error, flag it.
                 if res.status().is_server_error() {
-                    findings.push(format!("eth_call returned 500 Server Error on malformed address"));
+                    findings.push("eth_call returned 500 Server Error on malformed address".to_string());
                 }
             }
             Err(e) => {
@@ -49,7 +49,7 @@ impl EvmRpcFuzzer {
         match self.send_payload(&payload_block).await {
             Ok(res) => {
                 if res.status().is_server_error() {
-                    findings.push(format!("eth_getBlockByNumber returned 500 on massive block number"));
+                    findings.push("eth_getBlockByNumber returned 500 on massive block number".to_string());
                 }
             }
             Err(e) => {

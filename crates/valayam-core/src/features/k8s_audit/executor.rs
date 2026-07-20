@@ -619,13 +619,11 @@ pub async fn execute(
             }
 
             // Security context checks (Pod, Deployment, DaemonSet, StatefulSet)
-            if config.check_privilege_escalation || config.check_resources || config.check_probes || config.check_images || config.check_host_access {
-                if matches!(kind, "Pod" | "Deployment" | "DaemonSet" | "StatefulSet" | "Job" | "CronJob") {
-                    if config.check_privilege_escalation || config.check_resources || config.check_host_access || config.check_probes || config.check_images {
+            if (config.check_privilege_escalation || config.check_resources || config.check_probes || config.check_images || config.check_host_access)
+                && matches!(kind, "Pod" | "Deployment" | "DaemonSet" | "StatefulSet" | "Job" | "CronJob")
+                    && (config.check_privilege_escalation || config.check_resources || config.check_host_access || config.check_probes || config.check_images) {
                         all_findings.extend(check_security_context(kind, name, namespace, &val, template.strict_rbac || config.strict_mode));
                     }
-                }
-            }
 
             // Network policy checks
             if config.check_network_policies {

@@ -105,24 +105,24 @@ pub async fn execute(
         for matcher in &rule.matchers {
             let matched = match matcher.r#type.as_str() {
                 "legacy_tls" => !legacy_versions.is_empty(),
-                "expired" => cert_info.as_ref().map_or(false, |c| c.is_expired),
-                "self_signed" => cert_info.as_ref().map_or(false, |c| c.is_self_signed),
+                "expired" => cert_info.as_ref().is_some_and(|c| c.is_expired),
+                "self_signed" => cert_info.as_ref().is_some_and(|c| c.is_self_signed),
                 "weak_cipher" => {
-                    cert_info.as_ref().and_then(|c| c.cipher_suite.as_ref()).map_or(false, |cipher| {
+                    cert_info.as_ref().and_then(|c| c.cipher_suite.as_ref()).is_some_and(|cipher| {
                         cipher.contains("CBC") || cipher.contains("RC4") || cipher.contains("3DES") || cipher.contains("DES") ||
                         cipher.contains("NULL") || cipher.contains("MD5") ||
                         cipher.contains("RC2") || cipher.contains("IDEA")
                     })
                 },
                 "tls_version" => {
-                    cert_info.as_ref().and_then(|c| c.tls_version.as_ref()).map_or(false, |v| {
+                    cert_info.as_ref().and_then(|c| c.tls_version.as_ref()).is_some_and(|v| {
                         matcher.regex.iter().any(|pattern| {
                             Regex::new(pattern).map(|re| re.is_match(v)).unwrap_or(false)
                         })
                     })
                 },
                 "san" => {
-                    cert_info.as_ref().map_or(false, |c| {
+                    cert_info.as_ref().is_some_and(|c| {
                         matcher.regex.iter().any(|pattern| {
                             let re = Regex::new(pattern).unwrap_or_else(|_| Regex::new(".*").unwrap());
                             c.subject_alternative_names.iter().any(|san| re.is_match(san))
@@ -130,7 +130,7 @@ pub async fn execute(
                     })
                 },
                 "weak_key" => {
-                    cert_info.as_ref().map_or(false, |c| {
+                    cert_info.as_ref().is_some_and(|c| {
                         match c.public_key_algorithm.as_str() {
                             "RSA" => {
                                 if let Some(bits) = c.public_key_bits {
@@ -150,9 +150,9 @@ pub async fn execute(
                         }
                     })
                 },
-                "is_ca" => cert_info.as_ref().map_or(false, |c| c.is_ca),
+                "is_ca" => cert_info.as_ref().is_some_and(|c| c.is_ca),
                 "basic_constraints" => {
-                    cert_info.as_ref().map_or(false, |c| {
+                    cert_info.as_ref().is_some_and(|c| {
                         matcher.regex.iter().any(|pattern| {
                             let re = Regex::new(pattern).unwrap_or_else(|_| Regex::new(".*").unwrap());
                             let mut match_str = String::new();

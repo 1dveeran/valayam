@@ -13,12 +13,12 @@ impl ServerlessAnalyzer {
                 if let Some(roles_array) = iam_roles.as_sequence() {
                     for role in roles_array {
                         if let Some(action) = role.get("Action") {
-                            if action.as_str() == Some("*") || action.as_sequence().map_or(false, |s| s.iter().any(|v| v.as_str() == Some("*"))) {
+                            if action.as_str() == Some("*") || action.as_sequence().is_some_and(|s| s.iter().any(|v| v.as_str() == Some("*"))) {
                                 findings.push("Wildcard Action '*' found in provider IAM roles. This violates least privilege.".to_string());
                             }
                         }
                         if let Some(resource) = role.get("Resource") {
-                            if resource.as_str() == Some("*") || resource.as_sequence().map_or(false, |s| s.iter().any(|v| v.as_str() == Some("*"))) {
+                            if resource.as_str() == Some("*") || resource.as_sequence().is_some_and(|s| s.iter().any(|v| v.as_str() == Some("*"))) {
                                 findings.push("Wildcard Resource '*' found in provider IAM roles. This violates least privilege.".to_string());
                             }
                         }
@@ -69,12 +69,12 @@ impl ServerlessAnalyzer {
                                             if let Some(stmt_array) = stmt.as_sequence() {
                                                 for s in stmt_array {
                                                     if let Some(action) = s.get("Action") {
-                                                        if action.as_str() == Some("*") || action.as_sequence().map_or(false, |seq| seq.iter().any(|v| v.as_str() == Some("*"))) {
+                                                        if action.as_str() == Some("*") || action.as_sequence().is_some_and(|seq| seq.iter().any(|v| v.as_str() == Some("*"))) {
                                                             findings.push(format!("Wildcard Action '*' found in SAM function '{}' policies.", res_name.as_str().unwrap_or("Unknown")));
                                                         }
                                                     }
                                                     if let Some(resource) = s.get("Resource") {
-                                                        if resource.as_str() == Some("*") || resource.as_sequence().map_or(false, |seq| seq.iter().any(|v| v.as_str() == Some("*"))) {
+                                                        if resource.as_str() == Some("*") || resource.as_sequence().is_some_and(|seq| seq.iter().any(|v| v.as_str() == Some("*"))) {
                                                             findings.push(format!("Wildcard Resource '*' found in SAM function '{}' policies.", res_name.as_str().unwrap_or("Unknown")));
                                                         }
                                                     }

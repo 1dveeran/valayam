@@ -183,7 +183,7 @@ impl TlsConfig {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         // Create spoofer if profile is specified
-        let spoofer = profile.map(|p| Ja3Ja4Spoofer::new(p));
+        let spoofer = profile.map(Ja3Ja4Spoofer::new);
 
         Ok(Self {
             spoofer,

@@ -26,7 +26,7 @@ impl GraphqlMutator {
         for i in 0..num_aliases {
             batched_query.push_str(&format!("  alias_{}: {}\n", i, first_field_name));
         }
-        batched_query.push_str("}");
+        batched_query.push('}');
         
         Some(serde_json::json!({
             "query": batched_query

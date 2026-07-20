@@ -43,7 +43,7 @@ pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&
     let file_stem = archive_path.file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("plugin");
-    let extract_dir = cache_base_dir.join(format!("{}_{}", file_stem, uuid::Uuid::new_v4().to_string().replace("-", "")[..8].to_string()));
+    let extract_dir = cache_base_dir.join(format!("{}_{}", file_stem, &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]));
     
     fs::create_dir_all(&extract_dir)?;
 

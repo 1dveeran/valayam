@@ -43,7 +43,7 @@ pub async fn run_scan(
 
     // ── 2. Create cancellation token (wired to Ctrl+C) ──
     let cancel = CancellationToken::new();
-    let cancel_clone = cancel.clone();
+    let _cancel_clone = cancel.clone();
     let cancel_for_handler = cancel.clone();
     
     // We will still handle ctrl-c to save state
@@ -69,7 +69,7 @@ pub async fn run_scan(
 
     // ── 3. Build PluginRegistry ──
     let registry = {
-        let mut reg = PluginRegistry::new();
+        let reg = PluginRegistry::new();
         // Core protocols
         reg.register(HttpScanPlugin::new(http_client.clone()));
         reg.register(NetworkScanPlugin::new());

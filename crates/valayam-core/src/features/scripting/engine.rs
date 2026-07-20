@@ -113,16 +113,13 @@ impl ScriptEngine {
         // ── Register: TCP builtins ──
         engine.register_fn("tcp_request", |host: ImmutableString, port: i64, payload: ImmutableString| -> Dynamic {
             let address = format!("{}:{}", host, port);
-            match TcpStream::connect_timeout(&address.parse().unwrap(), Duration::from_secs(5)) {
-                Ok(mut stream) => {
-                    if stream.write_all(payload.as_bytes()).is_ok() {
-                        let mut buf = Vec::new();
-                        let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-                        let _ = stream.read_to_end(&mut buf);
-                        return Dynamic::from(String::from_utf8_lossy(&buf).to_string());
-                    }
+            if let Ok(mut stream) = TcpStream::connect_timeout(&address.parse().unwrap(), Duration::from_secs(5)) {
+                if stream.write_all(payload.as_bytes()).is_ok() {
+                    let mut buf = Vec::new();
+                    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                    let _ = stream.read_to_end(&mut buf);
+                    return Dynamic::from(String::from_utf8_lossy(&buf).to_string());
                 }
-                Err(_) => {}
             }
             Dynamic::from(String::new())
         });
@@ -201,7 +198,7 @@ impl ScriptEngine {
             let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
             mac.update(signing_input.as_bytes());
             let signature = mac.finalize().into_bytes();
-            let signature_b64 = URL_SAFE_NO_PAD.encode(&signature);
+            let signature_b64 = URL_SAFE_NO_PAD.encode(signature);
             
             format!("{}.{}", signing_input, signature_b64).into()
         });

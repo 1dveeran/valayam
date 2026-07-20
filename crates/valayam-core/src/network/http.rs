@@ -199,7 +199,7 @@ impl StealthHttpClient {
         };
 
         // Add JA3/JA4 spoofing if profile specified
-        let ja3_ja4_spoofer = ja3_ja4_profile.map(|profile| Ja3Ja4Spoofer::new(profile));
+        let ja3_ja4_spoofer = ja3_ja4_profile.map(Ja3Ja4Spoofer::new);
 
         let client = client_builder.build()?;
 

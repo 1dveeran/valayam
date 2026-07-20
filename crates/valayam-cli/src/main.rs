@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
     // Console layer (text format)
     let console_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
-        .with_filter(level_filter.clone());
+        .with_filter(level_filter);
 
     // OpenTelemetry pipeline setup
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")

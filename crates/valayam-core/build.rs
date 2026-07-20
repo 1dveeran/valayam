@@ -127,13 +127,10 @@ fn load_cache(path: &str) -> Option<HashMap<String, u64>> {
     let mut map = HashMap::new();
     for line in content.lines() {
         let mut parts = line.splitn(2, '\t');
-        match (parts.next(), parts.next()) {
-            (Some(key), Some(value)) => {
-                if let Ok(h) = value.parse::<u64>() {
-                    map.insert(key.to_string(), h);
-                }
+        if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
+            if let Ok(h) = value.parse::<u64>() {
+                map.insert(key.to_string(), h);
             }
-            _ => {}
         }
     }
     Some(map)

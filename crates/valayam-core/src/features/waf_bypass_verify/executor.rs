@@ -333,7 +333,7 @@ pub async fn execute(
                 let headers_ref = additional_headers.as_ref();
 
                 match http_client
-                    .send_request(&method, &url, headers_ref, body.as_deref())
+                    .send_request(&method, &url, headers_ref, body)
                     .await
                 {
                     Ok(resp) => {

@@ -43,10 +43,7 @@ fn helper_url_encode(input: &str) -> String {
 fn helper_url_decode(input: &str) -> String {
     // Decode percent-encoded bytes back to UTF-8
     let decoded_bytes: Vec<u8> = input
-        .as_bytes()
-        .iter()
-        .copied()
-        .collect::<Vec<u8>>();
+        .as_bytes().to_vec();
     // Use form_urlencoded to parse a single key which effectively decodes it
     url::form_urlencoded::parse(&decoded_bytes)
         .map(|(k, v)| {

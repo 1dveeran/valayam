@@ -340,7 +340,7 @@ pub async fn scan_ports(
 
             Some(UdpPortResult {
                 port,
-                response: response.map(|v| v),
+                response: response,
                 service_info,
             })
         })

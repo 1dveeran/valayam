@@ -70,7 +70,7 @@ pub async fn execute(
                 };
                 
                 // If it matches our vulnerable conditions, and the baseline didn't fail
-                if is_match && (p_status >= 200 && p_status < 400) {
+                if is_match && (200..400).contains(&p_status) {
                     return Some(ScanResult {
                         cvss_score: None,
                         reference: None,

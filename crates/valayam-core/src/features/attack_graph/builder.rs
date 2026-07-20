@@ -14,7 +14,7 @@ impl AttackGraph {
             NodeType::IpAddress
         };
 
-        let target_idx = self.add_node(NodeData {
+        let _target_idx = self.add_node(NodeData {
             id: target_node_id.clone(),
             label: target_node_id.clone(),
             node_type: target_type,
@@ -23,7 +23,7 @@ impl AttackGraph {
 
         // Create a node for the vulnerability
         let vuln_node_id = format!("{}-{}", target_node_id, result.template_id);
-        let vuln_idx = self.add_node(NodeData {
+        let _vuln_idx = self.add_node(NodeData {
             id: vuln_node_id.clone(),
             label: result.template_name.clone(),
             node_type: NodeType::Vulnerability,

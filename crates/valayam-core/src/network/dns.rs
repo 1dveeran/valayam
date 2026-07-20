@@ -44,7 +44,7 @@ pub async fn attempt_axfr(domain: &str, nameservers: Option<&[String]>) -> Vec<S
         match perform_axfr_transfer(&ns, domain).await {
             Ok(Some(zone_records)) => {
                 // Successful transfer
-                records.extend(zone_records.into_iter());
+                records.extend(zone_records);
                 break; // Success, no need to try other servers
             }
             Ok(None) => {
@@ -136,7 +136,7 @@ async fn is_vulnerable_takeover_target(target: &str) -> bool {
     for pattern in &vulnerable_patterns {
         if target.ends_with(*pattern) {
             // Additional verification: try to see if service is actually unclaimed
-            return service_claim_check(target, *pattern).await;
+            return service_claim_check(target, pattern).await;
         }
     }
 

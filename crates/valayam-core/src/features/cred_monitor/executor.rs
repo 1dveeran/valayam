@@ -371,7 +371,7 @@ pub async fn execute(
 ) -> Option<ScanResult> {
     let config = CredMonitorConfig::default();
 
-    for template in templates {
+    if let Some(template) = templates.iter().next() {
         let domain = template.target_domain.replace("{{Hostname}}", target_url);
         let mut all_findings: Vec<CredFinding> = Vec::new();
 
@@ -473,7 +473,7 @@ pub async fn execute(
                     "monitoring".to_string(),
                     format!("findings:{}", all_findings.len()),
                 ];
-                t.extend(finding_types.into_iter());
+                t.extend(finding_types);
                 t
             },
             compliance: {

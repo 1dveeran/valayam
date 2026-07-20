@@ -111,7 +111,7 @@ impl PluginRegistry {
             return Ok(()); // No external plugins directory
         }
 
-        let cache_dir = dirs::cache_dir().unwrap_or_else(|| std::env::temp_dir()).join("valayam/plugins_cache");
+        let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
         let pk = self.pub_key; // Copy
 
         for entry in std::fs::read_dir(dir_path)? {
@@ -146,7 +146,7 @@ impl PluginRegistry {
                         tracing::info!(file = %path.display(), "Loading external WASM plugin");
                         let plugin = crate::core::wasm_plugin::WasmPluginBridge::new(file_name, path);
                         self.register(plugin);
-                    } else if ext == "exe" || ext == "sh" || ext == "bat" || ext == "cmd" || (ext == "py" && !file_name.contains("_pb2")) || (std::env::consts::FAMILY == "unix" && ext == "") {
+                    } else if ext == "exe" || ext == "sh" || ext == "bat" || ext == "cmd" || (ext == "py" && !file_name.contains("_pb2")) || (std::env::consts::FAMILY == "unix" && ext.is_empty()) {
                         tracing::info!(file = %path.display(), "Loading external gRPC plugin");
                         let plugin = crate::core::grpc_plugin::GrpcPluginBridge::new(file_name, path);
                         self.register(plugin);

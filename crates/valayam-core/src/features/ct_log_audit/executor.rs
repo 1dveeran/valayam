@@ -155,7 +155,7 @@ fn analyze_certificates(
         .filter_map(|e| {
             e.not_before
                 .as_deref()
-                .and_then(|s| parse_ct_date(s))
+                .and_then(parse_ct_date)
         })
         .collect();
 

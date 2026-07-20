@@ -32,7 +32,7 @@ impl WasmPluginBridge {
         let module = Module::from_file(&engine, &wasm_path).unwrap_or_else(|e| {
             tracing::warn!("Failed to load WASM module from {}: {}", wasm_path.display(), e);
             // Create a minimal dummy module for error path — we validate in init()
-            Module::new(&engine, &[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).expect("Empty module should always succeed")
+            Module::new(&engine, [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).expect("Empty module should always succeed")
         });
         Self {
             name: name.into(),
