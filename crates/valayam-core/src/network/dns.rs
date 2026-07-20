@@ -276,16 +276,16 @@ pub struct SubdomainTakeoverInfo {
 /// Resolve DNS records for a domain.
 pub async fn resolve(domain: &str, record_type: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     // Create a resolver with system configuration
-    let resolver = Resolver::new(
+    let resolver = hickory_resolver::TokioAsyncResolver::tokio(
         ResolverConfig::default(),
         ResolverOpts::default(),
-    )?;
+    );
 
     // Parse the record type
     let record_type_parsed = record_type.parse::<RecordType>()?;
 
     // Perform the lookup
-    let response = resolver.lookup(domain, record_type_parsed)?;
+    let response = resolver.lookup(domain, record_type_parsed).await?;
 
     // Extract record data as strings
     let mut results = Vec::new();

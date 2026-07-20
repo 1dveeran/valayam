@@ -73,6 +73,15 @@ pub async fn execute(
         // ── Resolve all placeholders in path, headers, and body ──
         let resolved_path = resolve_all(&req_rule.path, variables);
 
+        // Format the full URL properly
+        let full_url = if resolved_path.starts_with("http://") || resolved_path.starts_with("https://") {
+            resolved_path.clone()
+        } else {
+            let base = target_url.trim_end_matches('/');
+            let path = resolved_path.trim_start_matches('/');
+            format!("{}/{}", base, path)
+        };
+
         let resolved_headers = req_rule.headers.as_ref().map(|h| {
             h.iter()
                 .map(|(k, v)| (k.clone(), resolve_all(v, variables)))
@@ -84,19 +93,19 @@ pub async fn execute(
         tracing::trace!(
             target = %target_url,
             method = %req_rule.method,
-            path = %resolved_path,
+            url = %full_url,
             headers = ?resolved_headers,
             body = ?resolved_body,
             "Prepared raw HTTP request payload"
         );
 
         // ── Send HTTP request ──
-        tracing::debug!(target = %target_url, method = %req_rule.method, path = %resolved_path, "Sending HTTP request");
+        tracing::debug!(target = %target_url, method = %req_rule.method, url = %full_url, "Sending HTTP request");
         
         let resp = match client
             .send_request(
                 &req_rule.method,
-                &resolved_path,
+                &full_url,
                 resolved_headers.as_ref(),
                 resolved_body.as_deref(),
             )

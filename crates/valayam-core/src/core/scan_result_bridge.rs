@@ -21,8 +21,8 @@ pub fn scan_result_to_finding(result: ScanResult) -> FindingOwned {
     if let Some(score) = result.cvss_score {
         metadata.insert(META_CVSS_SCORE.to_string(), score.to_string());
     }
-    if let Some(solution) = result.solution {
-        metadata.insert(META_SOLUTION.to_string(), solution);
+    if let Some(ref solution) = result.solution {
+        metadata.insert(META_SOLUTION.to_string(), solution.clone());
     }
     if let Some(reference) = result.reference {
         metadata.insert(META_REFERENCE.to_string(), reference);
@@ -37,6 +37,8 @@ pub fn scan_result_to_finding(result: ScanResult) -> FindingOwned {
         severity: result.template_severity,
         target: result.target,
         matched_at: result.payload,
+        description: None,
+        solution: result.solution,
         extracted_data: None,
         metadata,
     }
@@ -83,7 +85,7 @@ pub fn finding_to_scan_result(finding: FindingOwned) -> ScanResult {
         payload: finding.matched_at,
         compliance,
         cvss_score,
-        solution,
+        solution: finding.solution.or(solution),
         reference,
         tags,
     }

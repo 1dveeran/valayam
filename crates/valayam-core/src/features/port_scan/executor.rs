@@ -272,7 +272,11 @@ pub async fn execute(
     template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
     for template in templates {
-        let host_to_scan = template.target.replace("{{Hostname}}", target_host);
+        let host_to_scan = template
+            .target
+            .as_deref()
+            .unwrap_or("{{Hostname}}")
+            .replace("{{Hostname}}", target_host);
 
         // Filter to only scan sensitive ports if specific ports weren't provided
         let ports_to_scan = if template.ports.is_empty() {

@@ -22,7 +22,7 @@ pub async fn execute(
         let records = match dns::resolve(&domain, &rule.query_type).await {
             Ok(r) => r,
             Err(e) => {
-                tracing::warn!(target = %domain, error = %e, "DNS resolution failed");
+                tracing::debug!(target = %domain, error = %e, "DNS resolution failed");
                 continue;
             }
         };

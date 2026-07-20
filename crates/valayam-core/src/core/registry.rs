@@ -656,6 +656,8 @@ mod tests {
                     severity: "medium".into(),
                     target: ctx.target.clone(),
                     matched_at: format!("match_{}", i),
+                    description: None,
+                    solution: None,
                     extracted_data: None,
                     metadata: Default::default(),
                 }).await;

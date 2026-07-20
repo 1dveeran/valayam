@@ -5,10 +5,10 @@ info:
   severity: "High"
   classification:
     cve-2023-0003: {}
-port-scan:
+port_scan:
   - ports:
-      - "22"    # SSH
-      - "23"    # Telnet
-      - "3389"  # RDP
-      - "5900"  # VNC
-      - "5901"  # VNC
+      - 22    # SSH
+      - 23    # Telnet
+      - 21    # FTP
+      - 3389  # RDP
+      - 5900  # VNC

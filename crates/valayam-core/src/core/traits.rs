@@ -17,12 +17,27 @@ pub struct FindingOwned {
     pub target: String,
     pub matched_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub solution: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub extracted_data: Option<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, String>,
 }
 
 impl FindingOwned {
+    /// Produces a deduplication key from the triple `(template_id, target, matched_at)`.
+    /// Two findings with the same key are considered duplicates.
+    #[must_use]
+    pub fn dedup_key(&self) -> (String, String, String) {
+        (
+            self.template_id.clone(),
+            self.target.clone(),
+            self.matched_at.clone(),
+        )
+    }
+
     /// Convert to legacy `ScanResult` for backward compatibility.
     #[must_use]
     pub fn into_scan_result(self) -> crate::core::result::ScanResult {
@@ -105,7 +120,11 @@ impl ScanContext {
     pub async fn set_variable(&self, plugin_name: &str, key: &str, value: String) {
         self.variables.write().await.set(plugin_name, key, value);
     }
-    pub async fn emit_finding(&self, finding: FindingOwned) -> Result<(), mpsc::error::SendError<FindingOwned>> {
+    pub async fn emit_finding(&self, mut finding: FindingOwned) -> Result<(), mpsc::error::SendError<FindingOwned>> {
+        // Auto-inject description if the plugin omitted it
+        if finding.description.is_none() {
+            finding.description = self.template.info.description.clone();
+        }
         self.finding_tx.send(finding).await
     }
     pub fn is_cancelled(&self) -> bool {

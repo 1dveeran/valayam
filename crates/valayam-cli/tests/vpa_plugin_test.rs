@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use valayam_core::core::registry::PluginRegistry;
 
-#[tokio::test]
-async fn test_vpa_plugin_packaging_and_loading() {
+#[test]
+fn test_vpa_plugin_packaging_and_loading() {
     let temp_dir = std::env::temp_dir().join("valayam_vpa_test");
     if temp_dir.exists() {
         std::fs::remove_dir_all(&temp_dir).unwrap();

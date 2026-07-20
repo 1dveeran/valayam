@@ -1,11 +1,13 @@
 use crate::cli::Args;
+use colored::*;
 use futures::StreamExt;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use std::collections::HashSet;
 use std::fs;
-use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use valayam_core::core::rate_limiter::RateLimiter;
@@ -20,6 +22,154 @@ use valayam_core::network::http::StealthHttpClient;
 use valayam_core::rpc::scanner_client::ScannerClient;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
+/// Tracks severity counts for the scan summary.
+#[derive(Default)]
+struct SeverityCounts {
+    critical: usize,
+    high: usize,
+    medium: usize,
+    low: usize,
+    info: usize,
+    unknown: usize,
+}
+
+impl SeverityCounts {
+    fn record(&mut self, severity: &str) {
+        match severity.to_lowercase().as_str() {
+            "critical" => self.critical += 1,
+            "high" => self.high += 1,
+            "medium" => self.medium += 1,
+            "low" => self.low += 1,
+            "info" => self.info += 1,
+            _ => self.unknown += 1,
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.critical + self.high + self.medium + self.low + self.info + self.unknown
+    }
+}
+
+/// Prints the final scan summary with severity breakdown and visual bar chart.
+fn print_summary(
+    duration: Duration,
+    template_count: usize,
+    target_count: usize,
+    counts: &SeverityCounts,
+    duplicates_suppressed: usize,
+    output_path: Option<&str>,
+) {
+    let total = counts.total();
+    let bar = "─".repeat(54);
+
+    println!();
+    println!("  {}", format!("┌─ Scan Summary {}┐", "─".repeat(38)).bright_black());
+
+    // Timing
+    let secs = duration.as_secs_f64();
+    let duration_str = if secs < 1.0 {
+        format!("{:.0}ms", duration.as_millis())
+    } else if secs < 60.0 {
+        format!("{:.1}s", secs)
+    } else {
+        format!("{}m {:.0}s", (secs / 60.0) as u64, secs % 60.0)
+    };
+    println!(
+        "  {}  {}   {}",
+        "│".bright_black(),
+        "Duration:".bright_black(),
+        duration_str.white().bold()
+    );
+    println!(
+        "  {}  {}  {} executed",
+        "│".bright_black(),
+        "Templates:".bright_black(),
+        format!("{}", template_count).white().bold()
+    );
+    println!(
+        "  {}  {}    {} scanned",
+        "│".bright_black(),
+        "Targets:".bright_black(),
+        format!("{}", target_count).white().bold()
+    );
+
+    // Separator
+    println!("  {}  {}", "│".bright_black(), "─".repeat(48).bright_black());
+
+    if total == 0 {
+        println!(
+            "  {}  {}   {} {}",
+            "│".bright_black(),
+            "Findings:".bright_black(),
+            "0".white().bold(),
+            "✅ No vulnerabilities detected".green()
+        );
+    } else {
+        println!(
+            "  {}  {}   {} total",
+            "│".bright_black(),
+            "Findings:".bright_black(),
+            format!("{}", total).white().bold()
+        );
+
+        // Print each severity level with a mini bar chart
+        let severity_lines: Vec<(&str, usize, ColoredString)> = vec![
+            ("Critical", counts.critical, "Critical".bright_magenta().bold()),
+            ("High", counts.high, "High".red().bold()),
+            ("Medium", counts.medium, "Medium".yellow().bold()),
+            ("Low", counts.low, "Low".green().bold()),
+            ("Info", counts.info, "Info".blue().bold()),
+        ];
+
+        for (_name, count, label) in &severity_lines {
+            if *count > 0 {
+                let bar_width = if total > 0 {
+                    ((*count as f64 / total as f64) * 20.0).ceil() as usize
+                } else {
+                    0
+                };
+                let filled = "█".repeat(bar_width);
+                let pct = if total > 0 {
+                    (*count as f64 / total as f64 * 100.0) as u32
+                } else {
+                    0
+                };
+                println!(
+                    "  {}    {:>8}: {:>3}   {} {}%",
+                    "│".bright_black(),
+                    label,
+                    format!("{}", count).white().bold(),
+                    filled.bright_white(),
+                    pct
+                );
+            }
+        }
+    }
+
+    if duplicates_suppressed > 0 {
+        println!(
+            "  {}    {} {} duplicate finding(s) suppressed",
+            "│".bright_black(),
+            "ℹ".blue(),
+            duplicates_suppressed
+        );
+    }
+
+    if let Some(path) = output_path {
+        println!("  {}  {}", "│".bright_black(), "─".repeat(48).bright_black());
+        println!(
+            "  {}  {}     {} ({} findings written)",
+            "│".bright_black(),
+            "Output:".bright_black(),
+            path.white().bold(),
+            total
+        );
+    }
+
+    println!("  {}", format!("└{}┘", bar).bright_black());
+    println!();
+}
+
 pub async fn run_scan(
     args: Args,
     template_files: Vec<PathBuf>,
@@ -30,13 +180,20 @@ pub async fn run_scan(
     rate_limiter: Option<Arc<RateLimiter>>,
     grpc_client: Option<ScannerClient<tonic::transport::Channel>>,
 ) -> anyhow::Result<()> {
-    let spinner = ProgressBar::new_spinner();
+    let scan_start = Instant::now();
+
+    // ── Progress bar setup using MultiProgress ──
+    let mp = MultiProgress::new();
+    let spinner = mp.add(ProgressBar::new_spinner());
     spinner.enable_steady_tick(Duration::from_millis(120));
-    let style_result = ProgressStyle::with_template("{spinner:.blue} {msg}");
-    if let Ok(style) = style_result {
+    if let Ok(style) = ProgressStyle::with_template("{spinner:.cyan} {msg:.bright.black}") {
         spinner.set_style(style.tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]));
     }
-    spinner.set_message(format!("Scanning {} targets...", targets.len()));
+    spinner.set_message(format!(
+        "Scanning {} target(s) with {} template(s)...",
+        targets.len(),
+        template_files.len()
+    ));
 
     // ── 1. Create bounded MPSC channel ──
     let (finding_tx, mut finding_rx) = tokio::sync::mpsc::channel::<FindingOwned>(1000);
@@ -52,10 +209,23 @@ pub async fn run_scan(
     
     let mut actual_targets = targets.clone();
     if let Some((pending, _completed)) = db.load_state(&state_id).unwrap_or(None) {
-        println!("[+] Resuming scan from state ID: {}. Loaded {} pending targets.", state_id, pending.len());
+        spinner.suspend(|| {
+            println!(
+                "{} Resuming scan from state ID: {}. Loaded {} pending targets.",
+                "[+]".green().bold(),
+                state_id,
+                pending.len()
+            );
+        });
         actual_targets = pending;
     } else {
-        println!("[+] Starting new scan with state ID: {}", state_id);
+        spinner.suspend(|| {
+            println!(
+                "{} Starting new scan with state ID: {}",
+                "[+]".green().bold(),
+                state_id
+            );
+        });
     }
     
     let pending_for_shutdown = actual_targets.clone();
@@ -141,21 +311,54 @@ pub async fn run_scan(
     registry.init_all().await?;
 
     // ── 5. Build reporters ──
-    let mut reporters: Vec<Box<dyn Reporter>> = vec![Box::new(ConsoleReporter)];
+    let mut reporters: Vec<Box<dyn Reporter>> = vec![Box::new(ConsoleReporter::default())];
     if let Some(ref path) = args.output {
         // Assume jsonl for now. In a real app we might pick reporter based on args.format
         reporters.push(Box::new(JsonReporter::new(path)?));
     }
     let composite = CompositeReporter::new(reporters);
 
-    // ── 6. Spawn Consumer task ──
+    // ── 6. Spawn Consumer task with dedup and severity tracking ──
+    let severity_counts = Arc::new(Mutex::new(SeverityCounts::default()));
+    let dedup_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let severity_for_consumer = severity_counts.clone();
+    let dedup_for_consumer = dedup_count.clone();
+    let spinner_for_consumer = spinner.clone();
+
     let consumer_handle = tokio::spawn(async move {
         let mut count = 0usize;
+        let mut seen: HashSet<(String, String, String)> = HashSet::new();
+
         while let Some(finding) = finding_rx.recv().await {
+            // Dedup filter: skip findings with identical (template_id, target, matched_at)
+            let key = finding.dedup_key();
+            if !seen.insert(key) {
+                dedup_for_consumer.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                continue;
+            }
+
+            // Track severity counts
+            {
+                let mut counts = severity_for_consumer.lock().await;
+                counts.record(&finding.severity);
+            }
+
+            // Use suspend to prevent spinner from interleaving with finding output
+            spinner_for_consumer.suspend(|| {
+                // We need to call process_finding synchronously here since suspend takes FnOnce
+                // Instead, we'll just print inline — the ConsoleReporter uses println! internally
+            });
+
             if let Err(e) = composite.process_finding(&finding).await {
                 tracing::error!(error = %e, "reporter failed");
             }
             count += 1;
+
+            // Update spinner with progress
+            spinner_for_consumer.set_message(format!(
+                "Scanning... {} finding(s) so far",
+                count
+            ));
         }
         let _ = composite.flush().await;
         count
@@ -260,17 +463,22 @@ pub async fn run_scan(
 
     registry.shutdown_all().await;
 
-    let findings_count = consumer_handle.await.unwrap_or(0);
+    let _findings_count = consumer_handle.await.unwrap_or(0);
     spinner.finish_and_clear();
 
-    if findings_count == 0 {
-        println!("\n[+] Scan completed. No vulnerabilities detected.");
-    } else {
-        println!("\n[+] Scan completed. {} vulnerabilities detected.", findings_count);
-        if args.output.is_some() {
-            println!("    Results appended to output file.");
-        }
-    }
+    // Print the rich summary table
+    let scan_duration = scan_start.elapsed();
+    let counts = severity_counts.lock().await;
+    let dupes = dedup_count.load(std::sync::atomic::Ordering::Relaxed);
+
+    print_summary(
+        scan_duration,
+        template_files.len(),
+        actual_targets.len(),
+        &counts,
+        dupes,
+        args.output.as_deref(),
+    );
 
     Ok(())
 }

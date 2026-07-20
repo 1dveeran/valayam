@@ -8,6 +8,7 @@ pub mod state;
 pub mod plugin_cli;
 
 use clap::Parser;
+use colored::*;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -19,12 +20,53 @@ use valayam_core::features::nuclei_compat::executor::NucleiExecutor;
 use valayam_core::network::http::StealthHttpClient;
 use valayam_core::stealth::proxy::ProxyRotator;
 
+/// Prints the branded Valayam ASCII banner to stdout.
+fn print_banner() {
+    let banner = r#"
+ ██╗   ██╗ █████╗ ██╗      █████╗ ██╗   ██╗ █████╗ ███╗   ███╗
+ ██║   ██║██╔══██╗██║     ██╔══██╗╚██╗ ██╔╝██╔══██╗████╗ ████║
+ ██║   ██║███████║██║     ███████║ ╚████╔╝ ███████║██╔████╔██║
+ ╚██╗ ██╔╝██╔══██║██║     ██╔══██║  ╚██╔╝  ██╔══██║██║╚██╔╝██║
+  ╚████╔╝ ██║  ██║███████╗██║  ██║   ██║   ██║  ██║██║ ╚═╝ ██║
+   ╚═══╝  ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝     ╚═╝"#;
+    println!("{}", banner.bright_cyan());
+    println!(
+        "{}",
+        "                    Modern Stealth Scanner v0.1.0\n"
+            .bright_black()
+    );
+}
+
+/// Prints a boxed scan configuration summary.
+fn print_scan_config(target: &str, template_count: usize, engine: &str, concurrency: usize, rate_limit: Option<u32>, output: Option<&str>) {
+    let bar = "─".repeat(54);
+    println!("  {}", format!("┌─ Scan Configuration {}┐", "─".repeat(32)).bright_black());
+    println!("  {}  {}     {}", "│".bright_black(), "Target:".bright_black(), target.cyan().bold());
+    println!("  {}  {}  {} {} {}", "│".bright_black(), "Templates:".bright_black(), format!("{}", template_count).white().bold(), "loaded".bright_black(), format!("({})", engine).bright_black());
+    let rate_str = rate_limit.map_or("unlimited".to_string(), |r| format!("{} req/s", r));
+    println!("  {}  {}       {} {} {} {}", "│".bright_black(), "Tuning:".bright_black(), "concurrency".bright_black(), format!("{}", concurrency).white(), "│ rate limit".bright_black(), rate_str.white());
+    if let Some(out) = output {
+        println!("  {}  {}     {} {}", "│".bright_black(), "Output:".bright_black(), "console".white(), format!("+ {}", out).bright_black());
+    } else {
+        println!("  {}  {}     {}", "│".bright_black(), "Output:".bright_black(), "console".white());
+    }
+    println!("  {}", format!("└{}┘", bar).bright_black());
+    println!();
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
+    print_banner();
     
-    // Parse log level from string
-    let level = args.log_level.parse::<tracing::Level>().unwrap_or(tracing::Level::INFO);
+    // Parse log level from string. Default to WARN to keep CLI output clean,
+    // unless the user explicitly requested debug or trace.
+    let level_str = if args.log_level.eq_ignore_ascii_case("info") {
+        "warn"
+    } else {
+        &args.log_level
+    };
+    let level = level_str.parse::<tracing::Level>().unwrap_or(tracing::Level::WARN);
     let level_filter = tracing_subscriber::filter::LevelFilter::from_level(level);
 
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
@@ -105,14 +147,15 @@ async fn main() -> anyhow::Result<()> {
     } else if let Some(n) = &args.nuclei_template {
         (n.as_str(), true)
     } else {
-        println!("[!] No template flag provided. Defaulting to Native engine with demo template (-t {}).", default_template);
+        println!("{} No template flag provided. Defaulting to Native engine with demo template (-t {}).", "[!]".yellow().bold(), default_template);
         (default_template.as_str(), false)
     };
 
     // --- Developer QoL: Auto-generate a demo template if it doesn't exist ---
     if !is_nuclei && !Path::new(template_path).exists() {
         println!(
-            "[!] Native template not found at '{}'. Generating demo template...",
+            "{} Native template not found at '{}'. Generating demo template...",
+            "[!]".yellow().bold(),
             template_path
         );
 
@@ -148,18 +191,18 @@ network:
       - "8080"
 "#;
         fs::write(template_path, demo_yaml.trim())?;
-        println!("[+] Demo template created successfully.\n");
+        println!("{} Demo template created successfully.\n", "[+]".green().bold());
     }
 
     // 1. Initialize Stealth Core
     let proxy_rotator = if let Some(path) = &args.proxy_file {
         match ProxyRotator::load_from_file(path) {
             Ok(rotator) => {
-                println!("[+] Loaded {} proxies from {}", rotator.len(), path);
+                println!("{} Loaded {} proxies from {}", "[+]".green().bold(), rotator.len(), path);
                 Some(rotator)
             }
             Err(e) => {
-                eprintln!("[!] Failed to load proxies: {}", e);
+                eprintln!("{} Failed to load proxies: {}", "[✗]".red().bold(), e);
                 None
             }
         }
@@ -176,12 +219,12 @@ network:
     let executor_nuclei = NucleiExecutor::new(Arc::clone(&http_client));
 
     if args.waf_detect {
-        println!("[*] Starting WAF Detection on {}...", args.target);
+        println!("{} Starting WAF Detection on {}...", "[*]".blue().bold(), args.target);
         let detections = valayam_core::features::waf_detect::detector::detect_waf(&http_client, &args.target).await;
         if detections.is_empty() {
-            println!("[+] No WAF detected. The target appears to be unshielded.");
+            println!("{} No WAF detected. The target appears to be unshielded.", "[+]".green().bold());
         } else {
-            println!("[!] WAF Detected!");
+            println!("{} WAF Detected!", "[!]".yellow().bold());
             for det in detections {
                 println!(" ├─ Product:  {}", det.product);
                 println!(" └─ Evidence: {}", det.evidence);
@@ -197,7 +240,7 @@ network:
 
     // Initialize rate limiter if configured
     let rate_limiter = args.rate_limit.map(|rps| {
-        println!("[+] Rate limiting enabled: {} requests/second", rps);
+        println!("{} Rate limiting enabled: {} requests/second", "[+]".green().bold(), rps);
         Arc::new(RateLimiter::new_simple(rps))
     });
 
@@ -207,11 +250,11 @@ network:
         use valayam_core::rpc::scanner_client::ScannerClient;
         match ScannerClient::connect(worker_url.clone()).await {
             Ok(client) => {
-                println!("[+] Connected to Valayam worker node at {}", worker_url);
+                println!("{} Connected to Valayam worker node at {}", "[+]".green().bold(), worker_url);
                 grpc_client = Some(client);
             }
             Err(e) => {
-                eprintln!("[!] Failed to connect to Valayam worker node: {}", e);
+                eprintln!("{} Failed to connect to Valayam worker node: {}", "[✗]".red().bold(), e);
                 return Ok(());
             }
         }
@@ -235,20 +278,24 @@ network:
     }
 
     if template_files.is_empty() {
-        println!("[!] No valid YAML templates found in {}", template_path);
+        println!("{} No valid YAML templates found in {}", "[!]".yellow().bold(), template_path);
         return Ok(());
     }
 
-    println!(
-        "[+] Found {} template(s). Starting concurrent {} scan...",
+    let engine_name = if is_nuclei { "Nuclei" } else { "Native" };
+    print_scan_config(
+        &args.target,
         template_files.len(),
-        if is_nuclei { "Nuclei" } else { "Native" }
+        engine_name,
+        args.concurrency,
+        args.rate_limit,
+        args.output.as_deref(),
     );
 
     // 2.5 Run Web Crawler if requested to build target URLs list
     let mut targets = vec![args.target.clone()];
     if args.crawl {
-        println!("[*] Starting Web Crawler discovery on {}...", args.target);
+        println!("{} Starting Web Crawler discovery on {}...", "[*]".blue().bold(), args.target);
         
         let crawl_hdrs = args.crawl_headers.as_ref().map(|s| {
             let mut map = std::collections::HashMap::new();
@@ -272,13 +319,13 @@ network:
         match crawler {
             Ok(c) => {
                 let discovered = c.run().await;
-                println!("[+] Crawler discovered {} page(s) on target domain.", discovered.len());
+                println!("{} Crawler discovered {} page(s) on target domain.", "[+]".green().bold(), discovered.len());
                 if !discovered.is_empty() {
                     targets = discovered.into_iter().collect();
                 }
             }
             Err(e) => {
-                eprintln!("[!] Failed to initialize crawler: {}", e);
+                eprintln!("{} Failed to initialize crawler: {}", "[✗]".red().bold(), e);
             }
         }
     }

@@ -107,7 +107,7 @@ impl ScriptEngine {
 
         // ── Register: log(message) ──
         engine.register_fn("log", |msg: ImmutableString| {
-            println!("[script] {}", msg);
+            tracing::debug!(target: "valayam::script", "[script] {}", msg);
         });
 
         // ── Register: TCP builtins ──

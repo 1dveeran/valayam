@@ -56,6 +56,7 @@ opentelemetry = { version = "0.21.0", features = ["trace"] }
 petgraph = { version = "0.8.3", features = ["serde-1"] }
 rusty-axml = "0.2.1"
 axum = "0.8.9"
+colored = "3.1.1"
 
 [features]
 sarif = []
@@ -63,6 +64,12 @@ sarif = []
 [build-dependencies]
 tonic-build = { workspace = true }
 
+[[bench]]
+name = "crawler_bench"
+harness = false
+
 [dev-dependencies]
+criterion = "0.8.2"
+mockito = "1.7.2"
 tempfile = { workspace = true }
 wat = "1.253.0"

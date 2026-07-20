@@ -52,3 +52,9 @@ graphql-parser = "0.4.0"
 jsonwebtoken = "9.3"
 rumqttc = "0.24"
 toml = "0.8"
+
+[profile.release]
+strip = true      # Automatically strip debug symbols from the binary
+opt-level = "z"   # Optimize for size rather than speed
+lto = true        # Link Time Optimization (removes dead code across dependencies)
+codegen-units = 1 # Better optimizations at the cost of slower compile times
