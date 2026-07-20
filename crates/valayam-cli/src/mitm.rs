@@ -198,6 +198,11 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
         cicd_audit: vec![],
         dependency_audit: vec![],
         easm: vec![],
+        web3_audit: vec![],
+        mobile_audit: vec![],
+        serverless_audit: vec![],
+        auto_exploit: vec![],
+        ui_proxy: vec![],
         oob_interaction: false,
     };
 

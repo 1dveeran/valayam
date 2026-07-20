@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 async-trait = { workspace = true }
 tokio-util = { version = "0.7", features = ["rt"] }
 serde = { workspace = true, features = ["derive"] }
@@ -54,6 +54,8 @@ rand_core = { version = "0.6.4", features = ["std"] }
 notify = "6.1.1"
 opentelemetry = { version = "0.21.0", features = ["trace"] }
 petgraph = { version = "0.8.3", features = ["serde-1"] }
+rusty-axml = "0.2.1"
+axum = "0.8.9"
 
 [features]
 sarif = []

@@ -56,3 +56,8 @@ pub mod cicd_audit;
 pub mod dependency_audit;
 pub mod easm;
 pub mod attack_graph;
+pub mod web3_audit;
+pub mod mobile_audit;
+pub mod serverless_audit;
+pub mod auto_exploit;
+pub mod ui_proxy;

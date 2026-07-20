@@ -43,15 +43,20 @@ use crate::features::subdomain_takeover::parser::SubdomainTakeoverTemplate;
 use crate::features::port_scan::parser::PortScanTemplate;
 use crate::features::schema_drift::parser::SchemaDriftTemplate;
 use crate::features::pii_leak_audit::parser::PiiLeakAuditTemplate;
+use crate::features::auto_exploit::parser::AutoExploitTemplate;
+use crate::features::ui_proxy::parser::UiProxyTemplate;
 use crate::features::cicd_audit::parser::CicdAuditTemplate;
 use crate::features::dependency_audit::parser::DependencyAuditTemplate;
 use crate::features::easm::parser::EasmTemplate;
+use crate::features::mobile_audit::parser::MobileAuditTemplate;
+use crate::features::serverless_audit::parser::ServerlessAuditTemplate;
+use crate::features::web3_audit::parser::Web3AuditTemplate;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Top-level template structure that composes types from all feature slices.
 /// This is the single entry point for YAML deserialization of native templates.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct VulnerabilityTemplate {
     pub id: String,
@@ -149,6 +154,16 @@ pub struct VulnerabilityTemplate {
     #[serde(default)]
     pub easm: Vec<EasmTemplate>,
     #[serde(default)]
+    pub web3_audit: Vec<Web3AuditTemplate>,
+    #[serde(default)]
+    pub mobile_audit: Vec<MobileAuditTemplate>,
+    #[serde(default)]
+    pub serverless_audit: Vec<ServerlessAuditTemplate>,
+    #[serde(default)]
+    pub auto_exploit: Vec<AutoExploitTemplate>,
+    #[serde(default)]
+    pub ui_proxy: Vec<UiProxyTemplate>,
+    #[serde(default)]
     pub oob_interaction: bool,
 }
 
@@ -219,6 +234,11 @@ impl VulnerabilityTemplate {
             || !self.iac_audit.is_empty()
             || !self.drift_detect.is_empty()
             || !self.easm.is_empty()
+            || !self.web3_audit.is_empty()
+            || !self.mobile_audit.is_empty()
+            || !self.serverless_audit.is_empty()
+            || !self.auto_exploit.is_empty()
+            || !self.ui_proxy.is_empty()
             || !self.oob_interaction;
 
         if !has_any_definition {

@@ -813,6 +813,11 @@ mod tests {
             cicd_audit: vec![],
             dependency_audit: vec![],
             easm: vec![],
+            web3_audit: vec![],
+            mobile_audit: vec![],
+            serverless_audit: vec![],
+            auto_exploit: vec![],
+            ui_proxy: vec![],
             oob_interaction: false,
         })
     }
