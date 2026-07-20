@@ -10,6 +10,8 @@ pub struct TlsAuditTemplate {
     #[serde(default)]
     pub min_version: Option<String>,
     #[serde(default)]
+    pub max_expiry_days: Option<u32>,
+    #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
 }
 

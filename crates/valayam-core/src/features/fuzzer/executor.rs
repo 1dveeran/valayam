@@ -128,7 +128,10 @@ mod tests {
                 r#type: "status".to_string(),
                 part: "status".to_string(),
                 regex: vec![],
-                status: Some(vec![500]),
+                words: vec![],
+                status: Some(vec![500, 501, 502, 503, 400, 401, 403]),
+                negative: false,
+                condition: "and".to_string(),
             }],
         };
 

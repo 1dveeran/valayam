@@ -31,7 +31,7 @@ pub async fn execute(
         };
 
         // Scan the specific SCADA port using the network TCP port scanner module
-        let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None, false).await;
+        let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None, false, None).await;
 
         if let Some(_open_port) = results.first() {
             return Some(ScanResult {

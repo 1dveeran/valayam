@@ -16,6 +16,14 @@ pub struct HttpRequestTemplate {
     pub headers: Option<HashMap<String, String>>,
     #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
+    #[serde(default = "default_matcher_condition")]
+    pub matcher_condition: String,
     #[serde(default)]
     pub extractors: Vec<Extractor>,
+    #[serde(default)]
+    pub follow_redirects: Option<bool>,
+}
+
+fn default_matcher_condition() -> String {
+    "and".to_string()
 }

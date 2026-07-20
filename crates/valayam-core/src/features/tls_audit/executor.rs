@@ -3,30 +3,18 @@ use crate::core::variables::resolve_variables;
 use crate::network::tls;
 use crate::template::schema::TemplateInfo;
 use super::parser::TlsAuditTemplate;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::collections::HashMap;
 
-/// Executes all TLS audit rules from a template.
-///
-///
-/// Supports special matcher types:
-/// - `type: "expired"` — matches if the certificate is past its expiry date
-/// - `type: "self_signed"` — matches if the certificate is self-signed
-/// - `type: "weak_cipher"` — matches if the negotiated cipher is weak (e.g., CBC)
-/// - `type: "tls_version"` — regex match against the negotiated TLS version
-/// - `type: "legacy_tls"` — active probe to see if server supports SSLv3, TLSv1.0, TLSv1.1
-/// - `type: "regex"` — regex match against issuer, subject, serial, version, or cipher
-/// - `type: "san"` — matches if Subject Alternative Name contains the pattern
-/// - `type: "weak_key"` — matches if public key is weak (e.g., RSA < 2048 bits)
-/// - `type: "is_ca"` — matches if certificate is a CA certificate
-/// - `type: "basic_constraints"` — matches basic constraints properties
 pub async fn execute(
     tls_rules: &[TlsAuditTemplate],
     template_id: &str,
     template_info: &TemplateInfo,
     variables: &HashMap<String, String>,
-) -> Option<ScanResult> {
+) -> Vec<ScanResult> {
+    let mut findings = Vec::new();
+
     for rule in tls_rules {
         let host = resolve_variables(&rule.host, variables);
 
@@ -50,11 +38,9 @@ pub async fn execute(
             continue;
         }
 
-        // Active version restriction matching (e.g. min_version is TLSv1.2, but server accepted TLSv1.0 or TLSv1.1)
         if let Some(ref min_v) = rule.min_version {
             if let Some(ref info) = cert_info {
                 if let Some(ref negotiated) = info.tls_version {
-                    // Quick check: if min_version is TLSv1.2/TLSv1.3 and negotiated is TLSv1.0/TLSv1.1/TLSv1.2 (for TLS1.3 constraint)
                     let version_rank = |v: &str| -> u8 {
                         if v.contains("1.3") { 4 }
                         else if v.contains("1.2") { 3 }
@@ -63,7 +49,7 @@ pub async fn execute(
                         else { 0 }
                     };
                     if version_rank(negotiated) < version_rank(min_v) {
-                        return Some(ScanResult {
+                        findings.push(ScanResult {
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),
@@ -83,7 +69,7 @@ pub async fn execute(
 
         if rule.matchers.is_empty() {
             if let Some(c) = cert_info {
-                return Some(ScanResult {
+                findings.push(ScanResult {
                     timestamp: Utc::now(),
                     template_id: template_id.to_string(),
                     template_name: template_info.name.clone(),
@@ -100,12 +86,30 @@ pub async fn execute(
                     compliance: Default::default(),
                 });
             }
+            continue;
         }
 
         for matcher in &rule.matchers {
             let matched = match matcher.r#type.as_str() {
                 "legacy_tls" => !legacy_versions.is_empty(),
                 "expired" => cert_info.as_ref().is_some_and(|c| c.is_expired),
+                "expiring_soon" => {
+                    cert_info.as_ref().is_some_and(|c| {
+                        if let Some(max_days) = rule.max_expiry_days {
+                            // Parse not_after. Example format varies, we might need a robust parser.
+                            // Assuming it's RFC2822 or similar. If we can't parse, we skip.
+                            if let Ok(expiry) = DateTime::parse_from_rfc3339(&c.not_after)
+                                .or_else(|_| DateTime::parse_from_rfc2822(&c.not_after)) {
+                                let duration = expiry.with_timezone(&Utc).signed_duration_since(Utc::now());
+                                duration.num_days() >= 0 && duration.num_days() <= max_days as i64
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    })
+                },
                 "self_signed" => cert_info.as_ref().is_some_and(|c| c.is_self_signed),
                 "weak_cipher" => {
                     cert_info.as_ref().and_then(|c| c.cipher_suite.as_ref()).is_some_and(|cipher| {
@@ -136,7 +140,7 @@ pub async fn execute(
                                 if let Some(bits) = c.public_key_bits {
                                     bits < 2048
                                 } else {
-                                    false // unknown key size, assume not weak for safety
+                                    false
                                 }
                             }
                             "DSA" => {
@@ -200,6 +204,7 @@ pub async fn execute(
                 tracing::debug!(target = %host, matcher_type = %matcher.r#type, "Vulnerability TLS match found");
                 let payload = match matcher.r#type.as_str() {
                     "expired" => format!("Certificate expired: {}", cert_info.as_ref().unwrap().not_after),
+                    "expiring_soon" => format!("Certificate expires soon (within {} days): {}", rule.max_expiry_days.unwrap_or(0), cert_info.as_ref().unwrap().not_after),
                     "self_signed" => "Self-signed certificate detected".to_string(),
                     "weak_cipher" => format!("Weak cipher negotiated: {}", cert_info.as_ref().unwrap().cipher_suite.as_deref().unwrap_or("Unknown")),
                     "tls_version" => format!("TLS version matched: {}", cert_info.as_ref().unwrap().tls_version.as_deref().unwrap_or("Unknown")),
@@ -225,7 +230,7 @@ pub async fn execute(
                             desc.push_str(&format!("pathlen:{}", path_len));
                         }
                         format!("Basic constraints: {}", if desc.is_empty() { "None" } else { &desc })
- },
+                    },
                     _ => {
                         let c = cert_info.as_ref();
                         let issuer = c.map(|c| c.issuer.as_str()).unwrap_or("").to_string();
@@ -244,7 +249,7 @@ pub async fn execute(
                     },
                 };
 
-                return Some(ScanResult {
+                findings.push(ScanResult {
                     timestamp: Utc::now(),
                     template_id: template_id.to_string(),
                     template_name: template_info.name.clone(),
@@ -261,5 +266,5 @@ pub async fn execute(
         }
     }
 
-    None
+    findings
 }

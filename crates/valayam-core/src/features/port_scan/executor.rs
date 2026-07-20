@@ -296,6 +296,7 @@ pub async fn execute(
             &ports_to_scan,
             Some(2000), // 2 second timeout for banner grabbing
             true,       // Enable service detection
+            None,       // send_probe
         ).await;
 
         if port_results.is_empty() {

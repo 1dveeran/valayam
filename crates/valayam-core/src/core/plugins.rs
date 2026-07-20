@@ -15,7 +15,7 @@ impl_scan_plugin!(
     state: { client: Arc<StealthHttpClient> },
     |self, ctx, template, finding_tx| {
         let mut vars = ctx.snapshot_variables().await;
-        let result = crate::features::http_scan::executor::execute(
+        let results = crate::features::http_scan::executor::execute(
             &self.client, &ctx.target, &template.requests,
             &template.id, &template.info, &mut vars,
         ).await;
@@ -25,9 +25,12 @@ impl_scan_plugin!(
                 scope.set("http_scan", k.clone(), v.clone());
             }
         }
-        if let Some(res) = result {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            PluginOutcome::Matched { count: 1 }
+        if !results.is_empty() {
+            let count = results.len();
+            for res in results {
+                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            }
+            PluginOutcome::Matched { count }
         } else {
             PluginOutcome::NoMatch
         }
@@ -38,13 +41,16 @@ impl_scan_plugin!(
     NetworkScanPlugin, "network_scan", network,
     |ctx, template, finding_tx| {
         let target_host = &ctx.target_host;
-        let result = crate::features::network_scan::executor::execute(
+        let results = crate::features::network_scan::executor::execute(
             &ctx.target, target_host, &template.network,
             &template.id, &template.info,
         ).await;
-        if let Some(res) = result {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            PluginOutcome::Matched { count: 1 }
+        if !results.is_empty() {
+            let count = results.len();
+            for res in results {
+                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            }
+            PluginOutcome::Matched { count }
         } else {
             PluginOutcome::NoMatch
         }
@@ -71,12 +77,15 @@ impl_scan_plugin!(
     TlsAuditPlugin, "tls_audit", tls,
     |ctx, template, finding_tx| {
         let vars = ctx.snapshot_variables().await;
-        let result = crate::features::tls_audit::executor::execute(
+        let results = crate::features::tls_audit::executor::execute(
             &template.tls, &template.id, &template.info, &vars,
         ).await;
-        if let Some(res) = result {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            PluginOutcome::Matched { count: 1 }
+        if !results.is_empty() {
+            let count = results.len();
+            for res in results {
+                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            }
+            PluginOutcome::Matched { count }
         } else {
             PluginOutcome::NoMatch
         }

@@ -60,7 +60,7 @@ pub async fn execute_template_inner(
             rl.acquire().await;
         }
 
-        if let Some(result) = http_scan::executor::execute(
+        let results = http_scan::executor::execute(
             client,
             target_url,
             &template.requests,
@@ -68,24 +68,24 @@ pub async fn execute_template_inner(
             &template.info,
             &mut variables,
         )
-        .await
-        {
-            return Some(result);
+        .await;
+        if !results.is_empty() {
+            return Some(results.into_iter().next().unwrap());
         }
     }
 
     // Phase 2: Network Scanning (TCP with banner grabbing)
     if !template.network.is_empty() {
-        if let Some(result) = network_scan::executor::execute(
+        let results = network_scan::executor::execute(
             target_url,
             &target_host,
             &template.network,
             &template.id,
             &template.info,
         )
-        .await
-        {
-            return Some(result);
+        .await;
+        if !results.is_empty() {
+            return Some(results.into_iter().next().unwrap());
         }
     }
 
@@ -105,15 +105,15 @@ pub async fn execute_template_inner(
 
     // Phase 4: TLS Certificate Auditing
     if !template.tls.is_empty() {
-        if let Some(result) = tls_audit::executor::execute(
+        let results = tls_audit::executor::execute(
             &template.tls,
             &template.id,
             &template.info,
             &variables,
         )
-        .await
-        {
-            return Some(result);
+        .await;
+        if !results.is_empty() {
+            return Some(results.into_iter().next().unwrap());
         }
     }
 

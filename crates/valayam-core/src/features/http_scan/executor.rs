@@ -11,29 +11,25 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 // ── Built-in Sensitive Patterns ─────────────────────────────────────────
-// Modern Rust Feature: LazyLock compiles these heavy regexes exactly ONCE
-// at runtime, making them thread-safe and instantly available to all async workers.
 static SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         Regex::new(r"root:x:[0-9]+:[0-9]+:").unwrap(),
         Regex::new(r"(?i)DB_PASSWORD=").unwrap(),
-        Regex::new(r#"\"args\":\s*\{"#).unwrap(), // Matches httpbin.org payload reflection
+        Regex::new(r#"\"args\":\s*\{"#).unwrap(),
+        Regex::new(r"(?i)AKIA[0-9A-Z]{16}").unwrap(), // AWS Access Key
+        Regex::new(r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*").unwrap(), // JWT Token
+        Regex::new(r#"(?i)api[_-]?key[\s=:"']+[A-Za-z0-9_=-]+"#).unwrap(), // Generic API Key
+        Regex::new(r"(?i)BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY").unwrap(), // Private Keys
     ]
 });
 
-/// Evaluates raw byte slices without allocating expensive String copies in memory.
-/// Checks both hardcoded sensitive patterns and custom template-defined patterns.
 fn evaluate_stream(body_bytes: &[u8], customized_patterns: &[String]) -> bool {
-    // 1. Fast global check (Zero-Day indicators hardcoded in engine)
     for re in SENSITIVE_PATTERNS.iter() {
         if re.is_match(body_bytes) {
             return true;
         }
     }
-
-    // 2. Custom template check (from the YAML file)
     for pattern in customized_patterns {
-        // Modern let-else: if the user wrote a bad regex, skip it safely
         let Ok(re) = Regex::new(pattern) else {
             continue;
         };
@@ -41,26 +37,64 @@ fn evaluate_stream(body_bytes: &[u8], customized_patterns: &[String]) -> bool {
             return true;
         }
     }
-
     false
 }
 
-/// Resolves all variable placeholders and helper functions in a string.
-/// Pipeline: raw string → variable substitution → helper evaluation.
 fn resolve_all(template_str: &str, context: &HashMap<String, String>) -> String {
     let with_vars = resolve_variables(template_str, context);
     evaluate_helpers(&with_vars)
 }
 
-/// Executes all HTTP request rules from a template against the target.
-///
-/// Supports the full extraction pipeline:
-/// 1. Resolve `{{variables}}` and `{{helpers()}}` in path, headers, and body
-/// 2. Send the request
-/// 3. Run matchers against the response
-/// 4. Run extractors to capture values into the shared variable context
-///
-/// Returns the first finding (ScanResult) or None if no matchers triggered.
+fn matches_condition(
+    matcher: &crate::core::matcher::ResponseMatcher,
+    body_bytes: &[u8],
+    resp_headers: &HashMap<String, String>,
+    status: u16,
+) -> bool {
+    let mut is_match = false;
+
+    if matcher.r#type == "regex" {
+        if matcher.part == "body" {
+            is_match = evaluate_stream(body_bytes, &matcher.regex);
+        } else if matcher.part == "header" {
+            let headers_str = resp_headers
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect::<Vec<_>>()
+                .join("\r\n");
+            
+            for pattern in &matcher.regex {
+                if let Ok(re) = regex::Regex::new(pattern) {
+                    if re.is_match(&headers_str) {
+                        is_match = true;
+                        break;
+                    }
+                }
+            }
+        }
+    } else if matcher.r#type == "word" {
+        if matcher.part == "body" {
+            let body_str = String::from_utf8_lossy(body_bytes);
+            is_match = matcher.words.iter().any(|w| body_str.contains(w));
+        } else if matcher.part == "header" {
+            let headers_str = resp_headers
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect::<Vec<_>>()
+                .join("\r\n");
+            is_match = matcher.words.iter().any(|w| headers_str.contains(w));
+        }
+    } else if matcher.r#type == "status" {
+        is_match = matcher.status.as_ref().is_some_and(|s| s.contains(&status));
+    }
+
+    if matcher.negative {
+        !is_match
+    } else {
+        is_match
+    }
+}
+
 pub async fn execute(
     client: &StealthHttpClient,
     target_url: &str,
@@ -68,12 +102,12 @@ pub async fn execute(
     template_id: &str,
     template_info: &TemplateInfo,
     variables: &mut HashMap<String, String>,
-) -> Option<ScanResult> {
+) -> Vec<ScanResult> {
+    let mut findings = Vec::new();
+
     for req_rule in requests {
-        // ── Resolve all placeholders in path, headers, and body ──
         let resolved_path = resolve_all(&req_rule.path, variables);
 
-        // Format the full URL properly
         let full_url = if resolved_path.starts_with("http://") || resolved_path.starts_with("https://") {
             resolved_path.clone()
         } else {
@@ -99,9 +133,13 @@ pub async fn execute(
             "Prepared raw HTTP request payload"
         );
 
-        // ── Send HTTP request ──
         tracing::debug!(target = %target_url, method = %req_rule.method, url = %full_url, "Sending HTTP request");
         
+        // TODO: Pass follow_redirects to client if supported, for now just trace it
+        if let Some(follow) = req_rule.follow_redirects {
+            tracing::trace!("Template specified follow_redirects: {}", follow);
+        }
+
         let resp = match client
             .send_request(
                 &req_rule.method,
@@ -120,7 +158,6 @@ pub async fn execute(
 
         let status = resp.status().as_u16();
 
-        // Capture response headers for extraction
         let resp_headers: HashMap<String, String> = resp
             .headers()
             .iter()
@@ -144,42 +181,34 @@ pub async fn execute(
             "Received HTTP response"
         );
 
-        // ── Run extractors (always, even if matchers fail) ──
         if !req_rule.extractors.is_empty() {
             let extracted = extract_from_response(
                 &req_rule.extractors,
                 &body_bytes,
                 &resp_headers,
             );
-            // Merge extracted values into the shared context
             for (key, value) in extracted {
                 variables.insert(key, value);
             }
         }
 
-        // ── Evaluate matchers ──
         tracing::debug!(status = %status, response_len = %body_bytes.len(), "Evaluating matchers");
         
-        let all_matchers_succeeded = if req_rule.matchers.is_empty() {
+        let matchers_succeeded = if req_rule.matchers.is_empty() {
             false
         } else {
-            req_rule.matchers.iter().all(|matcher| {
-                if matcher.r#type == "regex" && matcher.part == "body" {
-                    evaluate_stream(&body_bytes, &matcher.regex)
-                } else if matcher.r#type == "status" {
-                    matcher
-                        .status
-                        .as_ref()
-                        .is_some_and(|s| s.contains(&status))
-                } else {
-                    false
-                }
-            })
+            let is_or = req_rule.matcher_condition.eq_ignore_ascii_case("or");
+            
+            if is_or {
+                req_rule.matchers.iter().any(|matcher| matches_condition(matcher, &body_bytes, &resp_headers, status))
+            } else {
+                req_rule.matchers.iter().all(|matcher| matches_condition(matcher, &body_bytes, &resp_headers, status))
+            }
         };
 
-        if all_matchers_succeeded {
-            tracing::debug!("Vulnerability match found for template {}", template_id);
-            return Some(ScanResult {
+        if matchers_succeeded {
+            tracing::debug!("Vulnerability match found for template {} on {}", template_id, full_url);
+            findings.push(ScanResult {
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -195,5 +224,5 @@ pub async fn execute(
         }
     }
 
-    None
+    findings
 }

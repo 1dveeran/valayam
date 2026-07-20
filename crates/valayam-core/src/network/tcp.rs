@@ -315,16 +315,21 @@ pub async fn scan_ports(
     ports: &[String],
     banner_timeout_ms: Option<u64>,
     enable_service_detection: bool,
+    send_probe: Option<String>,
 ) -> Vec<PortResult> {
     let Ok(parsed_ports) = parse_ports(ports) else {
         eprintln!("[!] Invalid port format provided.");
         return Vec::new();
     };
 
+    let send_probe_arc = std::sync::Arc::new(send_probe);
+
     let scan_futures = parsed_ports.into_iter().map(|port| {
         let host = host.to_string();
         let banner_ms = banner_timeout_ms;
         let _detect_service = enable_service_detection;
+        let probe = send_probe_arc.clone();
+        
         tokio::spawn(async move {
             let address = format!("{}:{}", host, port);
             let connect_timeout = Duration::from_secs(3); // Slightly increased for reliability
@@ -337,6 +342,12 @@ pub async fn scan_ports(
 
             // Get peer address for logging/tracing
             let _peer_addr = stream.peer_addr().ok();
+
+            // Optional: send custom probe before reading
+            if let Some(ref probe_data) = *probe {
+                use tokio::io::AsyncWriteExt;
+                let _ = stream.write_all(probe_data.as_bytes()).await;
+            }
 
             // Phase 1: Passive banner grabbing
             let mut banner = if let Some(ms) = banner_ms {

@@ -14,6 +14,8 @@ pub struct NetworkRequestTemplate {
     #[serde(default = "default_protocol")]
     pub protocol: String,
     #[serde(default)]
+    pub send_probe: Option<String>,
+    #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
 }
 

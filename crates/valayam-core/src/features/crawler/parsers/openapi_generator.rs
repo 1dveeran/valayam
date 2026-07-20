@@ -43,9 +43,14 @@ pub fn generate_template_from_openapi(openapi_content: &str) -> Result<Vulnerabi
                                 r#type: "status".to_string(),
                                 part: "status".to_string(),
                                 regex: vec![],
+                                words: vec![],
                                 status: Some(vec![200, 201, 204, 302, 401, 403]), // Match normal responses
+                                negative: false,
+                                condition: "and".to_string(),
                             }],
+                            matcher_condition: "and".to_string(),
                             extractors: vec![],
+                            follow_redirects: None,
                         });
                     }
                 }
