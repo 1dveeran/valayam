@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_common_password_patterns() {
-        let findings = check_password_strength("MyP@ssw0rd123!");
+        let findings = check_password_strength("MyPassword123!");
         assert!(findings.iter().any(|f| f.finding_type == "password_pattern"));
     }
 

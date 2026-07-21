@@ -86,3 +86,122 @@ pub async fn execute(
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // DnsRequestTemplate deserialization tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_dns_template_minimal() {
+        let yaml = r#"
+domain: example.com
+query_type: A
+"#;
+        let tmpl: DnsRequestTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.domain, "example.com");
+        assert_eq!(tmpl.query_type, "A");
+        assert!(tmpl.matchers.is_empty());
+    }
+
+    #[test]
+    fn test_dns_template_with_matchers() {
+        let yaml = r#"
+domain: example.com
+query_type: TXT
+matchers:
+  - type: regex
+    part: body
+    regex: ["spf"]
+"#;
+        let tmpl: DnsRequestTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.domain, "example.com");
+        assert_eq!(tmpl.query_type, "TXT");
+        assert_eq!(tmpl.matchers.len(), 1);
+        assert_eq!(tmpl.matchers[0].regex[0], "spf");
+    }
+
+    #[test]
+    fn test_dns_template_serde_roundtrip() {
+        let tmpl = DnsRequestTemplate {
+            domain: "test.com".to_string(),
+            query_type: "MX".to_string(),
+            matchers: vec![],
+        };
+        let json = serde_json::to_string(&tmpl).unwrap();
+        let back: DnsRequestTemplate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.domain, "test.com");
+        assert_eq!(back.query_type, "MX");
+    }
+
+    // -----------------------------------------------------------------------
+    // Variable resolution tests (the resolve step in execute)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_domain_variable_resolution() {
+        let mut variables = HashMap::new();
+        variables.insert("domain".to_string(), "example.com".to_string());
+        let resolved = resolve_variables("{{domain}}", &variables);
+        assert_eq!(resolved, "example.com");
+    }
+
+    #[test]
+    fn test_domain_variable_resolution_no_variable() {
+        let variables = HashMap::new();
+        let resolved = resolve_variables("example.com", &variables);
+        assert_eq!(resolved, "example.com");
+    }
+
+    // -----------------------------------------------------------------------
+    // DNS records regex matching logic tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_regex_matches_dns_records() {
+        let records = vec![
+            "10 mail.example.com".to_string(),
+            "20 backup.example.com".to_string(),
+        ];
+        let records_text = records.join("\n");
+
+        let re = Regex::new(r"mail\.example\.com").unwrap();
+        assert!(re.is_match(&records_text));
+    }
+
+    #[test]
+    fn test_regex_no_match_on_dns_records() {
+        let records = vec![
+            "10 mail.example.com".to_string(),
+        ];
+        let records_text = records.join("\n");
+
+        let re = Regex::new(r"evil\.com").unwrap();
+        assert!(!re.is_match(&records_text));
+    }
+
+    #[test]
+    fn test_regex_match_spf_record() {
+        let records = vec![
+            "v=spf1 include:_spf.example.com ~all".to_string(),
+        ];
+        let records_text = records.join("\n");
+
+        let re = Regex::new(r"v=spf1").unwrap();
+        assert!(re.is_match(&records_text));
+    }
+
+    #[test]
+    fn test_regex_match_cname_record() {
+        let records = vec![
+            "app.example.com.".to_string(),
+        ];
+        let records_text = records.join("\n");
+
+        let re = Regex::new(r"example\.com").unwrap();
+        assert!(re.is_match(&records_text));
+    }
+}

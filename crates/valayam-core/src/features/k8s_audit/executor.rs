@@ -78,8 +78,8 @@ fn check_rbac(val: &Value, strict: bool) -> Vec<K8sFinding> {
         .and_then(|v| v.as_str())
         .unwrap_or("default");
 
-    // Check ClusterRoleBinding / RoleBinding
-    if kind == "ClusterRoleBinding" || kind == "RoleBinding" {
+    // Check ClusterRoleBinding / RoleBinding and ClusterRole / Role
+    if kind == "ClusterRoleBinding" || kind == "RoleBinding" || kind == "ClusterRole" || kind == "Role" {
         if let Some(role_ref) = val.get("roleRef") {
             let role_name = role_ref.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let _role_kind = role_ref.get("kind").and_then(|v| v.as_str()).unwrap_or("");
@@ -101,60 +101,61 @@ fn check_rbac(val: &Value, strict: bool) -> Vec<K8sFinding> {
                     reference: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/",
                 });
             }
+        }
 
-            // Check for wildcard verbs
-            if let Some(rules) = val.get("rules").and_then(|r| r.as_sequence()) {
-                for (i, rule) in rules.iter().enumerate() {
-                    let verbs = rule.get("verbs").and_then(|v| v.as_sequence())
-                        .map(|v| v.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
-                        .unwrap_or_default();
-                    let resources = rule.get("resources").and_then(|v| v.as_sequence())
-                        .map(|v| v.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
-                        .unwrap_or_default();
-                    let api_groups = rule.get("apiGroups").and_then(|v| v.as_sequence())
-                        .map(|v| v.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
-                        .unwrap_or_default();
+        // Check for wildcard verbs — applies to ClusterRole/Role (rules at top level)
+        // and to bindings that may embed inline rules.
+        if let Some(rules) = val.get("rules").and_then(|r| r.as_sequence()) {
+            for (i, rule) in rules.iter().enumerate() {
+                let verbs = rule.get("verbs").and_then(|v| v.as_sequence())
+                    .map(|v| v.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let resources = rule.get("resources").and_then(|v| v.as_sequence())
+                    .map(|v| v.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let api_groups = rule.get("apiGroups").and_then(|v| v.as_sequence())
+                    .map(|v| v.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
+                    .unwrap_or_default();
 
-                    if verbs.contains(&"*") && resources.contains(&"*") {
+                if verbs.contains(&"*") && resources.contains(&"*") {
+                    findings.push(K8sFinding {
+                        kind: kind.to_string(),
+                        name: name.to_string(),
+                        namespace: namespace.to_string(),
+                        finding_type: "wildcard_rbac_rule",
+                        severity: if strict { "Critical" } else { "High" },
+                        cvss_score: if strict { 8.5 } else { 7.5 },
+                        message: format!(
+                            "RBAC rule #{} in '{}' grants wildcard access ('*' verbs, '*' resources, apiGroups: {:?}). \
+                            This is equivalent to admin access.",
+                            i, name, api_groups
+                        ),
+                        solution: "Replace wildcard '*' with specific verbs (get, list, watch, create, update, patch, delete) and specific resources (pods, secrets, configmaps, etc.).",
+                        reference: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole",
+                    });
+                }
+            }
+        }
+
+        // Check for subject wildcards — applies to binding kinds that have subjects
+        if let Some(subjects) = val.get("subjects").and_then(|s| s.as_sequence()) {
+            for subject in subjects {
+                if let Some(sname) = subject.get("name").and_then(|v| v.as_str()) {
+                    if sname == "*" || sname == "system:anonymous" || sname == "system:unauthenticated" {
                         findings.push(K8sFinding {
                             kind: kind.to_string(),
                             name: name.to_string(),
                             namespace: namespace.to_string(),
-                            finding_type: "wildcard_rbac_rule",
-                            severity: if strict { "Critical" } else { "High" },
-                            cvss_score: if strict { 8.5 } else { 7.5 },
+                            finding_type: "wildcard_subject",
+                            severity: "Critical",
+                            cvss_score: 9.5,
                             message: format!(
-                                "RBAC rule #{} in '{}' grants wildcard access ('*' verbs, '*' resources, apiGroups: {:?}). \
-                                This is equivalent to admin access.",
-                                i, name, api_groups
+                                "RBAC binding '{}' includes subject '{}' which allows unauthenticated/anonymous access.",
+                                name, sname
                             ),
-                            solution: "Replace wildcard '*' with specific verbs (get, list, watch, create, update, patch, delete) and specific resources (pods, secrets, configmaps, etc.).",
-                            reference: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole",
+                            solution: "Remove wildcard and anonymous subjects from RBAC bindings. Authenticate all users and service accounts.",
+                            reference: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#service-account-permissions",
                         });
-                    }
-                }
-            }
-
-            // Check for subject wildcards
-            if let Some(subjects) = val.get("subjects").and_then(|s| s.as_sequence()) {
-                for subject in subjects {
-                    if let Some(sname) = subject.get("name").and_then(|v| v.as_str()) {
-                        if sname == "*" || sname == "system:anonymous" || sname == "system:unauthenticated" {
-                            findings.push(K8sFinding {
-                                kind: kind.to_string(),
-                                name: name.to_string(),
-                                namespace: namespace.to_string(),
-                                finding_type: "wildcard_subject",
-                                severity: "Critical",
-                                cvss_score: 9.5,
-                                message: format!(
-                                    "RBAC binding '{}' includes subject '{}' which allows unauthenticated/anonymous access.",
-                                    name, sname
-                                ),
-                                solution: "Remove wildcard and anonymous subjects from RBAC bindings. Authenticate all users and service accounts.",
-                                reference: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#service-account-permissions",
-                            });
-                        }
                     }
                 }
             }

@@ -627,3 +627,83 @@ impl_scan_plugin!(DependencyAuditPlugin, "dependency_audit", dependency_audit,
         PluginOutcome::NoMatch
     }
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::traits::ScanPlugin;
+    use crate::template::schema::VulnerabilityTemplate;
+
+    fn empty_template() -> VulnerabilityTemplate {
+        VulnerabilityTemplate::default()
+    }
+
+    #[test]
+    fn test_http_scan_plugin_new_and_name() {
+        let client = Arc::new(crate::network::http::StealthHttpClient::new(false, false, None, false).unwrap());
+        let plugin = HttpScanPlugin::new(client);
+        assert_eq!(plugin.name(), "http_scan");
+    }
+
+    #[test]
+    fn test_http_scan_applicable_empty() {
+        let client = Arc::new(crate::network::http::StealthHttpClient::new(false, false, None, false).unwrap());
+        let plugin = HttpScanPlugin::new(client);
+        // Empty template — requests field is empty, so not applicable
+        assert!(!plugin.is_applicable(&empty_template()));
+    }
+
+    #[test]
+    fn test_network_scan_plugin_new() {
+        let plugin = NetworkScanPlugin::new();
+        assert_eq!(plugin.name(), "network_scan");
+        assert!(!plugin.is_applicable(&empty_template()));
+    }
+
+    #[test]
+    fn test_dns_audit_plugin_new() {
+        let plugin = DnsAuditPlugin::new();
+        assert_eq!(plugin.name(), "dns_audit");
+        assert!(!plugin.is_applicable(&empty_template()));
+    }
+
+    #[test]
+    fn test_tls_audit_plugin_new() {
+        let plugin = TlsAuditPlugin::new();
+        assert_eq!(plugin.name(), "tls_audit");
+        assert!(!plugin.is_applicable(&empty_template()));
+    }
+
+    #[test]
+    fn test_scripting_plugin_new() {
+        let plugin = ScriptingPlugin::new();
+        assert_eq!(plugin.name(), "scripting");
+        assert!(!plugin.is_applicable(&empty_template()));
+    }
+
+    #[test]
+    fn test_fuzzer_plugin_new() {
+        let client = Arc::new(crate::network::http::StealthHttpClient::new(false, false, None, false).unwrap());
+        let plugin = FuzzerPlugin::new(client);
+        assert_eq!(plugin.name(), "fuzzer");
+        assert!(!plugin.is_applicable(&empty_template()));
+    }
+
+    #[test]
+    fn test_plugin_api_version() {
+        let plugin = HttpScanPlugin::new(Arc::new(crate::network::http::StealthHttpClient::new(false, false, None, false).unwrap()));
+        assert_eq!(plugin.api_version(), "1.0");
+    }
+
+    #[test]
+    fn test_plugin_timeout_default() {
+        let plugin = HttpScanPlugin::new(Arc::new(crate::network::http::StealthHttpClient::new(false, false, None, false).unwrap()));
+        assert_eq!(plugin.timeout(), std::time::Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_plugin_depends_on_default_is_empty() {
+        let plugin = NetworkScanPlugin::new();
+        assert!(plugin.depends_on().is_empty());
+    }
+}

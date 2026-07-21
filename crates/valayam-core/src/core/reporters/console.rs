@@ -143,3 +143,98 @@ impl Reporter for ConsoleReporter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_finding() -> FindingOwned {
+        FindingOwned {
+            template_id: "test-001".into(),
+            template_name: "Test Finding".into(),
+            severity: "high".into(),
+            target: "https://example.com".into(),
+            matched_at: "/login".into(),
+            description: Some("SQL Injection detected".into()),
+            solution: Some("Use prepared statements".into()),
+            extracted_data: Some("admin' OR 1=1".into()),
+            metadata: Default::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_console_reporter_process_finding() {
+        let reporter = ConsoleReporter::default();
+        let finding = sample_finding();
+        let result = reporter.process_finding(&finding).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_console_reporter_multiple_findings() {
+        let reporter = ConsoleReporter::default();
+        let f1 = sample_finding();
+        let f2 = FindingOwned {
+            template_id: "test-002".into(),
+            template_name: "Low Severity".into(),
+            severity: "low".into(),
+            target: "https://other.com".into(),
+            matched_at: "/public".into(),
+            description: None,
+            solution: None,
+            extracted_data: None,
+            metadata: Default::default(),
+        };
+
+        assert!(reporter.process_finding(&f1).await.is_ok());
+        assert!(reporter.process_finding(&f2).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_console_reporter_flush() {
+        let reporter = ConsoleReporter::default();
+        let result = reporter.flush().await;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_severity_badge_renders() {
+        let critical = ConsoleReporter::severity_badge("critical");
+        assert!(!critical.to_string().is_empty());
+
+        let high = ConsoleReporter::severity_badge("high");
+        assert!(!high.to_string().is_empty());
+
+        let unknown = ConsoleReporter::severity_badge("unknown");
+        assert!(!unknown.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_severity_icon_returns_expected() {
+        assert_eq!(ConsoleReporter::severity_icon("critical"), "💀");
+        assert_eq!(ConsoleReporter::severity_icon("high"), "🔴");
+        assert_eq!(ConsoleReporter::severity_icon("medium"), "🟡");
+        assert_eq!(ConsoleReporter::severity_icon("low"), "🟢");
+        assert_eq!(ConsoleReporter::severity_icon("info"), "🔵");
+        assert_eq!(ConsoleReporter::severity_icon("unknown"), "⚪");
+    }
+
+    #[test]
+    fn test_truncate_short_string() {
+        assert_eq!(ConsoleReporter::truncate("hello", 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_long_string() {
+        let long = "a".repeat(100);
+        let truncated = ConsoleReporter::truncate(&long, 10);
+        assert_eq!(truncated.chars().count(), 10); // 9 chars + …
+        assert!(truncated.ends_with('…'));
+    }
+
+    #[test]
+    fn test_truncate_edge_cases() {
+        assert_eq!(ConsoleReporter::truncate("", 10), "");
+        assert_eq!(ConsoleReporter::truncate("abc", 0), "…");
+    }
+}

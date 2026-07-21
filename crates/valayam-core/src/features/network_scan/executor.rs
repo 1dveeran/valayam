@@ -492,3 +492,253 @@ pub async fn execute(
 
     all_findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // SENSITIVE_PORTS tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_sensitive_ports_contains_known_services() {
+        assert!(SENSITIVE_PORTS.contains(&22), "SSH port 22 should be sensitive");
+        assert!(SENSITIVE_PORTS.contains(&3306), "MySQL port 3306 should be sensitive");
+        assert!(SENSITIVE_PORTS.contains(&3389), "RDP port 3389 should be sensitive");
+        assert!(SENSITIVE_PORTS.contains(&6379), "Redis port 6379 should be sensitive");
+    }
+
+    // -----------------------------------------------------------------------
+    // identify_service_from_banner tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_identify_ssh_on_port_22() {
+        let (service, _version) = identify_service_from_banner(22, "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3");
+        assert_eq!(service, "SSH");
+    }
+
+    #[test]
+    fn test_identify_ssh_on_port_22_without_ssh_in_banner() {
+        let (service, _version) = identify_service_from_banner(22, "something else");
+        assert_eq!(service, "Unknown");
+    }
+
+    #[test]
+    fn test_identify_telnet_on_port_23() {
+        let (service, _version) = identify_service_from_banner(23, "Telnet Server ready");
+        assert_eq!(service, "Telnet");
+    }
+
+    #[test]
+    fn test_identify_smtp_sendmail_on_port_25() {
+        let (service, _version) = identify_service_from_banner(25, "220 Sendmail ready");
+        assert_eq!(service, "Sendmail");
+    }
+
+    #[test]
+    fn test_identify_smtp_postfix_on_port_25() {
+        let (service, _version) = identify_service_from_banner(25, "220 Postfix ESMTP server ready");
+        assert_eq!(service, "Postfix");
+    }
+
+    #[test]
+    fn test_identify_dns_on_port_53() {
+        let (service, version) = identify_service_from_banner(53, "named 9.16.1");
+        assert_eq!(service, "DNS");
+        assert!(version.is_some());
+    }
+
+    #[test]
+    fn test_identify_smb_on_port_445() {
+        let (service, _version) = identify_service_from_banner(445, "Samba 4.15.0");
+        assert_eq!(service, "SMB");
+    }
+
+    #[test]
+    fn test_identify_mysql_on_port_3306() {
+        let (service, version) = identify_service_from_banner(3306, "MySQL 5.7.38-log");
+        assert_eq!(service, "MySQL");
+        assert!(version.is_some());
+    }
+
+    #[test]
+    fn test_identify_mariadb_on_port_3306() {
+        let (service, _version) = identify_service_from_banner(3306, "MariaDB 10.6.0");
+        assert_eq!(service, "MariaDB");
+    }
+
+    #[test]
+    fn test_identify_rdp_on_port_3389() {
+        let (service, _version) = identify_service_from_banner(3389, "Remote Desktop Server");
+        assert_eq!(service, "RDP");
+    }
+
+    #[test]
+    fn test_identify_postgresql_on_port_5432() {
+        let (service, version) = identify_service_from_banner(5432, "PostgreSQL 14.5");
+        assert_eq!(service, "PostgreSQL");
+        assert!(version.is_some());
+    }
+
+    #[test]
+    fn test_identify_vnc_on_port_5900() {
+        let (service, _version) = identify_service_from_banner(5900, "RFB 003.008");
+        assert_eq!(service, "VNC");
+    }
+
+    #[test]
+    fn test_identify_redis_on_port_6379() {
+        let (service, version) = identify_service_from_banner(6379, "Redis 6.2.6");
+        assert_eq!(service, "Redis");
+        assert!(version.is_some());
+    }
+
+    #[test]
+    fn test_identify_mongodb_on_port_27017() {
+        let (service, _version) = identify_service_from_banner(27017, "MongoDB 5.0.0");
+        assert_eq!(service, "MongoDB");
+    }
+
+    #[test]
+    fn test_identify_unknown_port_guesses_from_banner() {
+        let (service, _version) = identify_service_from_banner(9999, "FTP server ready");
+        assert_eq!(service, "FTP");
+    }
+
+    #[test]
+    fn test_identify_unknown_port_returns_unknown() {
+        let (service, _version) = identify_service_from_banner(9999, "garbage data");
+        assert_eq!(service, "Unknown");
+    }
+
+    #[test]
+    fn test_identify_http_on_non_standard_port() {
+        let (service, _version) = identify_service_from_banner(8080, "HTTP/1.1 200 OK");
+        assert_eq!(service, "HTTP");
+    }
+
+    #[test]
+    fn test_identify_ssh_on_non_standard_port() {
+        let (service, _version) = identify_service_from_banner(2222, "SSH-2.0-OpenSSH");
+        assert_eq!(service, "SSH");
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_version_from_banner tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_version_semver() {
+        let ver = extract_version_from_banner("OpenSSH_8.9p1 Ubuntu-3");
+        assert!(ver.is_some());
+        assert!(ver.unwrap().contains("8.9"));
+    }
+
+    #[test]
+    fn test_extract_version_major_minor() {
+        let ver = extract_version_from_banner("Apache/2.4.51");
+        assert!(ver.is_some());
+    }
+
+    #[test]
+    fn test_extract_version_empty_returns_none() {
+        assert!(extract_version_from_banner("").is_none());
+    }
+
+    #[test]
+    fn test_extract_version_no_version_in_banner() {
+        assert!(extract_version_from_banner("Hello World").is_none());
+    }
+
+    #[test]
+    fn test_extract_version_version_prefix() {
+        let ver = extract_version_from_banner("v1.2.3");
+        assert!(ver.is_some());
+    }
+
+    // -----------------------------------------------------------------------
+    // check_vulnerability tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_check_vulnerability_vulnerable_ssh() {
+        let result = check_vulnerability("SSH", &Some("OpenSSH_7.0".to_string()));
+        assert!(result.is_some());
+        assert!(result.unwrap().contains("vulnerable"));
+    }
+
+    #[test]
+    fn test_check_vulnerability_patched_ssh() {
+        let result = check_vulnerability("SSH", &Some("OpenSSH_9.0".to_string()));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_check_vulnerability_no_version() {
+        let result = check_vulnerability("SSH", &None);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_check_vulnerability_vulnerable_apache() {
+        let result = check_vulnerability("HTTP", &Some("Apache/2.2".to_string()));
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_check_vulnerability_vulnerable_mysql() {
+        let result = check_vulnerability("MySQL", &Some("MySQL 5.1".to_string()));
+        assert!(result.is_some());
+    }
+
+    // -----------------------------------------------------------------------
+    // get_cvss_score tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_cvss_score_ssh() {
+        assert_eq!(get_cvss_score("SSH", 22), Some(9.0));
+    }
+
+    #[test]
+    fn test_cvss_score_telnet() {
+        assert_eq!(get_cvss_score("Telnet", 23), Some(9.5));
+    }
+
+    #[test]
+    fn test_cvss_score_http() {
+        assert_eq!(get_cvss_score("HTTP", 80), Some(4.0));
+    }
+
+    // -----------------------------------------------------------------------
+    // get_service_solution tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_solution_for_ssh_mentions_exposure_risk() {
+        let sol = get_service_solution("SSH", 22).unwrap();
+        assert!(sol.contains("Exposure Risk"));
+        assert!(sol.contains("remote administrative access"));
+    }
+
+    #[test]
+    fn test_solution_for_mysql_mentions_network_segmentation() {
+        let sol = get_service_solution("MySQL", 3306).unwrap();
+        assert!(sol.contains("Database exposed"));
+    }
+
+    #[test]
+    fn test_solution_for_unknown_service() {
+        let sol = get_service_solution("Unknown", 9999);
+        assert!(sol.is_none());
+    }
+
+    #[test]
+    fn test_solution_for_redis() {
+        let sol = get_service_solution("Redis", 6379).unwrap();
+        assert!(sol.contains("authentication"));
+        assert!(sol.contains("Database exposed"));
+    }
+}

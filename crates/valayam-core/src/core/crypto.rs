@@ -31,3 +31,72 @@ impl PluginCrypto {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_keypair_returns_32_byte_keys() {
+        let (private, public) = PluginCrypto::generate_keypair();
+        assert_eq!(private.len(), 32);
+        assert_eq!(public.len(), 32);
+        assert_ne!(private, public);
+    }
+
+    #[test]
+    fn test_sign_and_verify_roundtrip() {
+        let (private, public) = PluginCrypto::generate_keypair();
+        let message = b"test message to sign";
+        let signature = PluginCrypto::sign(&private, message).unwrap();
+        assert_eq!(signature.len(), 64);
+
+        let valid = PluginCrypto::verify(&public, message, &signature).unwrap();
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_verify_rejects_tampered_message() {
+        let (private, public) = PluginCrypto::generate_keypair();
+        let signature = PluginCrypto::sign(&private, b"original message").unwrap();
+        let valid = PluginCrypto::verify(&public, b"tampered message", &signature).unwrap();
+        assert!(!valid);
+    }
+
+    #[test]
+    fn test_verify_rejects_wrong_key() {
+        let (private_a, _public_a) = PluginCrypto::generate_keypair();
+        let (_private_b, public_b) = PluginCrypto::generate_keypair();
+        let signature = PluginCrypto::sign(&private_a, b"test message").unwrap();
+        let valid = PluginCrypto::verify(&public_b, b"test message", &signature).unwrap();
+        assert!(!valid);
+    }
+
+    #[test]
+    fn test_generate_unique_keys() {
+        // Multiple keypairs should all be different
+        let kp1 = PluginCrypto::generate_keypair();
+        let kp2 = PluginCrypto::generate_keypair();
+        let kp3 = PluginCrypto::generate_keypair();
+        assert_ne!(kp1, kp2);
+        assert_ne!(kp2, kp3);
+        assert_ne!(kp1, kp3);
+    }
+
+    #[test]
+    fn test_sign_empty_message() {
+        let (private, public) = PluginCrypto::generate_keypair();
+        let signature = PluginCrypto::sign(&private, b"").unwrap();
+        let valid = PluginCrypto::verify(&public, b"", &signature).unwrap();
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_sign_and_verify_large_message() {
+        let (private, public) = PluginCrypto::generate_keypair();
+        let large_msg = vec![0xABu8; 10000];
+        let sig = PluginCrypto::sign(&private, &large_msg).unwrap();
+        let valid = PluginCrypto::verify(&public, &large_msg, &sig).unwrap();
+        assert!(valid);
+    }
+}

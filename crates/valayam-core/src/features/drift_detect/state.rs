@@ -329,14 +329,18 @@ mod tests {
         let backend = Some(dir.path().to_str().unwrap().to_string());
         let state = test_state();
 
-        // Save a valid state
+        // Save twice — the second call creates a backup of the first save
         save_state("test-target", &state, &backend).unwrap();
+        // Modify state slightly so second save is distinct from first
+        let mut state_v2 = test_state();
+        state_v2.ports_open.push(8080);
+        save_state("test-target", &state_v2, &backend).unwrap();
 
-        // Corrupt the main state file
+        // Corrupt the main state file with invalid JSON
         let state_path = dir.path().join("test-target.json");
         fs::write(&state_path, "this is not valid json{}").unwrap();
 
-        // Load should recover from backup
+        // Load should recover from backup (contains first save data: [80, 443])
         let loaded = load_state("test-target", &backend)
             .unwrap()
             .expect("State should be recovered from backup");

@@ -482,3 +482,80 @@ pub async fn run_scan(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_severity_counts_default_zero() {
+        let counts = SeverityCounts::default();
+        assert_eq!(counts.critical, 0);
+        assert_eq!(counts.high, 0);
+        assert_eq!(counts.medium, 0);
+        assert_eq!(counts.low, 0);
+        assert_eq!(counts.info, 0);
+        assert_eq!(counts.unknown, 0);
+        assert_eq!(counts.total(), 0);
+    }
+
+    #[test]
+    fn test_severity_counts_record_critical() {
+        let mut counts = SeverityCounts::default();
+        counts.record("critical");
+        assert_eq!(counts.critical, 1);
+        assert_eq!(counts.total(), 1);
+    }
+
+    #[test]
+    fn test_severity_counts_record_all_levels() {
+        let mut counts = SeverityCounts::default();
+        counts.record("critical");
+        counts.record("high");
+        counts.record("medium");
+        counts.record("low");
+        counts.record("info");
+        counts.record("unknown");
+        assert_eq!(counts.critical, 1);
+        assert_eq!(counts.high, 1);
+        assert_eq!(counts.medium, 1);
+        assert_eq!(counts.low, 1);
+        assert_eq!(counts.info, 1);
+        assert_eq!(counts.unknown, 1);
+        assert_eq!(counts.total(), 6);
+    }
+
+    #[test]
+    fn test_severity_counts_case_insensitive() {
+        let mut counts = SeverityCounts::default();
+        counts.record("Critical");
+        counts.record("HIGH");
+        counts.record("Medium");
+        assert_eq!(counts.critical, 1);
+        assert_eq!(counts.high, 1);
+        assert_eq!(counts.medium, 1);
+    }
+
+    #[test]
+    fn test_severity_counts_unknown_severity() {
+        let mut counts = SeverityCounts::default();
+        counts.record("unknown_severity");
+        counts.record("nope");
+        assert_eq!(counts.unknown, 2);
+        assert_eq!(counts.total(), 2);
+    }
+
+    #[test]
+    fn test_severity_counts_multiple_records() {
+        let mut counts = SeverityCounts::default();
+        for _ in 0..5 {
+            counts.record("high");
+        }
+        for _ in 0..3 {
+            counts.record("critical");
+        }
+        assert_eq!(counts.high, 5);
+        assert_eq!(counts.critical, 3);
+        assert_eq!(counts.total(), 8);
+    }
+}

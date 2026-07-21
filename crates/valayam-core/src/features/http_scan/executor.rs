@@ -226,3 +226,308 @@ pub async fn execute(
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::matcher::ResponseMatcher;
+
+    // -----------------------------------------------------------------------
+    // evaluate_stream tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_evaluate_stream_matches_builtin_aws_key() {
+        let body = b"something AKIAIOSFODNN7EXAMPLE here";
+        assert!(evaluate_stream(body, &[]));
+    }
+
+    #[test]
+    fn test_evaluate_stream_matches_builtin_private_key() {
+        let body = b"-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...";
+        assert!(evaluate_stream(body, &[]));
+    }
+
+    #[test]
+    fn test_evaluate_stream_matches_builtin_jwt() {
+        let body = b"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNqP2RcQk3gNFOiE";
+        assert!(evaluate_stream(body, &[]));
+    }
+
+    #[test]
+    fn test_evaluate_stream_no_match_clean_body() {
+        let body = b"Hello world, nothing sensitive here!";
+        assert!(!evaluate_stream(body, &[]));
+    }
+
+    #[test]
+    fn test_evaluate_stream_custom_pattern() {
+        let body = b"my-secret-token-abc123";
+        assert!(evaluate_stream(body, &["secret-token".to_string()]));
+    }
+
+    #[test]
+    fn test_evaluate_stream_invalid_custom_pattern_is_skipped() {
+        let body = b"test data";
+        // Invalid regex should be skipped, not panic
+        assert!(!evaluate_stream(body, &["[invalid".to_string()]));
+    }
+
+    #[test]
+    fn test_evaluate_stream_empty_body() {
+        assert!(!evaluate_stream(b"", &[]));
+    }
+
+    // -----------------------------------------------------------------------
+    // resolve_all tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_resolve_all_no_variables() {
+        let context = HashMap::new();
+        assert_eq!(resolve_all("hello world", &context), "hello world");
+    }
+
+    #[test]
+    fn test_resolve_all_with_variables() {
+        let mut context = HashMap::new();
+        context.insert("port".to_string(), "8080".to_string());
+        assert_eq!(resolve_all("{{port}}", &context), "8080");
+    }
+
+    #[test]
+    fn test_resolve_all_unresolved_placeholder_left_as_is() {
+        let context = HashMap::new();
+        assert_eq!(resolve_all("{{missing}}", &context), "{{missing}}");
+    }
+
+    #[test]
+    fn test_resolve_all_nested_in_string() {
+        let mut context = HashMap::new();
+        context.insert("path".to_string(), "admin".to_string());
+        assert_eq!(resolve_all("/api/{{path}}/login", &context), "/api/admin/login");
+    }
+
+    // -----------------------------------------------------------------------
+    // matches_condition tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_matches_condition_status_match() {
+        let matcher = ResponseMatcher {
+            r#type: "status".to_string(),
+            part: "status".to_string(),
+            regex: vec![],
+            words: vec![],
+            status: Some(vec![200, 404]),
+            negative: false,
+            condition: "and".to_string(),
+        };
+        assert!(matches_condition(&matcher, b"", &HashMap::new(), 200));
+        assert!(matches_condition(&matcher, b"", &HashMap::new(), 404));
+        assert!(!matches_condition(&matcher, b"", &HashMap::new(), 500));
+    }
+
+    #[test]
+    fn test_matches_condition_status_no_match_empty_vec() {
+        let matcher = ResponseMatcher {
+            r#type: "status".to_string(),
+            part: "status".to_string(),
+            regex: vec![],
+            words: vec![],
+            status: Some(vec![]),
+            negative: false,
+            condition: "and".to_string(),
+        };
+        assert!(!matches_condition(&matcher, b"", &HashMap::new(), 200));
+    }
+
+    #[test]
+    fn test_matches_condition_status_none() {
+        let matcher = ResponseMatcher {
+            r#type: "status".to_string(),
+            part: "status".to_string(),
+            regex: vec![],
+            words: vec![],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        assert!(!matches_condition(&matcher, b"", &HashMap::new(), 200));
+    }
+
+    #[test]
+    fn test_matches_condition_word_body() {
+        let matcher = ResponseMatcher {
+            r#type: "word".to_string(),
+            part: "body".to_string(),
+            regex: vec![],
+            words: vec!["admin".to_string(), "root".to_string()],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        assert!(matches_condition(&matcher, b"admin panel", &HashMap::new(), 200));
+        assert!(matches_condition(&matcher, b"root user", &HashMap::new(), 200));
+        assert!(!matches_condition(&matcher, b"guest user", &HashMap::new(), 200));
+    }
+
+    #[test]
+    fn test_matches_condition_word_header() {
+        let matcher = ResponseMatcher {
+            r#type: "word".to_string(),
+            part: "header".to_string(),
+            regex: vec![],
+            words: vec!["nginx".to_string()],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        let mut headers = HashMap::new();
+        headers.insert("server".to_string(), "nginx/1.18.0".to_string());
+        assert!(matches_condition(&matcher, b"", &headers, 200));
+        assert!(!matches_condition(&matcher, b"", &HashMap::new(), 200));
+    }
+
+    #[test]
+    fn test_matches_condition_regex_body() {
+        let matcher = ResponseMatcher {
+            r#type: "regex".to_string(),
+            part: "body".to_string(),
+            regex: vec!["secret-token".to_string(), "AKIA[0-9A-Z]{16}".to_string()],
+            words: vec![],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        // Uses evaluate_stream which checks both built-in patterns and custom patterns
+        let body = b"my-secret-token-here";
+        assert!(matches_condition(&matcher, body, &HashMap::new(), 200));
+    }
+
+    #[test]
+    fn test_matches_condition_regex_header() {
+        let matcher = ResponseMatcher {
+            r#type: "regex".to_string(),
+            part: "header".to_string(),
+            regex: vec!["nginx/1\\.\\d+".to_string()],
+            words: vec![],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        let mut headers = HashMap::new();
+        headers.insert("server".to_string(), "nginx/1.18.0".to_string());
+        assert!(matches_condition(&matcher, b"", &headers, 200));
+    }
+
+    #[test]
+    fn test_matches_condition_negative_inverts() {
+        let matcher = ResponseMatcher {
+            r#type: "status".to_string(),
+            part: "status".to_string(),
+            regex: vec![],
+            words: vec![],
+            status: Some(vec![404]),
+            negative: true,
+            condition: "and".to_string(),
+        };
+        // negative=true inverts: should match when status is NOT 404
+        assert!(!matches_condition(&matcher, b"", &HashMap::new(), 404));
+        assert!(matches_condition(&matcher, b"", &HashMap::new(), 200));
+    }
+
+    #[test]
+    fn test_matches_condition_word_header_not_found() {
+        let matcher = ResponseMatcher {
+            r#type: "word".to_string(),
+            part: "header".to_string(),
+            regex: vec![],
+            words: vec!["apache".to_string()],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        let mut headers = HashMap::new();
+        headers.insert("server".to_string(), "nginx".to_string());
+        assert!(!matches_condition(&matcher, b"", &headers, 200));
+    }
+
+    #[test]
+    fn test_matches_condition_empty_headers() {
+        let matcher = ResponseMatcher {
+            r#type: "word".to_string(),
+            part: "header".to_string(),
+            regex: vec![],
+            words: vec!["anything".to_string()],
+            status: None,
+            negative: false,
+            condition: "and".to_string(),
+        };
+        assert!(!matches_condition(&matcher, b"", &HashMap::new(), 200));
+    }
+
+    // -----------------------------------------------------------------------
+    // HttpRequestTemplate deserialization tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_http_request_template_defaults() {
+        let yaml = r#"
+method: GET
+path: /api/health
+"#;
+        let tmpl: HttpRequestTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.method, "GET");
+        assert_eq!(tmpl.path, "/api/health");
+        assert!(tmpl.body.is_none());
+        assert!(tmpl.headers.is_none());
+        assert!(tmpl.matchers.is_empty());
+        assert_eq!(tmpl.matcher_condition, "and");
+        assert!(tmpl.follow_redirects.is_none());
+        assert!(tmpl.extractors.is_empty());
+    }
+
+    #[test]
+    fn test_http_request_template_with_all_fields() {
+        let yaml = r#"
+method: POST
+path: /api/login
+headers:
+  Content-Type: application/json
+body: '{"user":"admin"}'
+matchers:
+  - type: status
+    part: status
+    status: [200]
+matcher_condition: or
+follow_redirects: true
+"#;
+        let tmpl: HttpRequestTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.method, "POST");
+        assert_eq!(tmpl.headers.as_ref().unwrap().get("Content-Type").unwrap(), "application/json");
+        assert_eq!(tmpl.body.unwrap(), r#"{"user":"admin"}"#);
+        assert_eq!(tmpl.matchers.len(), 1);
+        assert_eq!(tmpl.matcher_condition, "or");
+        assert_eq!(tmpl.follow_redirects, Some(true));
+    }
+
+    #[test]
+    fn test_http_request_template_serde_roundtrip() {
+        let tmpl = HttpRequestTemplate {
+            method: "GET".to_string(),
+            path: "/test".to_string(),
+            body: Some("data".to_string()),
+            headers: None,
+            matchers: vec![],
+            matcher_condition: "and".to_string(),
+            extractors: vec![],
+            follow_redirects: None,
+        };
+        let json = serde_json::to_string(&tmpl).unwrap();
+        let back: HttpRequestTemplate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.method, "GET");
+        assert_eq!(back.path, "/test");
+        assert_eq!(back.body.unwrap(), "data");
+    }
+}

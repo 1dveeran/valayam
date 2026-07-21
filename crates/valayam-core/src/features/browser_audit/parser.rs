@@ -53,3 +53,37 @@ pub struct BrowserAuditTemplate {
     pub script: String, // Python worker script identifier
     pub matchers: Vec<ResponseMatcher>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_browser_audit_template_deser() {
+        let json = r#"{"target": "https://example.com", "script": "login.py", "matchers": []}"#;
+        let tmpl: BrowserAuditTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(tmpl.target, "https://example.com");
+        assert_eq!(tmpl.script, "login.py");
+        assert!(tmpl.matchers.is_empty());
+    }
+
+    #[test]
+    fn test_browser_audit_with_matchers() {
+        let json = r#"{"target": "https://app.com", "script": "check.py", "matchers": [{"type": "word", "part": "body", "words": ["success"]}]}"#;
+        let tmpl: BrowserAuditTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(tmpl.matchers.len(), 1);
+        assert_eq!(tmpl.matchers[0].words, vec!["success"]);
+    }
+
+    #[test]
+    fn test_browser_audit_serde_roundtrip() {
+        let tmpl = BrowserAuditTemplate {
+            target: "https://site.com".into(),
+            script: "script.py".into(),
+            matchers: vec![],
+        };
+        let json = serde_json::to_string(&tmpl).unwrap();
+        let back: BrowserAuditTemplate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.script, "script.py");
+    }
+}

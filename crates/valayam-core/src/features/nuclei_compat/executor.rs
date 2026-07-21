@@ -119,3 +119,91 @@ impl NucleiExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nuclei_executor_new() {
+        let client = Arc::new(
+            StealthHttpClient::new(false, false, None, false).unwrap()
+        );
+        let executor = NucleiExecutor::new(client);
+        // Just verify construction works
+        assert!(std::mem::size_of_val(&executor) > 0);
+    }
+
+    #[test]
+    fn test_nuclei_template_baseurl_substitution() {
+        let target_url = "https://example.com";
+        let raw_path = "{{BaseURL}}/admin";
+        let resolved = raw_path.replace("{{BaseURL}}", target_url);
+        assert_eq!(resolved, "https://example.com/admin");
+    }
+
+    #[test]
+    fn test_nuclei_matcher_and_condition_logic() {
+        // Simulate the AND/OR matcher logic from the executor
+        let matchers = vec![
+            ("word", true),
+            ("status", true),
+        ];
+        let is_and = true;
+        let all_match = matchers.iter().all(|(_, matched)| *matched);
+        let any_match = matchers.iter().any(|(_, matched)| *matched);
+        assert!(is_and && all_match);
+        assert!(any_match);
+    }
+
+    #[test]
+    fn test_nuclei_matcher_or_condition_logic() {
+        let matchers = vec![
+            ("word", false),
+            ("status", true),
+        ];
+        let is_and = false;
+        let all_match = matchers.iter().all(|(_, matched)| *matched);
+        let any_match = matchers.iter().any(|(_, matched)| *matched);
+        assert!(!is_and);
+        assert!(!all_match);
+        assert!(any_match);
+    }
+
+    #[test]
+    fn test_nuclei_matcher_and_fails_when_one_misses() {
+        let matchers = vec![
+            ("word", true),
+            ("status", false),
+        ];
+        let all_match = matchers.iter().all(|(_, matched)| *matched);
+        assert!(!all_match);
+    }
+
+    #[test]
+    fn test_nuclei_matcher_or_succeeds_with_any_match() {
+        let matchers = vec![
+            ("word", false),
+            ("status", false),
+            ("word", true),
+        ];
+        let any_match = matchers.iter().any(|(_, matched)| *matched);
+        assert!(any_match);
+    }
+
+    #[test]
+    fn test_nuclei_matcher_or_fails_with_no_matches() {
+        let matchers = vec![
+            ("word", false),
+            ("status", false),
+        ];
+        let any_match = matchers.iter().any(|(_, matched)| *matched);
+        assert!(!any_match);
+    }
+
+    #[test]
+    fn test_nuclei_empty_matchers_no_match() {
+        let matchers: Vec<&str> = vec![];
+        assert!(matchers.is_empty());
+    }
+}

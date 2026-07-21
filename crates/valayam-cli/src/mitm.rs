@@ -141,7 +141,9 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
         headers: None,
         body: if body.is_empty() { None } else { Some(body.to_string()) },
         matchers: vec![],
+        matcher_condition: "and".to_string(),
         extractors: vec![],
+        follow_redirects: None,
     };
 
     let template = VulnerabilityTemplate {

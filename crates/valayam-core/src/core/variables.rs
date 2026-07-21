@@ -317,4 +317,204 @@ mod tests {
         // {{timeout|default:"30s"}} uses advanced syntax; basic extraction omits it
         assert!(!names.contains(&"timeout".to_string()));
     }
+
+    // ── Additional edge case tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_resolve_variables_no_placeholders() {
+        let ctx = HashMap::new();
+        assert_eq!(resolve_variables("plain text", &ctx), "plain text");
+        assert_eq!(resolve_variables("", &ctx), "");
+    }
+
+    #[test]
+    fn test_resolve_variables_missing_var_keeps_placeholder() {
+        let ctx = HashMap::new();
+        let result = resolve_variables("Hello {{unknown}}!", &ctx);
+        assert_eq!(result, "Hello {{unknown}}!");
+    }
+
+    #[test]
+    fn test_resolve_variables_nested_interleaved() {
+        let mut ctx = HashMap::new();
+        ctx.insert("a".to_string(), "hello".to_string());
+        ctx.insert("b".to_string(), "world".to_string());
+        let result = resolve_variables("{{a}}_{{b}}", &ctx);
+        assert_eq!(result, "hello_world");
+    }
+
+    #[test]
+    fn test_resolve_variables_special_chars_in_names() {
+        // Variable names with underscores (valid in regex)
+        let mut ctx = HashMap::new();
+        ctx.insert("my_var".to_string(), "value".to_string());
+        let result = resolve_variables("{{my_var}}", &ctx);
+        assert_eq!(result, "value");
+    }
+
+    #[test]
+    fn test_resolve_variables_adjacent_no_separator() {
+        let mut ctx = HashMap::new();
+        ctx.insert("a".to_string(), "x".to_string());
+        ctx.insert("b".to_string(), "y".to_string());
+        let result = resolve_variables("{{a}}{{b}}", &ctx);
+        assert_eq!(result, "xy");
+    }
+
+    #[test]
+    fn test_resolve_variables_chained_value_contains_placeholder() {
+        let mut ctx = HashMap::new();
+        ctx.insert("outer".to_string(), "prefix_{{inner}}_suffix".to_string());
+        ctx.insert("inner".to_string(), "mid".to_string());
+        // Only one pass of resolution — {{inner}} inside the value is NOT resolved
+        let result = resolve_variables("{{outer}}", &ctx);
+        assert_eq!(result, "prefix_{{inner}}_suffix");
+    }
+
+    #[test]
+    fn test_resolve_variables_deeply_nested_context() {
+        let mut ctx = HashMap::with_capacity(100);
+        for i in 0..50 {
+            ctx.insert(format!("key_{}", i), format!("value_{}", i));
+        }
+        let mut input = String::new();
+        for i in 0..50 {
+            input.push_str(&format!("{{{{key_{}}}}},", i));
+        }
+        let result = resolve_variables(&input, &ctx);
+        for i in 0..50 {
+            assert!(result.contains(&format!("value_{}", i)));
+        }
+    }
+
+    #[test]
+    fn test_resolve_variables_multi_circular() {
+        let mut ctx = HashMap::new();
+        ctx.insert("a".to_string(), "{{b}}".to_string());
+        ctx.insert("b".to_string(), "{{c}}".to_string());
+        ctx.insert("c".to_string(), "{{a}}".to_string());
+
+        let result = resolve_variables("start {{a}} end", &ctx);
+        // At least one placeholder should remain unresolved
+        assert!(result.contains("{{a}}") || result.contains("{{b}}") || result.contains("{{c}}"));
+    }
+
+    // ── Advanced variable resolution edge cases ────────────────────────────
+
+    #[test]
+    fn test_advanced_no_placeholders() {
+        let ctx = HashMap::new();
+        assert_eq!(resolve_variables_advanced("simple text", &ctx), "simple text");
+    }
+
+    #[test]
+    fn test_advanced_chained_modifiers() {
+        let mut ctx = HashMap::new();
+        ctx.insert("name".to_string(), "Hello".to_string());
+        let result = resolve_variables_advanced("{{name|upper|reverse}}", &ctx);
+        assert_eq!(result, "OLLEH");
+    }
+
+    #[test]
+    fn test_advanced_modifier_on_empty_string() {
+        let mut ctx = HashMap::new();
+        ctx.insert("empty".to_string(), "".to_string());
+        assert_eq!(resolve_variables_advanced("{{empty|len}}", &ctx), "0");
+        assert_eq!(resolve_variables_advanced("{{empty|upper}}", &ctx), "");
+        assert_eq!(resolve_variables_advanced("{{empty|reverse}}", &ctx), "");
+    }
+
+    #[test]
+    fn test_advanced_unknown_modifier() {
+        let mut ctx = HashMap::new();
+        ctx.insert("x".to_string(), "value".to_string());
+        // Unknown modifier should pass through value unchanged
+        let result = resolve_variables_advanced("{{x|unknownmod}}", &ctx);
+        assert_eq!(result, "value");
+    }
+
+    #[test]
+    fn test_advanced_default_with_empty_string() {
+        let ctx = HashMap::new();
+        let result = resolve_variables_advanced("{{missing|default:\"\"}}", &ctx);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_advanced_missing_var_no_default() {
+        let ctx = HashMap::new();
+        let result = resolve_variables_advanced("{{missing}}", &ctx);
+        assert_eq!(result, "{{missing}}");
+    }
+
+    #[test]
+    fn test_advanced_default_with_special_chars() {
+        let ctx = HashMap::new();
+        let result = resolve_variables_advanced(
+            "{{missing|default:\"hello world! @#$%\"}}",
+            &ctx,
+        );
+        assert_eq!(result, "hello world! @#$%");
+    }
+
+    #[test]
+    fn test_advanced_mixed_syntax() {
+        let mut ctx = HashMap::new();
+        ctx.insert("user".to_string(), "Alice".to_string());
+        ctx.insert("domain".to_string(), "example.com".to_string());
+        let result = resolve_variables_advanced(
+            "{{user|lower}}@{{domain}} via {{missing|default:\"default\"}}",
+            &ctx,
+        );
+        assert_eq!(result, "alice@example.com via default");
+    }
+
+    // ── build_initial_context edge cases ──────────────────────────────────
+
+    #[test]
+    fn test_build_initial_context_no_scheme() {
+        let ctx = build_initial_context("example.com/path", "example.com");
+        assert_eq!(ctx.get("BaseURL").unwrap(), "example.com/path");
+        assert_eq!(ctx.get("Hostname").unwrap(), "example.com");
+    }
+
+    #[test]
+    fn test_build_initial_context_with_port() {
+        let ctx = build_initial_context("https://example.com:8443/api", "example.com");
+        assert_eq!(ctx.get("BaseURL").unwrap(), "https://example.com:8443/api");
+        assert_eq!(ctx.get("Hostname").unwrap(), "example.com");
+    }
+
+    #[test]
+    fn test_build_initial_context_trailing_slash_stripped() {
+        let ctx = build_initial_context("https://example.com/", "example.com");
+        assert_eq!(ctx.get("BaseURL").unwrap(), "https://example.com");
+    }
+
+    // ── extract_placeholder_names edge cases ───────────────────────────────
+
+    #[test]
+    fn test_extract_placeholder_names_empty() {
+        let names = extract_placeholder_names("");
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_extract_placeholder_names_no_placeholders() {
+        let names = extract_placeholder_names("just text");
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_extract_placeholder_names_duplicates() {
+        let names = extract_placeholder_names("{{a}} and {{a}} and {{a}}");
+        assert_eq!(names.len(), 3);
+    }
+
+    #[test]
+    fn test_extract_placeholder_names_invalid_syntax() {
+        // Missing closing braces — should not match
+        let names = extract_placeholder_names("{{broken");
+        assert!(names.is_empty());
+    }
 }

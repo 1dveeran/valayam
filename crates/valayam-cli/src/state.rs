@@ -60,3 +60,75 @@ impl StateDB {
         Ok(Some((snapshot.pending_targets, snapshot.completed_targets)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_snapshot_serde() {
+        let snapshot = ScanSnapshot {
+            id: "test-scan-001".into(),
+            pending_targets: vec!["https://example.com".into(), "https://test.com".into()],
+            completed_targets: vec!["https://done.com".into()],
+            timestamp: 1700000000,
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        let back: ScanSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, "test-scan-001");
+        assert_eq!(back.pending_targets.len(), 2);
+        assert_eq!(back.timestamp, 1700000000);
+    }
+
+    #[test]
+    fn test_scan_snapshot_empty_lists() {
+        let snapshot = ScanSnapshot {
+            id: "empty-scan".into(),
+            pending_targets: vec![],
+            completed_targets: vec![],
+            timestamp: 1700000000,
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        assert!(json.contains("empty-scan"));
+    }
+
+    #[test]
+    fn test_state_db_creates_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("sub").join("state");
+        let db = StateDB::new(&nested).unwrap();
+        assert!(nested.exists());
+        drop(db);
+    }
+
+    #[test]
+    fn test_state_save_and_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = StateDB::new(dir.path()).unwrap();
+        db.save_state("scan-1", &["https://target.com".into()], &[]).unwrap();
+        let loaded = db.load_state("scan-1").unwrap();
+        assert!(loaded.is_some());
+        let (pending, completed) = loaded.unwrap();
+        assert_eq!(pending, vec!["https://target.com"]);
+        assert!(completed.is_empty());
+    }
+
+    #[test]
+    fn test_state_load_nonexistent() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = StateDB::new(dir.path()).unwrap();
+        let loaded = db.load_state("nonexistent").unwrap();
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_state_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = StateDB::new(dir.path()).unwrap();
+        db.save_state("s", &["https://old.com".into()], &[]).unwrap();
+        db.save_state("s", &["https://new.com".into()], &["https://old.com".into()]).unwrap();
+        let (p, c) = db.load_state("s").unwrap().unwrap();
+        assert_eq!(p, vec!["https://new.com"]);
+        assert_eq!(c, vec!["https://old.com"]);
+    }
+}

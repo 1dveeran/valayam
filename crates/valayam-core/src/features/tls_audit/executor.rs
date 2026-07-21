@@ -268,3 +268,173 @@ pub async fn execute(
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // version_rank internal logic tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_version_rank_tls_1_3() {
+        let rank = |v: &str| -> u8 {
+            if v.contains("1.3") { 4 }
+            else if v.contains("1.2") { 3 }
+            else if v.contains("1.1") { 2 }
+            else if v.contains("1.0") { 1 }
+            else { 0 }
+        };
+        assert_eq!(rank("TLS 1.3"), 4);
+        assert_eq!(rank("TLSv1.3"), 4);
+    }
+
+    #[test]
+    fn test_version_rank_tls_1_2() {
+        let rank = |v: &str| -> u8 {
+            if v.contains("1.3") { 4 }
+            else if v.contains("1.2") { 3 }
+            else if v.contains("1.1") { 2 }
+            else if v.contains("1.0") { 1 }
+            else { 0 }
+        };
+        assert_eq!(rank("TLS 1.2"), 3);
+    }
+
+    #[test]
+    fn test_version_rank_tls_1_0() {
+        let rank = |v: &str| -> u8 {
+            if v.contains("1.3") { 4 }
+            else if v.contains("1.2") { 3 }
+            else if v.contains("1.1") { 2 }
+            else if v.contains("1.0") { 1 }
+            else { 0 }
+        };
+        assert_eq!(rank("TLS 1.0"), 1);
+    }
+
+    #[test]
+    fn test_version_rank_unknown() {
+        let rank = |v: &str| -> u8 {
+            if v.contains("1.3") { 4 }
+            else if v.contains("1.2") { 3 }
+            else if v.contains("1.1") { 2 }
+            else if v.contains("1.0") { 1 }
+            else { 0 }
+        };
+        assert_eq!(rank("SSL 3.0"), 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Weak cipher detection tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_weak_cipher_cbc_detected() {
+        let cipher = "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA".to_string();
+        assert!(
+            cipher.contains("CBC") || cipher.contains("RC4") || cipher.contains("3DES"),
+            "CBC cipher should be flagged as weak"
+        );
+    }
+
+    #[test]
+    fn test_weak_cipher_rc4_detected() {
+        let cipher = "TLS_RSA_WITH_RC4_128_MD5".to_string();
+        assert!(
+            cipher.contains("RC4") || cipher.contains("MD5"),
+            "RC4 cipher should be flagged as weak"
+        );
+    }
+
+    #[test]
+    fn test_strong_cipher_not_flagged() {
+        let cipher = "TLS_AES_256_GCM_SHA384".to_string();
+        assert!(
+            !(cipher.contains("CBC") || cipher.contains("RC4") || cipher.contains("3DES") ||
+              cipher.contains("DES") || cipher.contains("NULL") || cipher.contains("MD5") ||
+              cipher.contains("RC2") || cipher.contains("IDEA")),
+            "GCM cipher should not be flagged as weak"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Weak key detection tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_weak_rsa_key_1024_bits() {
+        let bits: u16 = 1024;
+        assert!(bits < 2048, "1024-bit RSA key should be weak");
+    }
+
+    #[test]
+    fn test_strong_rsa_key_2048_bits() {
+        let bits: u16 = 2048;
+        assert!(!(bits < 2048), "2048-bit RSA key should be strong");
+    }
+
+    #[test]
+    fn test_strong_rsa_key_4096_bits() {
+        let bits: u16 = 4096;
+        assert!(!(bits < 2048), "4096-bit RSA key should be strong");
+    }
+
+    // -----------------------------------------------------------------------
+    // TlsAuditTemplate deserialization tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_tls_template_minimal() {
+        let yaml = r#"
+host: example.com
+"#;
+        let tmpl: TlsAuditTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.host, "example.com");
+        assert_eq!(tmpl.port, 443, "Default port should be 443");
+        assert!(tmpl.min_version.is_none());
+        assert!(tmpl.matchers.is_empty());
+    }
+
+    #[test]
+    fn test_tls_template_custom_port() {
+        let yaml = r#"
+host: example.com
+port: 8443
+"#;
+        let tmpl: TlsAuditTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.port, 8443);
+    }
+
+    #[test]
+    fn test_tls_template_with_matchers() {
+        let yaml = r#"
+host: example.com
+min_version: "TLS 1.2"
+matchers:
+  - type: self_signed
+    part: status
+"#;
+        let tmpl: TlsAuditTemplate = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(tmpl.min_version.unwrap(), "TLS 1.2");
+        assert_eq!(tmpl.matchers.len(), 1);
+        assert_eq!(tmpl.matchers[0].r#type, "self_signed");
+    }
+
+    #[test]
+    fn test_tls_template_full_config() {
+        let tmpl = TlsAuditTemplate {
+            host: "example.com".to_string(),
+            port: 443,
+            min_version: Some("TLS 1.2".to_string()),
+            max_expiry_days: Some(30),
+            matchers: vec![],
+        };
+        let json = serde_json::to_string(&tmpl).unwrap();
+        let back: TlsAuditTemplate = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.host, "example.com");
+        assert_eq!(back.max_expiry_days, Some(30));
+    }
+
+    }

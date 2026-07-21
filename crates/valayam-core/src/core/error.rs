@@ -195,3 +195,309 @@ impl ScannerError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Constructor & Display tests ────────────────────────────────────────
+
+    #[test]
+    fn test_template_read_error_display() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let err = ScannerError::TemplateReadError(io_err);
+        assert!(err.to_string().contains("file not found"));
+        assert_eq!(err.error_code(), "TEMPLATE_READ_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_template_parse_error_from_yaml() {
+        // Create a YAML parse error by parsing invalid YAML
+        let yaml_result: Result<serde_yaml::Value, _> = serde_yaml::from_str("'unclosed string");
+        let yaml_err = yaml_result.unwrap_err();
+        let err: ScannerError = yaml_err.into();
+        assert_eq!(err.error_code(), "TEMPLATE_PARSE_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_template_validation_error() {
+        let err = ScannerError::TemplateValidationError("missing id field".into());
+        assert_eq!(err.to_string(), "Template validation failed: missing id field");
+        assert_eq!(err.error_code(), "TEMPLATE_VALIDATION_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[tokio::test]
+    async fn test_http_client_error() {
+        // Build a request against an unreachable URL to get a reqwest error
+        let err = ScannerError::HttpClientError(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_millis(10))
+                .build()
+                .unwrap()
+                .get("https://192.0.2.1:1/")
+                .timeout(std::time::Duration::from_millis(10))
+                .send()
+                .await
+                .unwrap_err()
+        );
+        assert_eq!(err.error_code(), "HTTP_CLIENT_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_invalid_http_method() {
+        let err = ScannerError::InvalidHttpMethod("INVALID".into());
+        assert_eq!(err.to_string(), "Invalid HTTP Method defined in template: INVALID");
+        assert_eq!(err.error_code(), "INVALID_HTTP_METHOD");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_script_errors() {
+        let init_err = ScannerError::ScriptEngineInitError("rhai engine failed".into());
+        assert!(init_err.to_string().contains("rhai engine failed"));
+        assert_eq!(init_err.error_code(), "SCRIPT_INIT_ERROR");
+        assert!(!init_err.is_retryable());
+
+        let exec_err = ScannerError::ScriptExecutionError("timeout".into());
+        assert!(exec_err.to_string().contains("timeout"));
+        assert_eq!(exec_err.error_code(), "SCRIPT_EXECUTION_ERROR");
+        assert!(!exec_err.is_retryable());
+    }
+
+    #[test]
+    fn test_network_errors_retryable() {
+        let net_err = ScannerError::NetworkError(tokio::io::Error::from(io::ErrorKind::TimedOut));
+        assert!(net_err.is_retryable());
+        assert_eq!(net_err.error_code(), "NETWORK_ERROR");
+
+        let timeout_err = ScannerError::TimeoutError("connection timed out".into());
+        assert!(timeout_err.is_retryable());
+        assert_eq!(timeout_err.error_code(), "TIMEOUT_ERROR");
+
+        let rate_err = ScannerError::RateLimitExceeded;
+        assert!(rate_err.is_retryable());
+        assert_eq!(rate_err.error_code(), "RATE_LIMIT_EXCEEDED");
+    }
+
+    #[test]
+    fn test_dns_resolution_error() {
+        let err = ScannerError::DnsResolutionError {
+            host: "example.com".into(),
+            error: "NXDOMAIN".into(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "DNS resolution failed for example.com: NXDOMAIN"
+        );
+        assert_eq!(err.error_code(), "DNS_RESOLUTION_ERROR");
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_tcp_connection_error() {
+        let err = ScannerError::TcpConnectionError {
+            host: "10.0.0.1".into(),
+            port: 8080,
+            error: "Connection refused".into(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "TCP connection failed to 10.0.0.1:8080: Connection refused"
+        );
+        assert_eq!(err.error_code(), "TCP_CONNECTION_ERROR");
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_udp_error() {
+        let err = ScannerError::UdpError {
+            host: "10.0.0.1".into(),
+            port: 5353,
+            error: "timeout".into(),
+        };
+        assert_eq!(err.to_string(), "UDP timeout or failure for 10.0.0.1:5353: timeout");
+        assert_eq!(err.error_code(), "UDP_ERROR");
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_tls_handshake_error() {
+        let err = ScannerError::TlsHandshakeError {
+            host: "example.com".into(),
+            port: 443,
+            error: "certificate expired".into(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "TLS handshake failed for example.com:443: certificate expired"
+        );
+        assert_eq!(err.error_code(), "TLS_HANDSHAKE_ERROR");
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_tls_cert_parse_error() {
+        let err = ScannerError::TlsCertParseError("invalid ASN1".into());
+        assert_eq!(err.to_string(), "TLS certificate parsing failed: invalid ASN1");
+        assert_eq!(err.error_code(), "TLS_CERT_PARSE_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_invalid_target_and_port() {
+        let target_err = ScannerError::InvalidTarget("not a url".into());
+        assert_eq!(target_err.to_string(), "Invalid target specification: not a url");
+        assert_eq!(target_err.error_code(), "INVALID_TARGET");
+        assert!(!target_err.is_retryable());
+
+        let port_err = ScannerError::InvalidPort("99999".into());
+        assert_eq!(port_err.to_string(), "Invalid port specification: 99999");
+        assert_eq!(port_err.error_code(), "INVALID_PORT");
+        assert!(!port_err.is_retryable());
+    }
+
+    #[test]
+    fn test_configuration_and_resource_errors() {
+        let cfg_err = ScannerError::ConfigurationError("missing api key".into());
+        assert_eq!(cfg_err.error_code(), "CONFIGURATION_ERROR");
+        assert!(!cfg_err.is_retryable());
+
+        let res_err = ScannerError::ResourceExhausted("too many open files".into());
+        assert_eq!(res_err.error_code(), "RESOURCE_EXHAUSTED");
+        assert!(!res_err.is_retryable());
+    }
+
+    #[test]
+    fn test_parse_error() {
+        let err = ScannerError::ParseError("invalid json".into());
+        assert_eq!(err.to_string(), "Failed to parse response data: invalid json");
+        assert_eq!(err.error_code(), "PARSE_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_certificate_and_cipher_errors() {
+        let cert_err = ScannerError::CertificateValidationError("self-signed".into());
+        assert_eq!(cert_err.error_code(), "CERTIFICATE_VALIDATION_ERROR");
+        assert!(!cert_err.is_retryable());
+
+        let cipher_err = ScannerError::InvalidCipherSuite("TLS_NULL".into());
+        assert_eq!(cipher_err.error_code(), "INVALID_CIPHER_SUITE");
+        assert!(!cipher_err.is_retryable());
+    }
+
+    #[test]
+    fn test_proxy_error_retryable() {
+        let err = ScannerError::ProxyError("proxy unreachable".into());
+        assert_eq!(err.error_code(), "PROXY_ERROR");
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_address_parse_error_from_std() {
+        let addr_err = "not a socket addr".parse::<std::net::SocketAddr>().unwrap_err();
+        let err: ScannerError = addr_err.into();
+        assert_eq!(err.error_code(), "ADDRESS_PARSE_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_utf8_error_from_std() {
+        let bytes = vec![0xFF, 0xFE, 0x00];
+        let str_err = String::from_utf8(bytes).unwrap_err();
+        let err = ScannerError::Utf8Error(str_err);
+        assert_eq!(err.error_code(), "UTF8_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_plugin_errors() {
+        let nf = ScannerError::PluginNotFound("ssh_scan".into());
+        assert_eq!(nf.to_string(), "Plugin not found: ssh_scan");
+        assert_eq!(nf.error_code(), "PLUGIN_NOT_FOUND");
+        assert!(!nf.is_retryable());
+
+        let init = ScannerError::PluginInitializationError("bad config".into());
+        assert!(init.to_string().contains("bad config"));
+        assert_eq!(init.error_code(), "PLUGIN_INITIALIZATION_ERROR");
+        assert!(!init.is_retryable());
+
+        let exec = ScannerError::PluginExecutionError("oom".into());
+        assert_eq!(exec.to_string(), "Plugin execution failed: oom");
+        assert_eq!(exec.error_code(), "PLUGIN_EXECUTION_ERROR");
+        assert!(!exec.is_retryable());
+    }
+
+    #[test]
+    fn test_other_error_boxed() {
+        let io_err = io::Error::new(io::ErrorKind::Other, "generic io error");
+        let err = ScannerError::Other(Box::new(io_err));
+        assert!(err.to_string().contains("generic io error"));
+        assert_eq!(err.error_code(), "OTHER_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_non_retryable_errors_exhaustive() {
+        // Verify specific non-retryable variants
+        let cases: Vec<ScannerError> = vec![
+            ScannerError::TemplateReadError(io::Error::new(io::ErrorKind::NotFound, "")),
+            ScannerError::TemplateValidationError("".into()),
+            ScannerError::InvalidHttpMethod("".into()),
+            ScannerError::ScriptEngineInitError("".into()),
+            ScannerError::ScriptExecutionError("".into()),
+            ScannerError::TlsCertParseError("".into()),
+            ScannerError::InvalidTarget("".into()),
+            ScannerError::InvalidPort("".into()),
+            ScannerError::ConfigurationError("".into()),
+            ScannerError::ResourceExhausted("".into()),
+            ScannerError::ParseError("".into()),
+            ScannerError::CertificateValidationError("".into()),
+            ScannerError::InvalidCipherSuite("".into()),
+            ScannerError::AddressParseError("0.0.0.0:99999".parse::<std::net::SocketAddr>().unwrap_err()),
+            ScannerError::Utf8Error(String::from_utf8(vec![0xFF]).unwrap_err()),
+            ScannerError::PluginNotFound("".into()),
+            ScannerError::PluginInitializationError("".into()),
+            ScannerError::PluginExecutionError("".into()),
+            ScannerError::Other(Box::new(io::Error::new(io::ErrorKind::Other, ""))),
+        ];
+        for err in &cases {
+            assert!(!err.is_retryable(), "Expected non-retryable for: {:?}", err.error_code());
+        }
+    }
+
+    #[test]
+    fn test_serialization_round_trip() {
+        let err = ScannerError::TemplateValidationError("bad template".into());
+        let json = serde_json::to_string(&err).expect("Should serialize");
+        // Custom Serialize impl produces error_type/message with Display output
+        assert!(json.contains("Template validation failed: bad template"));
+
+        // Deserialize back — ScannerError uses custom Serialize but no custom Deserialize
+        // So we just verify the serialized shape
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse JSON");
+        assert_eq!(parsed["error_type"], "Template validation failed: bad template");
+        assert_eq!(parsed["message"], "Template validation failed: bad template");
+        assert_eq!(parsed["is_retryable"], false);
+    }
+
+    #[test]
+    fn test_error_codes_are_unique() {
+        use std::collections::HashSet;
+        let mut codes = HashSet::new();
+
+        // Collect all error codes
+        let errs: Vec<ScannerError> = vec![
+            ScannerError::TemplateReadError(io::Error::new(io::ErrorKind::NotFound, "")),
+            ScannerError::TemplateValidationError("".into()),
+            ScannerError::InvalidHttpMethod("".into()),
+        ];
+        for e in &errs {
+            assert!(codes.insert(e.error_code()), "Duplicate error code: {}", e.error_code());
+        }
+    }
+}

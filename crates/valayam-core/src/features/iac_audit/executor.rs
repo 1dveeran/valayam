@@ -65,7 +65,7 @@ const TERRAFORM_DANGEROUS_PATTERNS: &[(&str, &str, &str, f32, &str, &str)] = &[
      "Remove public-read-write ACL immediately. Bucket contents can be read and modified by anyone.",
      "https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html"),
     // IAM: full admin access
-    ("Action.*\\*.*Effect.*Allow", "iam_full_admin", "Critical", 9.0,
+    ("\"*\"", "iam_full_admin", "Critical", 9.0,
      "Restrict IAM policy to specific actions and resources. Avoid using '*' in Action or Resource.",
      "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html"),
     // EBS/S3/GCS bucket encryption disabled
@@ -97,7 +97,7 @@ const DOCKERFILE_CHECKS: &[(&str, &str, &str, f32, &str, &str)] = &[
     ("EXPOSE 22", "ssh_port_exposed", "High", 7.5,
      "Do not expose SSH port. If SSH access is needed, use a bastion host or VPN.",
      "https://docs.docker.com/engine/reference/builder/#expose"),
-    ("FROM.*:latest", "latest_tag", "Low", 3.0,
+    (":latest", "latest_tag", "Low", 3.0,
      "Pin base image to a specific version tag instead of 'latest' for reproducible builds.",
      "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#from"),
     ("ENV.*PASSWORD", "password_in_env", "Critical", 9.0,
@@ -122,7 +122,7 @@ const CFN_DANGEROUS_PATTERNS: &[(&str, &str, &str, f32, &str, &str)] = &[
     ("AWS::IAM::Role.*ManagedPolicyArns.*AdministratorAccess", "cfn_admin_role", "Critical", 9.0,
      "Avoid attaching AdministratorAccess managed policy. Create scoped-down custom policies.",
      "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html"),
-    ("AWS::EC2::SecurityGroup.*0\\.0\\.0\\.0/0", "cfn_open_sg", "Critical", 9.5,
+    ("AWS::EC2::SecurityGroup", "cfn_open_sg", "Critical", 9.5,
      "Do not use 0.0.0.0/0 in security group ingress rules. Restrict to specific IP ranges.",
      "https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html"),
     ("AWS::S3::Bucket.*PublicAccessBlockConfiguration.*false", "cfn_public_s3", "High", 8.0,

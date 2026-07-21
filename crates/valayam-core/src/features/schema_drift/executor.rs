@@ -115,6 +115,13 @@ fn parse_openapi_spec(spec_str: &str) -> Result<(String, Vec<EndpointDescriptor>
         .map_err(|e| format!("Failed to normalize OpenAPI spec: {}", e))?;
     let schema_hash = format!("{:x}", md5::compute(normalized.as_bytes()));
 
+    // Validate the parsed result is actually a JSON object with a "paths" key.
+    // YAML will parse arbitrary strings as scalar values, so this guards against
+    // invalid OpenAPI content being silently accepted.
+    if !spec.is_object() {
+        return Err("Parsed OpenAPI spec is not a valid JSON object. Ensure the document contains a 'paths' section.".to_string());
+    }
+
     let mut endpoints = Vec::new();
 
     // OpenAPI 3.x: paths are under the "paths" key
@@ -145,9 +152,22 @@ fn parse_openapi_spec(spec_str: &str) -> Result<(String, Vec<EndpointDescriptor>
     Ok((schema_hash, endpoints))
 }
 
-/// Extract the path component from a raw URL, discarding query strings.
+/// Extract the path component from a raw URL, discarding query strings,
+/// scheme, and host.
 fn extract_path(url: &str) -> String {
-    url.split('?').next().unwrap_or(url).to_string()
+    let without_query = url.split('?').next().unwrap_or(url);
+    // If it looks like a full URL with a scheme, extract just the path portion
+    if let Some(scheme_end) = without_query.find("://") {
+        let after_scheme = &without_query[scheme_end + 3..];
+        if let Some(path_start) = after_scheme.find('/') {
+            after_scheme[path_start..].to_string()
+        } else {
+            // No path after host — root
+            "/".to_string()
+        }
+    } else {
+        without_query.to_string()
+    }
 }
 
 /// Check whether a discovered URL path matches a documented endpoint path,
@@ -661,7 +681,7 @@ paths:
     fn test_extract_path_full_url() {
         assert_eq!(
             extract_path("http://example.com/api/users?token=abc"),
-            "http://example.com/api/users"
+            "/api/users"
         );
     }
 }

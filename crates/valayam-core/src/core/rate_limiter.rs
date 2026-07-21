@@ -42,11 +42,21 @@ impl Default for RateLimiterConfig {
 }
 
 /// Tracks 429 responses for dynamic backoff
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct BackoffTracker {
     consecutive_429s: usize,
     last_429: Option<Instant>,
     backoff_multiplier: u32,
+}
+
+impl Default for BackoffTracker {
+    fn default() -> Self {
+        Self {
+            consecutive_429s: 0,
+            last_429: None,
+            backoff_multiplier: 1, // Start at 1 (no backoff), avoids division-by-zero
+        }
+    }
 }
 
 /// Thread-safe, global request rate limiter using the Token Bucket algorithm.
@@ -274,5 +284,154 @@ mod tests {
 
         // Should have waited at least some time due to backoff
         assert!(elapsed.as_secs() > 0);
+    }
+
+    // ── Expanded tests ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_rate_limiter_config_default() {
+        let config = RateLimiterConfig::default();
+        assert_eq!(config.base_rps, 10);
+        assert_eq!(config.burst_size, None);
+        assert_eq!(config.backoff_factor, 1.5);
+        assert_eq!(config.max_backoff, 60);
+        assert!(config.respect_retry_after);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_new_with_burst() {
+        let limiter = RateLimiter::new(RateLimiterConfig {
+            base_rps: 50,
+            burst_size: Some(20),
+            ..Default::default()
+        });
+        let config = limiter.config().await;
+        assert_eq!(config.base_rps, 50);
+        assert_eq!(config.burst_size, Some(20));
+    }
+
+    #[tokio::test]
+    async fn test_429_backoff_consecutive() {
+        let limiter = RateLimiter::new(RateLimiterConfig {
+            base_rps: 100,
+            backoff_factor: 1.0,
+            max_backoff: 5,
+            ..Default::default()
+        });
+
+        limiter.record_429(None).await;
+        let stats = limiter.stats().await;
+        // With factor 1.0: multiplier = 1 + 1*1 = 2
+        assert_eq!(stats.backoff_multiplier, 2);
+
+        limiter.record_429(None).await;
+        let stats = limiter.stats().await;
+        // With factor 1.0: multiplier = 1 + 1*2 = 3
+        assert_eq!(stats.backoff_multiplier, 3);
+    }
+
+    #[tokio::test]
+    async fn test_429_backoff_caps_at_max() {
+        let limiter = RateLimiter::new(RateLimiterConfig {
+            base_rps: 100,
+            backoff_factor: 10.0,
+            max_backoff: 5,
+            ..Default::default()
+        });
+
+        for _ in 0..10 {
+            limiter.record_429(None).await;
+        }
+        let stats = limiter.stats().await;
+        assert_eq!(stats.backoff_multiplier, 5);
+        assert_eq!(stats.consecutive_429s, 10);
+    }
+
+    #[tokio::test]
+    async fn test_429_retry_after_overrides_backoff() {
+        let limiter = RateLimiter::new(RateLimiterConfig {
+            base_rps: 100,
+            backoff_factor: 1.0,
+            max_backoff: 60,
+            ..Default::default()
+        });
+
+        // Retry-After of 30s should be the multiplier
+        limiter.record_429(Some(30)).await;
+        let stats = limiter.stats().await;
+        assert!(stats.backoff_multiplier >= 30);
+    }
+
+    #[tokio::test]
+    async fn test_record_success_reduces_backoff() {
+        let limiter = RateLimiter::new(RateLimiterConfig {
+            base_rps: 100,
+            backoff_factor: 2.0,
+            max_backoff: 10,
+            ..Default::default()
+        });
+
+        limiter.record_429(None).await;
+        let stats = limiter.stats().await;
+        assert_eq!(stats.consecutive_429s, 1);
+
+        // record_success() only reduces backoff if 30+ seconds have passed since last 429.
+        // Without real time passage, consecutive_429s stays at 1.
+        for _ in 0..6 {
+            limiter.record_success().await;
+        }
+        let stats = limiter.stats().await;
+        // No time has passed, so backoff remains
+        assert_eq!(stats.consecutive_429s, 1);
+        assert_eq!(stats.backoff_multiplier, 3); // 1 + 2.0 * 1 = 3
+    }
+
+    #[tokio::test]
+    async fn test_stats_initial() {
+        let limiter = RateLimiter::new_simple(50);
+        let stats = limiter.stats().await;
+        assert_eq!(stats.configured_rps, 50);
+        assert_eq!(stats.current_rps, 50.0);
+        assert_eq!(stats.consecutive_429s, 0);
+        assert_eq!(stats.backoff_multiplier, 1);
+        assert!(stats.last_429.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_stats_after_429() {
+        let limiter = RateLimiter::new_simple(100);
+        limiter.record_429(None).await;
+        let stats = limiter.stats().await;
+        assert_eq!(stats.consecutive_429s, 1);
+        assert!(stats.last_429.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_update_config() {
+        let limiter = RateLimiter::new_simple(10);
+        assert_eq!(limiter.config().await.base_rps, 10);
+
+        limiter.update_config(RateLimiterConfig {
+            base_rps: 100,
+            ..Default::default()
+        }).await;
+        assert_eq!(limiter.config().await.base_rps, 100);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_acquire() {
+        let limiter = Arc::new(RateLimiter::new_simple(500));
+        let mut handles = Vec::new();
+
+        for _ in 0..10 {
+            let l = limiter.clone();
+            handles.push(tokio::spawn(async move {
+                l.acquire().await;
+            }));
+        }
+
+        for h in handles {
+            let _ = timeout(std::time::Duration::from_secs(5), h).await;
+        }
     }
 }

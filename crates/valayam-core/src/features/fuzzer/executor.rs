@@ -115,43 +115,46 @@ pub async fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::matcher::ResponseMatcher;
 
-    #[tokio::test]
-    async fn test_fuzz_query_mutation() {
-        let client = StealthHttpClient::new(false, false, None, false).unwrap();
-        let rule = FuzzTemplate {
-            part: "query".to_string(),
-            keys: vec!["q".to_string()],
-            payloads: vec!["' OR 1=1--".to_string()],
-            matchers: vec![ResponseMatcher {
-                r#type: "status".to_string(),
-                part: "status".to_string(),
-                regex: vec![],
-                words: vec![],
-                status: Some(vec![500, 501, 502, 503, 400, 401, 403]),
-                negative: false,
-                condition: "and".to_string(),
-            }],
-        };
+    #[test]
+    fn test_fuzz_query_mutation() {
+        // Test the core mutation logic directly without needing an HTTP server or client.
+        // This avoids nested-runtime issues from mockito or reqwest inside #[tokio::test].
+        let base = Url::parse("https://example.com/search?q=hello&page=1").unwrap();
+        let params: Vec<(String, String)> = base
+            .query_pairs()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
 
-        let info = TemplateInfo {
-            name: "Fuzz Test".to_string(),
-            severity: "High".to_string(),
-            description: None,
-            compliance: std::collections::HashMap::new(),
-        };
+        // Mutate the "q" parameter with an SQL injection payload
+        let result = mutate_query_url(&base, &params, "q", "' OR 1=1--");
+        assert!(
+            result.contains("q="),
+            "Mutated URL should contain the q parameter: {}",
+            result
+        );
+        assert!(
+            result.contains("page=1"),
+            "Other query parameters should be preserved: {}",
+            result
+        );
+        assert!(
+            !result.contains("q=hello"),
+            "Original q value should be replaced: {}",
+            result
+        );
 
-        // Mutation check: executing against a target with matching query param triggers requests
-        let res = execute(
-            &client,
-            "https://httpbin.org/get?q=test&limit=10",
-            &[rule],
-            "fuzz-test",
-            &info,
-        ).await;
-
-        // httpbin will return 200, so our status 500 matcher remains unmatched (returns None)
-        assert!(res.is_none());
+        // Mutate a non-existent key — original params should be unchanged
+        let no_change = mutate_query_url(&base, &params, "nonexistent", "payload");
+        assert!(
+            no_change.contains("q=hello"),
+            "Non-targeted key should not be mutated: {}",
+            no_change
+        );
+        assert!(
+            no_change.contains("page=1"),
+            "Other params should be preserved: {}",
+            no_change
+        );
     }
 }

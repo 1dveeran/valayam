@@ -100,3 +100,40 @@ pub struct DeepAnalysisTemplate {
     pub analysis_type: String, // "llm_mutation", "wasm_decompile", "source_map", "artifact_recovery"
     pub prompt: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deep_analysis_template_deser() {
+        let json = r#"{"target": "example.com", "analysis_type": "llm_mutation", "prompt": "bypass waf with SQLi"}"#;
+        let tmpl: DeepAnalysisTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(tmpl.target, "example.com");
+        assert_eq!(tmpl.analysis_type, "llm_mutation");
+        assert_eq!(tmpl.prompt, Some("bypass waf with SQLi".into()));
+    }
+
+    #[test]
+    fn test_deep_analysis_variants() {
+        let json = r#"{"target": "test.app", "analysis_type": "wasm_decompile", "prompt": null}"#;
+        let tmpl: DeepAnalysisTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(tmpl.target, "test.app");
+        assert_eq!(tmpl.analysis_type, "wasm_decompile");
+        assert!(tmpl.prompt.is_none());
+    }
+
+    #[test]
+    fn test_deep_analysis_serde_roundtrip() {
+        let tmpl = DeepAnalysisTemplate {
+            target: "roundtrip.dev".into(),
+            analysis_type: "artifact_recovery".into(),
+            prompt: Some("recover configs".into()),
+        };
+        let json = serde_json::to_string(&tmpl).unwrap();
+        let deser: DeepAnalysisTemplate = serde_json::from_str(&json).unwrap();
+        assert_eq!(tmpl.target, deser.target);
+        assert_eq!(tmpl.analysis_type, deser.analysis_type);
+        assert_eq!(tmpl.prompt, deser.prompt);
+    }
+}

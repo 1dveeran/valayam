@@ -135,3 +135,161 @@ impl ScanResult {
         self.payload = format!("{}: {}", key, value);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn test_scan_result_default() {
+        let sr = ScanResult::default();
+        assert!(sr.template_id.is_empty());
+        assert!(sr.payload.is_empty());
+        assert!(sr.compliance.is_empty());
+        assert!(sr.cvss_score.is_none());
+        assert!(sr.solution.is_none());
+        assert!(sr.reference.is_none());
+        assert!(sr.tags.is_empty());
+    }
+
+    #[test]
+    fn test_scan_result_new() {
+        let info = crate::template::schema::TemplateInfo {
+            name: "SQLi Test".into(),
+            severity: "high".into(),
+            description: Some("Test for SQL injection".into()),
+            compliance: [("owasp".into(), "A1:2017".into())].into(),
+        };
+        let sr = ScanResult::new("sqli-001", &info, "https://example.com/login");
+        assert_eq!(sr.template_id, "sqli-001");
+        assert_eq!(sr.template_name, "SQLi Test");
+        assert_eq!(sr.template_severity, "high");
+        assert_eq!(sr.target, "https://example.com/login");
+        assert_eq!(sr.compliance.get("owasp").unwrap(), "A1:2017");
+        assert!(sr.payload.is_empty());
+    }
+
+    #[test]
+    fn test_with_compliance() {
+        let sr = ScanResult::default()
+            .with_compliance("cwe", "89")
+            .with_compliance("owasp", "A1:2017");
+        assert_eq!(sr.compliance.len(), 2);
+        assert_eq!(sr.compliance.get("cwe").unwrap(), "89");
+    }
+
+    #[test]
+    fn test_with_tag() {
+        let sr = ScanResult::default()
+            .with_tag("sql-injection")
+            .with_tag("critical");
+        assert_eq!(sr.tags.len(), 2);
+        assert!(sr.tags.contains(&"sql-injection".to_string()));
+    }
+
+    #[test]
+    fn test_with_cvss_score() {
+        let sr = ScanResult::default().with_cvss_score(9.8);
+        assert_eq!(sr.cvss_score.unwrap(), 9.8);
+    }
+
+    #[test]
+    fn test_with_solution() {
+        let sr = ScanResult::default().with_solution("Use prepared statements");
+        assert_eq!(sr.solution.unwrap(), "Use prepared statements");
+    }
+
+    #[test]
+    fn test_with_reference() {
+        let sr = ScanResult::default().with_reference("https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234");
+        assert_eq!(sr.reference.unwrap(), "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234");
+    }
+
+    #[test]
+    fn test_set_extracted() {
+        let mut sr = ScanResult::default();
+        sr.set_extracted("username", "admin".to_string());
+        assert_eq!(sr.payload, "username: admin");
+    }
+
+    #[test]
+    fn test_serde_round_trip() {
+        let sr = ScanResult {
+            timestamp: Utc.with_ymd_and_hms(2025, 1, 15, 10, 30, 0).unwrap(),
+            template_id: "test-001".into(),
+            template_name: "Test Finding".into(),
+            template_severity: "medium".into(),
+            target: "https://example.com".into(),
+            payload: "reflected".into(),
+            compliance: [("cwe".into(), "79".into())].into(),
+            cvss_score: Some(6.5),
+            solution: Some("Sanitize input".into()),
+            reference: Some("https://example.com/advisory".into()),
+            tags: vec!["xss".into()],
+        };
+
+        let json = serde_json::to_string(&sr).unwrap();
+        let back: ScanResult = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(back.template_id, "test-001");
+        assert_eq!(back.template_severity, "medium");
+        assert_eq!(back.cvss_score.unwrap(), 6.5);
+        assert_eq!(back.compliance.get("cwe").unwrap(), "79");
+        assert_eq!(back.tags, vec!["xss"]);
+        assert_eq!(back.solution.unwrap(), "Sanitize input");
+    }
+
+    #[test]
+    fn test_serde_optional_fields_default() {
+        let json = r#"{
+            "timestamp": 1736939400,
+            "template_id": "test",
+            "template_name": "Test",
+            "template_severity": "info",
+            "target": "https://example.com",
+            "payload": ""
+        }"#;
+
+        let sr: ScanResult = serde_json::from_str(json).unwrap();
+        assert!(sr.compliance.is_empty());
+        assert!(sr.cvss_score.is_none());
+        assert!(sr.solution.is_none());
+        assert!(sr.tags.is_empty());
+    }
+
+    #[cfg(feature = "sarif")]
+    #[test]
+    fn test_severity_to_sarif_level() {
+        use crate::core::result::ScanResult;
+
+        let make = |sev: &str| -> ScanResult {
+            ScanResult {
+                template_severity: sev.to_string(),
+                ..ScanResult::default()
+            }
+        };
+
+        assert_eq!(make("critical").map_severity_to_sarif_level(), "error");
+        assert_eq!(make("high").map_severity_to_sarif_level(), "error");
+        assert_eq!(make("medium").map_severity_to_sarif_level(), "warning");
+        assert_eq!(make("low").map_severity_to_sarif_level(), "note");
+        assert_eq!(make("info").map_severity_to_sarif_level(), "note");
+        assert_eq!(make("unknown").map_severity_to_sarif_level(), "note");
+    }
+
+    #[test]
+    fn test_chained_builder_methods() {
+        let sr = ScanResult::default()
+            .with_compliance("cwe", "79")
+            .with_tag("xss")
+            .with_tag("injection")
+            .with_cvss_score(8.2)
+            .with_solution("Encode output")
+            .with_reference("https://owasp.org/xss");
+
+        assert_eq!(sr.compliance.len(), 1);
+        assert_eq!(sr.tags.len(), 2);
+        assert_eq!(sr.cvss_score.unwrap(), 8.2);
+    }
+}

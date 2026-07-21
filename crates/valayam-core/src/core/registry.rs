@@ -1197,4 +1197,145 @@ mod tests {
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
     }
+
+    // ── Expanded tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_with_key() {
+        let key = [0u8; 32];
+        let registry = PluginRegistry::with_key(Some(key));
+        assert_eq!(registry.pub_key, Some(key));
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn test_with_key_none() {
+        let registry = PluginRegistry::with_key(None);
+        assert!(registry.pub_key.is_none());
+    }
+
+    #[test]
+    fn test_set_trusted_key() {
+        let mut registry = PluginRegistry::new();
+        assert!(registry.pub_key.is_none());
+
+        let key = [42u8; 32];
+        registry.set_trusted_key(key);
+        assert_eq!(registry.pub_key, Some(key));
+    }
+
+    #[test]
+    fn test_load_external_plugins_nonexistent_path() {
+        let registry = PluginRegistry::new();
+        let path = std::path::Path::new("/nonexistent/plugins/dir");
+        let result = registry.load_external_plugins(path);
+        // Should be Ok(()) — non-existent dirs are a no-op
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_validate_template_applicable_plugins() {
+        let mut registry = PluginRegistry::new();
+        registry.register(MockMatchPlugin { name: "validator" });
+        let result = registry.validate_template(&dummy_template());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_is_api_compatible_edge_cases() {
+        // Major version mismatch
+        assert!(!is_api_compatible("2.0", "1.0"));
+        assert!(!is_api_compatible("0.9", "1.0"));
+        // Malformed versions
+        assert!(!is_api_compatible("", "1.0"));
+        // "1" parses as (1, 0) because parts.next() after "1" is None → unwrap_or("0")
+        assert!(is_api_compatible("1", "1.0"));
+        // Empty minimum version → parse returns None → false
+        assert!(!is_api_compatible("1.0", ""));
+    }
+
+    #[tokio::test]
+    async fn test_execute_template_with_rate_limiter() {
+        let mut registry = PluginRegistry::new();
+        registry.register(MockMatchPlugin { name: "rl_plugin" });
+
+        let rl = crate::core::rate_limiter::RateLimiter::new_simple(1000);
+        let (finding_tx, _) = mpsc::channel(100);
+        let cancel = CancellationToken::new();
+
+        let metrics = registry.execute_template(
+            "https://example.com",
+            dummy_template(),
+            &finding_tx,
+            Some(&rl),
+            cancel,
+        )
+        .await;
+
+        assert_eq!(metrics.len(), 1);
+        assert_eq!(metrics[0].outcome, PluginOutcomeKind::Matched);
+    }
+
+    #[tokio::test]
+    async fn test_execute_template_with_cancellation_pre_check() {
+        let mut registry = PluginRegistry::new();
+        registry.register(MockMatchPlugin { name: "cancel_plugin" });
+
+        let (finding_tx, _) = mpsc::channel(100);
+        let cancel = CancellationToken::new();
+        cancel.cancel(); // Pre-cancelled
+
+        let metrics = registry.execute_template(
+            "https://example.com",
+            dummy_template(),
+            &finding_tx,
+            None,
+            cancel,
+        )
+        .await;
+
+        // Plugin still executes (cancellation is checked within each plugin)
+        assert_eq!(metrics.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_execute_with_no_applicable_plugins() {
+        let registry = PluginRegistry::new();
+        // No plugins registered
+
+        let (finding_tx, _) = mpsc::channel(100);
+        let cancel = CancellationToken::new();
+
+        let metrics = registry.execute_template(
+            "https://example.com",
+            dummy_template(),
+            &finding_tx,
+            None,
+            cancel,
+        )
+        .await;
+
+        assert!(metrics.is_empty());
+    }
+
+    #[test]
+    fn test_retry_config_default() {
+        let config = RetryConfig::default();
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.base_delay_ms, 100);
+        assert_eq!(config.max_delay_ms, 10_000);
+    }
+
+    #[test]
+    fn test_retry_config_delay_capping() {
+        let config = RetryConfig {
+            max_retries: 10,
+            base_delay_ms: 1000,
+            max_delay_ms: 5000,
+        };
+        // With large base and high attempt, should cap at max_delay_ms
+        let d = config.delay_for_attempt(10);
+        assert!(d.as_millis() >= 1000); // at least base
+        assert!(d.as_millis() <= 5050); // capped at max + max jitter
+    }
 }

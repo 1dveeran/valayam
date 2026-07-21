@@ -47,3 +47,45 @@ fn default_part() -> String {
 fn default_group() -> usize {
     1
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extractor_regex() {
+        let json = r#"{"type": "regex", "name": "auth_token", "regex": "token=(\\w+)"}"#;
+        let ext: Extractor = serde_json::from_str(json).unwrap();
+        assert_eq!(ext.r#type, "regex");
+        assert_eq!(ext.name, "auth_token");
+        assert_eq!(ext.part, "body");
+        assert_eq!(ext.group, 1);
+    }
+
+    #[test]
+    fn test_extractor_full() {
+        let json = r#"{"type": "regex", "name": "csrf", "part": "header", "regex": "csrf=(\\w+)", "group": 2, "json": "/data/token"}"#;
+        let ext: Extractor = serde_json::from_str(json).unwrap();
+        assert_eq!(ext.part, "header");
+        assert_eq!(ext.group, 2);
+        assert!(ext.json.is_some());
+    }
+
+    #[test]
+    fn test_extractor_serde_roundtrip() {
+        let ext = Extractor {
+            r#type: "regex".into(),
+            name: "token".into(),
+            part: "body".into(),
+            regex: Some(r"value=(\d+)".into()),
+            json: None,
+            css: Some("input[name=csrf]".into()),
+            attribute: Some("value".into()),
+            group: 1,
+        };
+        let json = serde_json::to_string(&ext).unwrap();
+        let back: Extractor = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "token");
+        assert!(back.regex.is_some());
+    }
+}
