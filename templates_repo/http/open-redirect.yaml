@@ -1,0 +1,36 @@
+id: http-open-redirect
+info:
+  name: "Open Redirect Detection"
+  severity: "Medium"
+  description: "Detects unvalidated redirects by injecting external URLs into redirect parameters."
+  compliance:
+    owasp: "A01:2021"
+    cwe: "CWE-601"
+requests:
+  - method: GET
+    path: "/redirect?url=https://evil.com"
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "Location:\\s*https?://evil\\.com"
+    follow_redirects: false
+
+  - method: GET
+    path: "/goto?next=//evil.com"
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "Location:\\s*https?://evil\\.com"
+          - "Location:\\s*//evil\\.com"
+    follow_redirects: false
+
+  - method: GET
+    path: "/out?url=https://evil.com@valid.com"
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "Location:\\s*https?://evil\\.com"
+    follow_redirects: false

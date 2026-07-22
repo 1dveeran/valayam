@@ -141,3 +141,119 @@ pub enum PluginCommands {
         output: String,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_target() {
+        let args = Args::parse_from(&["valayam"]);
+        assert_eq!(args.target, "https://httpbin.org");
+        assert!(args.template.is_none());
+        assert!(args.nuclei_template.is_none());
+        assert!(args.output.is_none());
+        assert_eq!(args.format, "json");
+        assert_eq!(args.concurrency, 500);
+        assert_eq!(args.log_level, "info");
+        assert_eq!(args.crawl_depth, 3);
+    }
+
+    #[test]
+    fn test_custom_target_and_template() {
+        let args = Args::parse_from(&["valayam", "-u", "https://example.com", "-t", "./templates/"]);
+        assert_eq!(args.target, "https://example.com");
+        assert_eq!(args.template, Some("./templates/".into()));
+        assert!(args.nuclei_template.is_none());
+    }
+
+    #[test]
+    fn test_output_and_format() {
+        let args = Args::parse_from(&[
+            "valayam", "-u", "https://test.com",
+            "-o", "results.jsonl", "--format", "sarif",
+        ]);
+        assert_eq!(args.output, Some("results.jsonl".into()));
+        assert_eq!(args.format, "sarif");
+    }
+
+    #[test]
+    fn test_rate_limit_and_concurrency() {
+        let args = Args::parse_from(&["valayam", "-r", "100", "--concurrency", "10"]);
+        assert_eq!(args.rate_limit, Some(100));
+        assert_eq!(args.concurrency, 10);
+    }
+
+    #[test]
+    fn test_nuclei_template() {
+        let args = Args::parse_from(&[
+            "valayam", "-u", "https://test.com", "-n", "./nuclei-templates/",
+        ]);
+        assert_eq!(args.nuclei_template, Some("./nuclei-templates/".into()));
+        assert!(args.template.is_none());
+    }
+
+    #[test]
+    fn test_plugin_subcommand_package() {
+        let args = Args::parse_from(&["valayam", "plugin", "package", "./my-plugin", "-o", "out.vpa"]);
+        match args.command {
+            Some(Commands::Plugin { action }) => match action {
+                PluginCommands::Package { dir, output, sign } => {
+                    assert_eq!(dir, "./my-plugin");
+                    assert_eq!(output, Some("out.vpa".into()));
+                    assert!(sign.is_none());
+                }
+                _ => panic!("Expected Package command"),
+            },
+            None => panic!("Expected a subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_plugin_subcommand_init() {
+        let args = Args::parse_from(&["valayam", "plugin", "init", "my-plugin"]);
+        match args.command {
+            Some(Commands::Plugin { action }) => match action {
+                PluginCommands::Init { name, lang, runtime } => {
+                    assert_eq!(name, "my-plugin");
+                    assert_eq!(lang, "python");
+                    assert_eq!(runtime, "grpc");
+                }
+                _ => panic!("Expected Init command"),
+            },
+            None => panic!("Expected a subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_plugin_subcommand_init_custom_lang() {
+        let args = Args::parse_from(&[
+            "valayam", "plugin", "init", "my-go-plugin",
+            "--lang", "go",
+        ]);
+        match args.command {
+            Some(Commands::Plugin { action }) => match action {
+                PluginCommands::Init { name, lang, .. } => {
+                    assert_eq!(name, "my-go-plugin");
+                    assert_eq!(lang, "go");
+                }
+                _ => panic!("Expected Init command"),
+            },
+            None => panic!("Expected a subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_plugin_subcommand_generate_key() {
+        let args = Args::parse_from(&["valayam", "plugin", "generate-key", "-o", "custom_key"]);
+        match args.command {
+            Some(Commands::Plugin { action }) => match action {
+                PluginCommands::GenerateKey { output } => {
+                    assert_eq!(output, "custom_key");
+                }
+                _ => panic!("Expected GenerateKey command"),
+            },
+            None => panic!("Expected a subcommand"),
+        }
+    }
+}

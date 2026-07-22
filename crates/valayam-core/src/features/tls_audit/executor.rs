@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::core::variables::resolve_variables;
+use valayam_engine::variables::resolve_variables;
 use crate::network::tls;
-use crate::template::schema::TemplateInfo;
-use super::parser::TlsAuditTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::tls_audit::TlsAuditTemplate;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::collections::HashMap;
@@ -49,7 +49,7 @@ pub async fn execute(
                         else { 0 }
                     };
                     if version_rank(negotiated) < version_rank(min_v) {
-                        findings.push(ScanResult {
+                        findings.push(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),
@@ -69,7 +69,7 @@ pub async fn execute(
 
         if rule.matchers.is_empty() {
             if let Some(c) = cert_info {
-                findings.push(ScanResult {
+                findings.push(ScanResult { schema_version: "1.0.0".to_string(),
                     timestamp: Utc::now(),
                     template_id: template_id.to_string(),
                     template_name: template_info.name.clone(),
@@ -249,7 +249,7 @@ pub async fn execute(
                     },
                 };
 
-                findings.push(ScanResult {
+                findings.push(ScanResult { schema_version: "1.0.0".to_string(),
                     timestamp: Utc::now(),
                     template_id: template_id.to_string(),
                     template_name: template_info.name.clone(),

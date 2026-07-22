@@ -17,7 +17,7 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
 
     // Read manifest to determine default output name
     let manifest_content = std::fs::read_to_string(&manifest_path)?;
-    let manifest: valayam_core::core::vpa::PluginManifest = serde_yaml::from_str(&manifest_content)
+    let manifest: valayam_engine::vpa::PluginManifest = serde_yaml::from_str(&manifest_content)
         .map_err(|e| anyhow::anyhow!("Failed to parse plugin.yaml: {}", e))?;
 
     let out_file_path = match output {
@@ -64,7 +64,7 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
         let mut priv_key = [0u8; 32];
         priv_key.copy_from_slice(&priv_key_bytes[0..32]);
         let manifest_bytes = std::fs::read(&manifest_path)?;
-        let signature = valayam_core::core::crypto::PluginCrypto::sign(&priv_key, &manifest_bytes)?;
+        let signature = valayam_engine::crypto::PluginCrypto::sign(&priv_key, &manifest_bytes)?;
         
         zip.start_file("signature.sig", options)?;
         zip.write_all(&signature)?;
@@ -138,8 +138,94 @@ impl Capitalize for String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_init_plugin_creates_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugin_dir = dir.path().join("test-plugin");
+        let name = plugin_dir.to_str().unwrap();
+
+        let result = init_plugin(name, "python", "grpc");
+        assert!(result.is_ok(), "init_plugin should succeed: {:?}", result.err());
+        assert!(plugin_dir.exists());
+        assert!(plugin_dir.join("plugin.yaml").exists());
+        assert!(plugin_dir.join("plugin.py").exists());
+
+        let _ = std::fs::remove_dir_all(&plugin_dir);
+    }
+
+    #[test]
+    fn test_init_plugin_existing_dir_fails() {
+        // Use a path that already exists on disk
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        // Temp dir already exists, so init should fail
+        let result = init_plugin(path, "python", "grpc");
+        assert!(result.is_err(), "init on existing dir should fail");
+        let err = format!("{}", result.err().unwrap());
+        assert!(err.contains("already exists"), "Error should mention 'already exists': {}", err);
+    }
+
+    #[test]
+    fn test_package_nonexistent_dir_fails() {
+        let result = package_plugin("/nonexistent/plugin_dir", None, None);
+        assert!(result.is_err());
+        let err = format!("{}", result.err().unwrap());
+        assert!(err.contains("does not exist") || err.contains("exist"));
+    }
+
+    #[test]
+    fn test_generate_key_creates_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = dir.path().join("test_key");
+        let prefix_str = prefix.to_str().unwrap();
+        let result = generate_key(prefix_str);
+        assert!(result.is_ok());
+        assert!(Path::new(&format!("{}.pem", prefix_str)).exists());
+        assert!(Path::new(&format!("{}.pub", prefix_str)).exists());
+        // Cleanup
+        let _ = std::fs::remove_file(format!("{}.pem", prefix_str));
+        let _ = std::fs::remove_file(format!("{}.pub", prefix_str));
+    }
+
+    #[test]
+    fn test_capitalize_empty_string() {
+        let s = String::new();
+        assert_eq!(s.capitalize_first_letter(), "");
+    }
+
+    #[test]
+    fn test_capitalize_lowercase() {
+        let s = "hello".to_string();
+        assert_eq!(s.capitalize_first_letter(), "Hello");
+    }
+
+    #[test]
+    fn test_capitalize_already_capitalized() {
+        let s = "Hello".to_string();
+        assert_eq!(s.capitalize_first_letter(), "Hello");
+    }
+
+    #[test]
+    fn test_capitalize_single_char() {
+        let s = "a".to_string();
+        assert_eq!(s.capitalize_first_letter(), "A");
+    }
+
+    #[test]
+    fn test_capitalize_hyphenated_name() {
+        // The trait capitalizes only the first letter, not after hyphens
+        let s = "my-plugin".to_string();
+        assert_eq!(s.capitalize_first_letter(), "My-plugin");
+    }
+}
+
 pub fn generate_key(output_prefix: &str) -> anyhow::Result<()> {
-    let (priv_key, pub_key) = valayam_core::core::crypto::PluginCrypto::generate_keypair();
+    let (priv_key, pub_key) = valayam_engine::crypto::PluginCrypto::generate_keypair();
     let priv_path = format!("{}.pem", output_prefix);
     let pub_path = format!("{}.pub", output_prefix);
     std::fs::write(&priv_path, priv_key)?;

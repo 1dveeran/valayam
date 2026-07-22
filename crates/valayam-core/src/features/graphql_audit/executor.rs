@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
-use super::parser::GraphqlAuditTemplate;
+use valayam_models::templates::graphql_audit::GraphqlAuditTemplate;
 
 pub async fn execute(
     target_url: &str,
@@ -25,7 +25,7 @@ pub async fn execute(
                 if let Ok(resp) = req_client.post(reqwest_url.clone()).json(&payload).send().await {
                     if let Ok(body) = resp.text().await {
                         if body.contains("__schema") && body.contains("queryType") {
-                            let mut results = vec![ScanResult {
+                            let mut results = vec![ScanResult { schema_version: "1.0.0".to_string(),
                                 timestamp: Utc::now(),
                                 template_id: template_id.to_string(),
                                 template_name: template_info.name.clone(),
@@ -44,7 +44,7 @@ pub async fn execute(
                                 if let Ok(atk_resp) = req_client.post(reqwest_url.clone()).json(&alias_payload).send().await {
                                     if atk_resp.status().is_server_error() || atk_resp.status().is_success() {
                                         // If it took a long time or crashed, it might be vulnerable. We'll flag it.
-                                        results.push(ScanResult {
+                                        results.push(ScanResult { schema_version: "1.0.0".to_string(),
                                             timestamp: Utc::now(),
                                             template_id: template_id.to_string(),
                                             template_name: format!("{} - Alias Batching DoS", template_info.name),
@@ -65,7 +65,7 @@ pub async fn execute(
                             let circ_payload = super::mutator::GraphqlMutator::generate_circular_fragment_payload();
                             if let Ok(atk_resp) = req_client.post(reqwest_url.clone()).json(&circ_payload).send().await {
                                 if atk_resp.status().is_server_error() {
-                                    results.push(ScanResult {
+                                    results.push(ScanResult { schema_version: "1.0.0".to_string(),
                                         timestamp: Utc::now(),
                                         template_id: template_id.to_string(),
                                         template_name: format!("{} - Circular Fragments", template_info.name),

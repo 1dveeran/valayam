@@ -1,10 +1,10 @@
 use crate::core::result::ScanResult;
-use crate::core::variables::resolve_variables;
+use valayam_engine::variables::resolve_variables;
 use crate::features::extractors::engine::extract_from_response;
-use crate::features::helpers::parser::evaluate_helpers;
+use valayam_models::templates::helpers::evaluate_helpers;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
-use super::parser::HttpRequestTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::http_scan::HttpRequestTemplate;
 use chrono::Utc;
 use regex::bytes::Regex;
 use std::collections::HashMap;
@@ -46,7 +46,7 @@ fn resolve_all(template_str: &str, context: &HashMap<String, String>) -> String 
 }
 
 fn matches_condition(
-    matcher: &crate::core::matcher::ResponseMatcher,
+    matcher: &valayam_models::templates::matcher::ResponseMatcher,
     body_bytes: &[u8],
     resp_headers: &HashMap<String, String>,
     status: u16,
@@ -208,7 +208,7 @@ pub async fn execute(
 
         if matchers_succeeded {
             tracing::debug!("Vulnerability match found for template {} on {}", template_id, full_url);
-            findings.push(ScanResult {
+            findings.push(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

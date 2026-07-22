@@ -1,9 +1,9 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
 use regex::Regex;
-use super::parser::DomRedirectAuditTemplate;
+use valayam_models::templates::dom_redirect_audit::DomRedirectAuditTemplate;
 
 pub async fn execute(
     target_url: &str,
@@ -24,7 +24,7 @@ pub async fn execute(
                     let dom_re = Regex::new(r"(?i)(window\.location|location\.href|location\.replace)\s*=\s*[^;]*(location\.hash|location\.search|window\.location\.search)").unwrap();
                     
                     if dom_re.is_match(&body) {
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),

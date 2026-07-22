@@ -4,11 +4,14 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-valayam-core = { path = "../valayam-core" }
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true }
 clap = { workspace = true }
 walkdir.workspace = true
+valayam-core = { path = "../valayam-core" }
+valayam-engine = { workspace = true }
+valayam-models = { workspace = true }
+valayam-network = { workspace = true }
 indicatif = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }

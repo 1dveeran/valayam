@@ -15,7 +15,7 @@ use std::sync::Arc;
 use walkdir::WalkDir;
 use opentelemetry_otlp::WithExportConfig;
 
-use valayam_core::core::rate_limiter::RateLimiter;
+use valayam_engine::rate_limiter::RateLimiter;
 use valayam_core::features::nuclei_compat::executor::NucleiExecutor;
 use valayam_core::network::http::StealthHttpClient;
 use valayam_core::stealth::proxy::ProxyRotator;

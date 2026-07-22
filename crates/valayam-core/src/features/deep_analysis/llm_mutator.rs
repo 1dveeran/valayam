@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use super::parser::DeepAnalysisTemplate;
+use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 use serde_json::json;
 
 // TODO: LLM Mutation Engine — Full Implementation Plan
@@ -138,7 +138,7 @@ pub async fn mutate_and_test(
 
             if let Ok(res) = test_req {
                 if res.status().is_success() {
-                    return Some(ScanResult {
+                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         cvss_score: None,
                         reference: None,
                         solution: None,

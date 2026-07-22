@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
 use crate::network::tcp;
 use crate::network::udp;
-use crate::template::schema::TemplateInfo;
-use super::parser::NetworkRequestTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::network_scan::NetworkRequestTemplate;
 use chrono::Utc;
 use regex::bytes::Regex;
 use std::collections::HashMap;
@@ -408,7 +408,7 @@ pub async fn execute(
                     severity
                 };
                 
-                let result = ScanResult {
+                let result = ScanResult { schema_version: "1.0.0".to_string(),
                     timestamp: Utc::now(),
                     template_id: template_id.to_string(),
                     template_name: template_info.name.clone(),
@@ -464,7 +464,7 @@ pub async fn execute(
                         severity
                     };
                     
-                    let result = ScanResult {
+                    let result = ScanResult { schema_version: "1.0.0".to_string(),
                         timestamp: Utc::now(),
                         template_id: template_id.to_string(),
                         template_name: template_info.name.clone(),

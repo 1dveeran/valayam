@@ -15,6 +15,12 @@
 .claude/
 .agents/
 .gemini/
+/*.py
+/err*.log
+/err.log
+
+# Graphify outputs
+graphify-out/
 
 # Python
 venv/

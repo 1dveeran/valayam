@@ -3,7 +3,7 @@
 //! Uses `tokio::task::spawn_blocking` for file I/O to avoid
 //! blocking the async runtime.
 
-use crate::core::traits::{Reporter, FindingOwned};
+use valayam_engine::traits::{Reporter, FindingOwned};
 use std::io::{self, Write, BufWriter};
 use std::sync::Mutex;
 use std::fs::File;

@@ -2,5 +2,5 @@
 // - Source-to-sink tracing for exposed codebases finding `eval()` or `system()`.
 // - Support AST parsing for multiple languages (JS, Python, Go, Rust).
 // - Minimize false positives by analyzing local sanitization wrappers.
-pub mod parser;
+
 pub mod executor;

@@ -8,9 +8,9 @@
 // - Implement multi-architecture image support (arm64, amd64, etc.).
 
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
-use super::parser::ContainerAuditTemplate;
+use valayam_models::templates::container_audit::ContainerAuditTemplate;
 
 /// Container image audit configuration.
 #[derive(Debug, Clone)]
@@ -421,7 +421,7 @@ fn aggregate_container_findings(
     template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
     if all_findings.is_empty() {
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: template_info.name.clone(),
@@ -456,7 +456,7 @@ fn aggregate_container_findings(
         .map(|f| format!("container:{}:{}", f.finding_type, f.severity.to_lowercase()))
         .collect();
 
-    Some(ScanResult {
+    Some(ScanResult { schema_version: "1.0.0".to_string(),
         timestamp: Utc::now(),
         template_id: template_id.to_string(),
         template_name: template_info.name.clone(),

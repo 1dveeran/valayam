@@ -1,9 +1,9 @@
 // TODO: Optimize Template Orchestration Pipeline.
 // - Ensure `{{variable}}` context flows thread-safely between phases.
 // - Add telemetry spans for performance monitoring of each execution slice.
-use crate::core::rate_limiter::RateLimiter;
+use valayam_engine::rate_limiter::RateLimiter;
 use crate::core::result::ScanResult;
-use crate::core::variables::build_initial_context;
+use valayam_engine::variables::build_initial_context;
 use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer, easm};
 use crate::network::http::StealthHttpClient;
 use super::schema::VulnerabilityTemplate;

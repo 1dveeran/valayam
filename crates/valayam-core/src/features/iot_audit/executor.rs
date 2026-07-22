@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::IotAuditTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::iot_audit::IotAuditTemplate;
 use chrono::Utc;
 use std::collections::HashMap;
 use tokio::net::TcpStream;
@@ -52,7 +52,7 @@ pub async fn execute(
                 let mut compliance = HashMap::new();
                 compliance.insert("cwe".to_string(), "CWE-284".to_string());
                 
-                return Some(ScanResult {
+                return Some(ScanResult { schema_version: "1.0.0".to_string(),
                     timestamp: Utc::now(),
                     template_id: template_id.to_string(),
                     template_name: template_info.name.clone(),

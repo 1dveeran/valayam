@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::EasmTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::easm::EasmTemplate;
 use reqwest::Client;
 use super::{crtsh, alienvault};
 use std::collections::HashSet;

@@ -83,3 +83,22 @@ impl CertificateAuthority {
         Ok(TlsAcceptor::from(Arc::new(server_config)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cert_params_creation() {
+        let mut params = CertificateParams::default();
+        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        params.distinguished_name.push(rcgen::DnType::CommonName, "Test CA");
+        let cert = Certificate::from_params(params);
+        assert!(cert.is_ok());
+
+        let cert = cert.unwrap();
+        let cert_pem = cert.serialize_pem();
+        assert!(cert_pem.is_ok());
+        assert!(cert_pem.unwrap().contains("BEGIN CERTIFICATE"));
+    }
+}

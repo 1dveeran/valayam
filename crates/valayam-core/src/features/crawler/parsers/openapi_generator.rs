@@ -1,7 +1,7 @@
 use serde_json::Value;
-use crate::template::schema::{VulnerabilityTemplate, TemplateInfo};
-use crate::features::http_scan::parser::HttpRequestTemplate;
-use crate::core::matcher::ResponseMatcher;
+use valayam_models::templates::schema::{VulnerabilityTemplate, TemplateInfo};
+use valayam_models::templates::http_scan::HttpRequestTemplate;
+use valayam_models::templates::matcher::ResponseMatcher;
 
 /// Compiles an OpenAPI/Swagger spec string into a single native VulnerabilityTemplate.
 pub fn generate_template_from_openapi(openapi_content: &str) -> Result<VulnerabilityTemplate, String> {

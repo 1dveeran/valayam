@@ -7,11 +7,11 @@
 // - Implement live cluster auditing via kubeconfig authentication.
 
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use serde_yaml::Value;
 use std::fs;
-use super::parser::K8sAuditTemplate;
+use valayam_models::templates::k8s_audit::K8sAuditTemplate;
 
 /// Kubernetes security check configuration.
 #[derive(Debug, Clone)]
@@ -508,7 +508,7 @@ fn aggregate_k8s_findings(
     template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
     if all_findings.is_empty() {
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: template_info.name.clone(),
@@ -543,7 +543,7 @@ fn aggregate_k8s_findings(
         .map(|f| format!("k8s:{}:{}", f.finding_type, f.severity.to_lowercase()))
         .collect();
 
-    Some(ScanResult {
+    Some(ScanResult { schema_version: "1.0.0".to_string(),
         timestamp: Utc::now(),
         template_id: template_id.to_string(),
         template_name: template_info.name.clone(),

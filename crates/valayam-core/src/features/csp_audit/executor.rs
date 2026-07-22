@@ -1,13 +1,13 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use lazy_static::lazy_static;
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 use tracing::{debug, warn};
-use super::parser::CspAuditTemplate;
+use valayam_models::templates::csp_audit::CspAuditTemplate;
 
 // ---------------------------------------------------------------------------
 // CSP directive knowledge base (const data, no runtime mutability)
@@ -341,7 +341,7 @@ pub async fn execute(
                         format_args!("{} (CVSS: {})", "High", 8.0).to_string(),
                     ),
             )
-            .map(|base| ScanResult {
+            .map(|base| ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -467,7 +467,7 @@ pub async fn execute(
             .collect();
         let cwe_list: Vec<&str> = cwe_set.into_iter().collect();
 
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: template_info.name.clone(),

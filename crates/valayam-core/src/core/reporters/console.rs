@@ -1,4 +1,4 @@
-use crate::core::traits::{FindingOwned, Reporter};
+use valayam_engine::traits::{FindingOwned, Reporter};
 use colored::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

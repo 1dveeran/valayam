@@ -1,4 +1,4 @@
-use super::parser::Extractor;
+use valayam_models::templates::extractors::Extractor;
 use regex::Regex;
 use std::collections::HashMap;
 

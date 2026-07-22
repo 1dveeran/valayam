@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
-use super::parser::FuzzTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::fuzzer::FuzzTemplate;
 use chrono::Utc;
 use url::Url;
 
@@ -66,7 +66,7 @@ pub async fn execute(
                             if matcher.r#type == "status" {
                                 if let Some(ref statuses) = matcher.status {
                                     if statuses.contains(&status_code) {
-                                        return Some(ScanResult {
+                                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                                             cvss_score: None,
                                             reference: None,
                                             solution: None,
@@ -85,7 +85,7 @@ pub async fn execute(
                                 for pattern in &matcher.regex {
                                     if let Ok(re) = regex::Regex::new(pattern) {
                                         if re.is_match(&body_text) {
-                                            return Some(ScanResult {
+                                            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                                             cvss_score: None,
                                             reference: None,
                                             solution: None,

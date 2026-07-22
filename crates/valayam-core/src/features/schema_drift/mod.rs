@@ -2,5 +2,5 @@
 // - Compare active, discovered API endpoints against the formal OpenAPI specification.
 // - Highlight undocumented shadow APIs and deprecated endpoints still active.
 // - Generate diff reports for developer feedback loops.
-pub mod parser;
+
 pub mod executor;

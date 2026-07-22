@@ -2,7 +2,7 @@
 members = [
     "crates/valayam-core",
     "crates/valayam-cli"
-, "crates/valayam-plugin-grpc-example", "crates/valayam-plugin-wasm-example", "crates/valayam-ebpf-agent"]
+, "crates/valayam-plugin-grpc-example", "crates/valayam-plugin-wasm-example", "crates/valayam-ebpf-agent", "crates/valayam-models", "crates/valayam-network", "crates/valayam-engine"]
 resolver = "2"
 
 [workspace.package]
@@ -10,6 +10,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
+valayam-models = { path = "crates/valayam-models" }
+valayam-network = { path = "crates/valayam-network", version = "0.1.0" }
+valayam-engine = { path = "crates/valayam-engine", version = "0.1.0" }
 lazy_static = "1.4"
 tokio = { version = "1.38", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -52,6 +55,7 @@ graphql-parser = "0.4.0"
 jsonwebtoken = "9.3"
 rumqttc = "0.24"
 toml = "0.8"
+hex = "0.4"
 
 [profile.release]
 strip = true      # Automatically strip debug symbols from the binary

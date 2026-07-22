@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
-use super::parser::OauthAuditTemplate;
+use valayam_models::templates::oauth_audit::OauthAuditTemplate;
 
 pub async fn execute(
     target_url: &str,
@@ -47,7 +47,7 @@ pub async fn execute(
                             payload_msg = "OAuth provider supports the deprecated and insecure Implicit Flow (response_type=token), which risks leaking access tokens in the browser history or referrer headers.".to_string();
                         }
 
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),

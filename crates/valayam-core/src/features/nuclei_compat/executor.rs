@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
 use super::matchers::evaluate_words_stream;
-use super::parser::NucleiTemplate;
+use valayam_models::templates::nuclei_compat::NucleiTemplate;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -101,7 +101,7 @@ impl NucleiExecutor {
         }
 
         if found_vulnerability {
-            Some(ScanResult {
+            Some(ScanResult { schema_version: "1.0.0".to_string(),
                 target: target_url.to_string(),
                 template_name: template.info.name,
                 template_id: template.id,

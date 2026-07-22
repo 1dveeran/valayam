@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
-use super::parser::GrpcAuditTemplate;
+use valayam_models::templates::grpc_audit::GrpcAuditTemplate;
 
 pub async fn execute(
     target_url: &str,
@@ -28,7 +28,7 @@ pub async fn execute(
                     
                     // If it returns HTTP 200 and grpc-status is NOT 12 (Unimplemented), reflection is likely enabled
                     if status.is_success() && grpc_status != "12" {
-                        let mut results = vec![ScanResult {
+                        let mut results = vec![ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),
@@ -54,7 +54,7 @@ pub async fn execute(
                                 .send().await {
                                 
                                 if atk_resp.status().is_server_error() {
-                                    results.push(ScanResult {
+                                    results.push(ScanResult { schema_version: "1.0.0".to_string(),
                                         timestamp: Utc::now(),
                                         template_id: template_id.to_string(),
                                         template_name: format!("{} - gRPC Fuzzing", template_info.name),

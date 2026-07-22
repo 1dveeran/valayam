@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use url::Url;
-use super::parser::ScadaAuditTemplate;
+use valayam_models::templates::scada_audit::ScadaAuditTemplate;
 
 pub async fn execute(
     target_url: &str,
@@ -34,7 +34,7 @@ pub async fn execute(
         let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None, false, None).await;
 
         if let Some(_open_port) = results.first() {
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

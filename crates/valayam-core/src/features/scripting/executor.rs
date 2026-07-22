@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use super::engine::ScriptEngine;
-use super::parser::{ScriptSource, ScriptTemplate};
+use valayam_models::templates::scripting::{ScriptSource, ScriptTemplate};
 use chrono::Utc;
 use std::collections::HashMap;
 
@@ -58,7 +58,7 @@ pub async fn execute(
             match engine.execute(&script_code, &mut variables) {
                 Ok(true) => {
                     tracing::debug!(target = %target_owned, "Vulnerability script match found");
-                    Some(ScanResult {
+                    Some(ScanResult { schema_version: "1.0.0".to_string(),
                         timestamp: Utc::now(),
                         template_id,
                         template_name,

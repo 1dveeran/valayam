@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::ImplantDeployTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::implant_deploy::ImplantDeployTemplate;
 
 // TODO: Implant Deploy Engine — Full Implementation Plan
 // ======================================================

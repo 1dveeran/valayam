@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
-use super::parser::AzureGcpEscalateTemplate;
+use valayam_models::templates::azure_gcp_escalate::AzureGcpEscalateTemplate;
 
 pub async fn execute(
     target_url: &str,
@@ -29,7 +29,7 @@ pub async fn execute(
                 
                 if let Ok(body) = resp.text().await {
                     if (template.provider == "gcp" && body.contains("instance/")) || (template.provider == "azure" && body.contains("compute")) {
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),

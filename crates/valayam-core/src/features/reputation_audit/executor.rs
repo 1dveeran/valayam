@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::ReputationAuditTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::reputation_audit::ReputationAuditTemplate;
 use chrono::Utc;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::Resolver;
@@ -551,7 +551,7 @@ pub async fn execute(
                 )
             };
 
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -583,7 +583,7 @@ pub async fn execute(
             let mut compliance = HashMap::new();
             compliance.insert("recon".to_string(), "DNSBL".to_string());
 
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

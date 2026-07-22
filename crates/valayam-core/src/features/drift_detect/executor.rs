@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
-use super::parser::DriftDetectTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::drift_detect::DriftDetectTemplate;
 use super::state::{load_state, save_state, ScanState};
 use chrono::Utc;
 use std::collections::HashSet;
@@ -196,7 +196,7 @@ pub async fn execute(
                         "Drift detected"
                     );
 
-                    return Some(ScanResult {
+                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         timestamp: Utc::now(),
                         template_id: template_id.to_string(),
                         template_name: template_info.name.clone(),

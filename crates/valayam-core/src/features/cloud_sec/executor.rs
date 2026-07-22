@@ -1,5 +1,5 @@
 use crate::core::result::ScanResult;
-use crate::features::cloud_sec::parser::CloudTemplate;
+use valayam_models::templates::cloud_sec::CloudTemplate;
 use crate::network::http::StealthHttpClient;
 
 
@@ -97,7 +97,7 @@ pub async fn execute_cloud_probe(
     if findings.is_empty() {
         None
     } else {
-        Some(ScanResult {
+        Some(ScanResult { schema_version: "1.0.0".to_string(),
             cvss_score: None,
             reference: None,
             solution: None,

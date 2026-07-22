@@ -2,10 +2,10 @@
 //!
 //! Each plugin wraps an existing feature executor behind the ScanPlugin trait.
 
-use crate::core::traits::PluginOutcome;
+use valayam_engine::impl_scan_plugin;
+use valayam_engine::traits::PluginOutcome;
 use crate::core::scan_result_bridge::scan_result_to_finding;
-use crate::network::http::StealthHttpClient;
-use crate::impl_scan_plugin;
+use valayam_network::network::http::StealthHttpClient;
 use std::sync::Arc;
 
 // ─── Core Protocol Plugins ────────────────────────────────────────────────
@@ -631,8 +631,8 @@ impl_scan_plugin!(DependencyAuditPlugin, "dependency_audit", dependency_audit,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::traits::ScanPlugin;
-    use crate::template::schema::VulnerabilityTemplate;
+    use valayam_engine::traits::ScanPlugin;
+    use valayam_models::templates::schema::VulnerabilityTemplate;
 
     fn empty_template() -> VulnerabilityTemplate {
         VulnerabilityTemplate::default()

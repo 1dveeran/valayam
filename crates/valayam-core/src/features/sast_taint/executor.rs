@@ -1,10 +1,10 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use std::fs;
 use std::path::Path;
 use regex::Regex;
-use super::parser::SastTaintTemplate;
+use valayam_models::templates::sast_taint::SastTaintTemplate;
 
 pub async fn execute(
     templates: &[SastTaintTemplate],
@@ -42,7 +42,7 @@ pub async fn execute(
         }
 
         if !findings.is_empty() {
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

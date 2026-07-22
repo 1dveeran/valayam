@@ -44,3 +44,31 @@ pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box
     doc.render(&mut file)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_pdf_empty_results_system_font() {
+        // On a system with fonts, PDF generation should succeed.
+        // On a system without fonts (CI), it returns the font error.
+        // We just verify it doesn't panic and returns either Ok or a String error.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.pdf");
+        let path_str = path.to_str().unwrap();
+        match generate_pdf(&[], path_str) {
+            Ok(()) => assert!(path.exists()),
+            Err(e) => {
+                let msg = format!("{}", e);
+                assert!(msg.contains("font") || msg.contains("Font"), "Expected font error: {}", msg);
+            }
+        }
+    }
+
+    #[test]
+    fn test_generate_pdf_invalid_path_returns_err() {
+        let result = generate_pdf(&[], "/nonexistent_dir/report.pdf");
+        assert!(result.is_err());
+    }
+}

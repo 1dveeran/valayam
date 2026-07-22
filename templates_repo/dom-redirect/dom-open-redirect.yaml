@@ -1,0 +1,11 @@
+id: dom-redirect-detection
+info:
+  name: "DOM-Based Open Redirect Detection"
+  severity: "High"
+  description: "Detects DOM-based open redirects by analyzing client-side JavaScript for unsafe location manipulation."
+  compliance:
+    owasp: "A03:2021"
+    cwe: "CWE-601"
+dom_redirect_audit:
+  - target: "https://{{Hostname}}"
+  - target: "https://{{Hostname}}/app"

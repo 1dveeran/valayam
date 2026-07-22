@@ -3,5 +3,5 @@
 // - executor.rs: Implement concurrent TCP/UDP scanning with service identification,
 //               version extraction, vulnerability assessment, and risk prioritization.
 //               HTTP GET fallback for silent services is implemented in tcp::scan_ports.
-pub mod parser;
+
 pub mod executor;

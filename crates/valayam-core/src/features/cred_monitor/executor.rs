@@ -7,10 +7,10 @@
 // - Support notification integrations (Slack, PagerDuty, email) on new critical findings.
 
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
-use super::parser::CredMonitorTemplate;
+use valayam_models::templates::cred_monitor::CredMonitorTemplate;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use std::collections::HashMap;
@@ -402,7 +402,7 @@ pub async fn execute(
 
         if all_findings.is_empty() {
             // No findings — return informational result
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -449,7 +449,7 @@ pub async fn execute(
             .map(|f| format!("{}:{}", f.finding_type, f.severity))
             .collect();
 
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: template_info.name.clone(),

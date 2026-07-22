@@ -2,5 +2,5 @@
 // - Associate all scanner findings with specific MITRE technique codes.
 // - Generate heatmaps representing the target's attack surface exposure.
 // - Ensure mapping accuracy aligns with standard enterprise SIEM expectations.
-pub mod parser;
+
 pub mod executor;

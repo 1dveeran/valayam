@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use super::cve_sync::{self, CveFinding, CveSeverity};
-use super::parser::SbomAuditTemplate;
+use valayam_models::templates::sbom_audit::SbomAuditTemplate;
 use chrono::Utc;
 use std::collections::HashMap;
 use tracing::{debug, warn};
@@ -319,7 +319,7 @@ pub async fn execute(
             let mut compliance = HashMap::new();
             compliance.insert("recon".to_string(), "SBOM".to_string());
 
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -406,7 +406,7 @@ pub async fn execute(
             None
         };
 
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: template_info.name.clone(),

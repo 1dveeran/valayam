@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use super::parser::DeepAnalysisTemplate;
+use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 
 pub async fn analyze(
     client: &StealthHttpClient,
@@ -28,7 +28,7 @@ pub async fn analyze(
                 }
                 
                 if !found_strings.is_empty() {
-                    return Some(ScanResult {
+                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         cvss_score: None,
                         reference: None,
                         solution: None,
@@ -53,7 +53,7 @@ pub async fn analyze(
                         for src_id in 0..sm.get_source_count() {
                             if let Some(content) = sm.get_source_contents(src_id) {
                                 if content.contains("process.env.API_KEY") || content.contains("AWS_ACCESS_KEY_ID") {
-                                    return Some(ScanResult {
+                                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         cvss_score: None,
                         reference: None,
                         solution: None,

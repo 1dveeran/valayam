@@ -7,11 +7,11 @@
 // - Support remote state backends (S3, GCS, Azure) for policy-as-code gate checks.
 
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use std::fs;
 use std::path::Path;
-use super::parser::IacAuditTemplate;
+use valayam_models::templates::iac_audit::IacAuditTemplate;
 
 /// Configuration for IaC audit checks.
 #[derive(Debug, Clone)]
@@ -279,7 +279,7 @@ fn aggregate_findings(
     template_info: &TemplateInfo,
 ) -> Option<ScanResult> {
     if all_findings.is_empty() {
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: template_info.name.clone(),
@@ -317,7 +317,7 @@ fn aggregate_findings(
         .map(|f| format!("iac:{}:{}", f.finding_type, f.severity.to_lowercase()))
         .collect();
 
-    Some(ScanResult {
+    Some(ScanResult { schema_version: "1.0.0".to_string(),
         timestamp: Utc::now(),
         template_id: template_id.to_string(),
         template_name: template_info.name.clone(),

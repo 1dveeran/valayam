@@ -1,0 +1,76 @@
+id: http-ssrf-detection
+info:
+  name: "Server-Side Request Forgery (SSRF) Detection"
+  severity: "High"
+  description: "Detects SSRF vulnerabilities by making the server request internal resources and analyzing responses."
+  compliance:
+    owasp: "A10:2021"
+    cwe: "CWE-918"
+requests:
+  - method: GET
+    path: "/fetch?url=http://169.254.169.254/latest/meta-data/"
+    headers:
+      User-Agent: "Valayam-Scanner/2.0"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "ami-id"
+          - "instance-id"
+          - "public-keys"
+          - "security-credentials"
+          - "iam/"
+          - "local-hostname"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/proxy?url=http://127.0.0.1:22/"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "SSH"
+          - "OpenSSH"
+          - "refused"
+          - "Connection reset"
+      - type: status
+        part: status
+        status:
+          - 200
+          - 502
+    matcher_condition: or
+
+  - method: GET
+    path: "/api/external?host=metadata.google.internal"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "project/"
+          - "computeMetadata"
+          - "google"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/load?url=http://localhost:6379/"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "redis"
+          - "redis_version"
+          - "-ERR"
+          - "+OK"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: or

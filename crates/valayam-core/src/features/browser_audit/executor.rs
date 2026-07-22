@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::network::http::StealthHttpClient;
 use chrono::Utc;
-use super::parser::BrowserAuditTemplate;
+use valayam_models::templates::browser_audit::BrowserAuditTemplate;
 
 // TODO: Headless Browser Audit Engine — Full Implementation Plan
 // ===============================================================
@@ -77,7 +77,7 @@ pub async fn execute(
                     // and reflecting script tags in the body.
 
                     if body.contains("<script>") && !body.contains("X-XSS-Protection") {
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),

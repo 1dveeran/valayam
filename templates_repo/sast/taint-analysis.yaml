@@ -1,0 +1,11 @@
+id: sast-taint-analysis
+info:
+  name: "SAST Taint Analysis"
+  severity: "High"
+  description: "Performs taint analysis on source code to trace untrusted user input to security-sensitive sink functions."
+  compliance:
+    cwe: "CWE-77"
+    owasp: "A03:2021"
+sast_taint:
+  - target: "{{Hostname}}"
+  - target: "{{TargetPath}}"

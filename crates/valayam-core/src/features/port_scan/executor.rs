@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
 use crate::network::tcp;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
-use super::parser::PortScanTemplate;
+use valayam_models::templates::port_scan::PortScanTemplate;
 
 /// Define commonly exposed administrative/dangerous services that should not be publicly accessible
 const SENSITIVE_PORTS: &[u16] = &[
@@ -347,7 +347,7 @@ pub async fn execute(
         all_findings.extend(findings);
 
         if !all_findings.is_empty() {
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

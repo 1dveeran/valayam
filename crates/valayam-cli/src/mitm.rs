@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::fs;
 use valayam_core::network::http::StealthHttpClient;
 use valayam_core::template::schema::{TemplateInfo, VulnerabilityTemplate};
-use valayam_core::features::http_scan::parser::HttpRequestTemplate;
+use valayam_models::templates::http_scan::HttpRequestTemplate;
 use reqwest::Method as ReqwestMethod;
 use std::str::FromStr;
 use crate::cert_auth::CertificateAuthority;

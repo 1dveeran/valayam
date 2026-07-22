@@ -1,4 +1,4 @@
-use crate::core::traits::{Reporter, FindingOwned};
+use valayam_engine::traits::{Reporter, FindingOwned};
 
 /// Fans out findings to multiple reporters (e.g., Console + JSONL simultaneously).
 pub struct CompositeReporter {

@@ -1,9 +1,9 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use tracing::{debug, warn};
-use super::parser::WafBypassVerifyTemplate;
+use valayam_models::templates::waf_bypass_verify::WafBypassVerifyTemplate;
 
 // ---------------------------------------------------------------------------
 // Structured WAF bypass techniques (const data)
@@ -258,7 +258,7 @@ pub async fn execute(
                     let status = response.status().as_u16();
                     if !is_waf_block(status) {
                         // WAF did not block the raw payload — this is a finding
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),
@@ -410,7 +410,7 @@ pub async fn execute(
         let reference =
             "https://owasp.org/www-community/attacks/WAF_Evasion".to_string();
 
-        return Some(ScanResult {
+        return Some(ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
             template_name: format!("{} - WAF Bypass", template_info.name),

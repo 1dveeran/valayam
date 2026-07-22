@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use super::parser::DeepAnalysisTemplate;
+use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 
 // TODO: Artifact Recovery Engine — Full Implementation Plan
 // ==========================================================

@@ -1,9 +1,9 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use std::fs;
 use std::path::Path;
-use super::parser::CicdAuditTemplate;
+use valayam_models::templates::cicd_audit::CicdAuditTemplate;
 
 pub async fn execute(
     templates: &[CicdAuditTemplate],
@@ -24,7 +24,7 @@ pub async fn execute(
                             if let Ok(content) = fs::read_to_string(&path) {
                                 // Check for dangerous pull_request_target which can lead to pwn request
                                 if content.contains("pull_request_target:") && content.contains("checkout") {
-                                    return Some(ScanResult {
+                                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                                         timestamp: Utc::now(),
                                         template_id: template_id.to_string(),
                                         template_name: template_info.name.clone(),

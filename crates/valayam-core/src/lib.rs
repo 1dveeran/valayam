@@ -1,7 +1,7 @@
 pub mod core;
 pub mod features;
-pub mod network;
-pub mod stealth;
+pub use valayam_network::network;
+pub use valayam_network::stealth;
 pub mod template;
 
 pub mod rpc {

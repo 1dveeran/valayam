@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
 use crate::core::error::ScannerError;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use crate::features::crawler::Crawler;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
-use super::parser::SchemaDriftTemplate;
+use valayam_models::templates::schema_drift::SchemaDriftTemplate;
 
 // ---------------------------------------------------------------------------
 // Schema version history — persisted between scans so we can detect when
@@ -422,7 +422,7 @@ pub async fn execute(
                 "Schema drift detected"
             );
 
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

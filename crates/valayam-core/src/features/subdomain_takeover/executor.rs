@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
 use crate::network::dns;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
-use super::parser::SubdomainTakeoverTemplate;
+use valayam_models::templates::subdomain_takeover::SubdomainTakeoverTemplate;
 
 const VULNERABLE_CNAMES: &[&str] = &[
     "github.io",
@@ -27,7 +27,7 @@ pub async fn execute(
         for cname in &cnames {
             for &vuln in VULNERABLE_CNAMES {
                 if cname.contains(vuln) {
-                    return Some(ScanResult {
+                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         timestamp: Utc::now(),
                         template_id: template_id.to_string(),
                         template_name: template_info.name.clone(),

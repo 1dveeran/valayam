@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use url::Url;
 
-use crate::core::rate_limiter::RateLimiter;
+use valayam_engine::rate_limiter::RateLimiter;
 use crate::network::http::StealthHttpClient;
 use super::parsers::{javascript, openapi, wasm};
 use super::wordlists::CRAWLER_PROBE_PATHS;

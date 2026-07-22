@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::core::variables::resolve_variables;
-use crate::features::auth_logic::parser::{AuthTemplate, LogicTemplate};
+use valayam_engine::variables::resolve_variables;
+use valayam_models::templates::auth_logic::{AuthTemplate, LogicTemplate};
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use std::collections::HashMap;
 
 /// Executes auth logic tests such as IDOR detection.
@@ -71,7 +71,7 @@ pub async fn execute(
                 
                 // If it matches our vulnerable conditions, and the baseline didn't fail
                 if is_match && (200..400).contains(&p_status) {
-                    return Some(ScanResult {
+                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         cvss_score: None,
                         reference: None,
                         solution: None,
@@ -95,7 +95,7 @@ pub async fn execute(
     if raw_token.split('.').count() == 3 {
         // Looks like a JWT
         if let Some(cracked_secret) = super::jwt_cracker::JwtCracker::crack_jwt_secret(raw_token) {
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 cvss_score: None,
                 reference: None,
                 solution: None,

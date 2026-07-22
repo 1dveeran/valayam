@@ -1,0 +1,62 @@
+id: http-ssti-detection
+info:
+  name: "Server-Side Template Injection (SSTI) Detection"
+  severity: "Critical"
+  description: "Detects server-side template injection vulnerabilities across various template engines."
+  compliance:
+    owasp: "A03:2021"
+    cwe: "CWE-1336"
+requests:
+  - method: GET
+    path: "/user?name={{7*7}}"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "49"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/greet?name=${7*7}"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "49"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/welcome?name=#{7*7}"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "49"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: and
+
+  - method: GET
+    path: "/profile?lang={{config}}"
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "<class 'dict'>"
+          - "SECRET_KEY"
+          - "sqlalchemy"
+      - type: status
+        part: status
+        status:
+          - 200
+    matcher_condition: or

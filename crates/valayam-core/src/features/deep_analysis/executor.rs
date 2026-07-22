@@ -1,7 +1,7 @@
 use crate::core::result::ScanResult;
 use crate::network::http::StealthHttpClient;
-use crate::template::schema::TemplateInfo;
-use super::parser::DeepAnalysisTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 
 pub async fn execute(
     client: &StealthHttpClient,
@@ -31,7 +31,7 @@ pub async fn execute(
                 tracing::info!("Running deep analysis: Entropy and statistical variance on {}", target_url);
                 // Simulate calculating Shannon entropy of HTTP responses
                 // This would drop the ScanResult if the variance is high (likely false positive).
-                return Some(ScanResult {
+                return Some(ScanResult { schema_version: "1.0.0".to_string(),
                         cvss_score: None,
                         reference: None,
                         solution: None,

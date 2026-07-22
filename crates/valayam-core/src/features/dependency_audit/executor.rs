@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
+use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use std::path::Path;
-use super::parser::DependencyAuditTemplate;
+use valayam_models::templates::dependency_audit::DependencyAuditTemplate;
 use super::extractor::extract_dependencies;
 use super::vuln_db::{ApiVulnDb, LocalVulnDb};
 
@@ -51,7 +51,7 @@ pub async fn execute(
                     if !vulns.is_empty() {
                         // Return the first vulnerability found
                         let vuln = &vulns[0];
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),

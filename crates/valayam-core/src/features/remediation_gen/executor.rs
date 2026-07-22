@@ -1,6 +1,6 @@
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::RemediationGenTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::remediation_gen::RemediationGenTemplate;
 use chrono::Utc;
 use std::collections::HashMap;
 
@@ -30,7 +30,7 @@ pub async fn execute(
             let mut compliance = HashMap::new();
             compliance.insert("reporting".to_string(), "Remediation Snippets Generated".to_string());
             
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),

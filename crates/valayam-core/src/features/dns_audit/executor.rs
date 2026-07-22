@@ -1,8 +1,8 @@
 use crate::core::result::ScanResult;
-use crate::core::variables::resolve_variables;
+use valayam_engine::variables::resolve_variables;
 use crate::network::dns;
-use crate::template::schema::TemplateInfo;
-use super::parser::DnsRequestTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::dns_audit::DnsRequestTemplate;
 use chrono::Utc;
 use regex::Regex;
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ pub async fn execute(
 
         if rule.matchers.is_empty() {
             // No matchers: any result is a finding
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -62,7 +62,7 @@ pub async fn execute(
                     };
                     if re.is_match(&records_text) {
                         tracing::debug!(target = %domain, pattern = %pattern, "Vulnerability DNS match found");
-                        return Some(ScanResult {
+                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
                             timestamp: Utc::now(),
                             template_id: template_id.to_string(),
                             template_name: template_info.name.clone(),

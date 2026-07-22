@@ -5,8 +5,8 @@
 // - Add CVSS-to-MITRE severity correlation.
 
 use crate::core::result::ScanResult;
-use crate::template::schema::TemplateInfo;
-use super::parser::MitreMappingTemplate;
+use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::templates::mitre_mapping::MitreMappingTemplate;
 use chrono::Utc;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -334,7 +334,7 @@ pub async fn execute(
                 "MITRE ATT&CK mapping completed"
             );
 
-            return Some(ScanResult {
+            return Some(ScanResult { schema_version: "1.0.0".to_string(),
                 timestamp: Utc::now(),
                 template_id: template_id.to_string(),
                 template_name: template_info.name.clone(),
@@ -369,7 +369,7 @@ mod tests {
         if let Some(c) = cwe {
             compliance.insert("cwe".to_string(), c.to_string());
         }
-        ScanResult {
+        ScanResult { schema_version: "1.0.0".to_string(),
             timestamp: chrono::Utc::now(),
             template_id: "test".to_string(),
             template_name: "Test".to_string(),

@@ -26,3 +26,72 @@ impl HtmlReporter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use valayam_core::core::result::ScanResult;
+
+    fn sample_results() -> Vec<ScanResult> {
+        vec![
+            ScanResult {
+                template_id: "test-001".into(),
+                template_name: "SQLi Test".into(),
+                template_severity: "high".into(),
+                target: "https://example.com".into(),
+                payload: "' OR 1=1".into(),
+                ..Default::default()
+            },
+            ScanResult {
+                template_id: "test-002".into(),
+                template_name: "XSS Test".into(),
+                template_severity: "medium".into(),
+                target: "https://example.com".into(),
+                payload: "<script>".into(),
+                ..Default::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn test_html_generates_output() {
+        let results = sample_results();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.html");
+        let path_str = path.to_str().unwrap();
+
+        HtmlReporter::generate(&results, path_str).unwrap();
+        assert!(path.exists());
+
+        let content = std::fs::read_to_string(path_str).unwrap();
+        assert!(content.contains("Valayam Vulnerability Scan Report"));
+        assert!(content.contains("SQLi Test"));
+        assert!(content.contains("XSS Test"));
+        assert!(content.contains("high"));
+        assert!(content.contains("medium"));
+        assert!(content.contains("<table"));
+        assert!(content.contains("</table>"));
+    }
+
+    #[test]
+    fn test_html_empty_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.html");
+        let path_str = path.to_str().unwrap();
+
+        HtmlReporter::generate(&[], path_str).unwrap();
+        assert!(path.exists());
+        let content = std::fs::read_to_string(path_str).unwrap();
+        assert!(content.contains("<table"));
+        assert!(content.contains("</table>"));
+        // No rows besides header
+        assert_eq!(content.matches("<tr>").count(), 1);
+    }
+
+    #[test]
+    fn test_html_invalid_path_returns_err() {
+        let results = sample_results();
+        let result = HtmlReporter::generate(&results, "/nonexistent_dir/report.html");
+        assert!(result.is_err());
+    }
+}
