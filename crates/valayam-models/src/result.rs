@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_scan_result_new() {
-        let info = crate::template::schema::TemplateInfo {
+        let info = crate::templates::schema::TemplateInfo {
             name: "SQLi Test".into(),
             severity: "high".into(),
             description: Some("Test for SQL injection".into()),

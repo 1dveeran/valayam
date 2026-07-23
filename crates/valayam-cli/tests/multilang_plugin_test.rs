@@ -4,8 +4,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use valayam_core::core::registry::PluginRegistry;
-use valayam_core::core::traits::FindingOwned;
+use valayam_engine::registry::PluginRegistry;
+use valayam_engine::traits::FindingOwned;
+use valayam_engine::traits::ScanPlugin;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
 #[tokio::test]

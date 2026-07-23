@@ -198,17 +198,6 @@ pub async fn execute_template_inner(
     }
 
     // Phase 9: IaC & SBOM Audit
-    if !template.iac_audit.is_empty() {
-        if let Some(result) = crate::features::iac_audit::executor::execute(
-            &template.iac_audit,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
     if !template.sbom_audit.is_empty() {
         if let Some(result) = crate::features::sbom_audit::executor::execute(
             target_url,
@@ -229,19 +218,6 @@ pub async fn execute_template_inner(
             target_url,
             client,
             &template.grpc_audit,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
-    if !template.graphql_audit.is_empty() {
-        if let Some(result) = crate::features::graphql_audit::executor::execute(
-            target_url,
-            client,
-            &template.graphql_audit,
             &template.id,
             &template.info,
         )
@@ -302,19 +278,6 @@ pub async fn execute_template_inner(
     }
 
     // Phase 12: Zero-Trust & Identity Security
-    if !template.oauth_audit.is_empty() {
-        if let Some(result) = crate::features::oauth_audit::executor::execute(
-            target_url,
-            client,
-            &template.oauth_audit,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
     if !template.idp_audit.is_empty() {
         if let Some(result) = crate::features::idp_audit::executor::execute(
             &template.idp_audit,
@@ -375,17 +338,6 @@ pub async fn execute_template_inner(
     }
 
     // Phase 15: Hardware & IoT Protocol Security
-    if !template.iot_audit.is_empty() {
-        if let Some(result) = crate::features::iot_audit::executor::execute(
-            &template.iot_audit,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
     if !template.scada_audit.is_empty() {
         if let Some(result) = crate::features::scada_audit::executor::execute(
             target_url,
@@ -627,17 +579,6 @@ pub async fn execute_template_inner(
     if !template.cicd_audit.is_empty() {
         if let Some(result) = crate::features::cicd_audit::executor::execute(
             &template.cicd_audit,
-            &template.id,
-            &template.info,
-        )
-        .await
-        {
-            return Some(result);
-        }
-    }
-    if !template.dependency_audit.is_empty() {
-        if let Some(result) = crate::features::dependency_audit::executor::execute(
-            &template.dependency_audit,
             &template.id,
             &template.info,
         )

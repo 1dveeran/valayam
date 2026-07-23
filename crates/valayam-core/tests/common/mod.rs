@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use valayam_core::core::traits::FindingOwned;
+use valayam_engine::traits::FindingOwned;
 use valayam_core::network::http::StealthHttpClient;
 
 /// Starts a mockito server returning "pong" on GET /ping.

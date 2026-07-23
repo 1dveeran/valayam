@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion, black_box};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use valayam_core::core::rate_limiter::{RateLimiter, RateLimiterConfig};
+use valayam_engine::rate_limiter::{RateLimiter, RateLimiterConfig};
 
 fn bench_rate_limiter_new(c: &mut Criterion) {
     c.bench_function("rate_limiter_new_simple_100", |b| {

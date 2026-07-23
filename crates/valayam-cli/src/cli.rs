@@ -108,6 +108,15 @@ pub enum Commands {
         #[command(subcommand)]
         action: PluginCommands,
     },
+    /// Sync the local vulnerability database from the Valayam CDN (Air-Gapped environments)
+    SyncVulndb {
+        /// The CDN or server URL to pull the signed database from
+        #[arg(long, default_value = "https://cdn.valayam.io")]
+        cdn: String,
+        /// The output path for the synced database
+        #[arg(long, default_value = "data/vuln-db.sqlite")]
+        output: String,
+    },
 }
 
 #[derive(clap::Subcommand, Debug, Clone)]
@@ -205,6 +214,7 @@ mod tests {
                 }
                 _ => panic!("Expected Package command"),
             },
+            Some(_) => panic!("Unexpected command"),
             None => panic!("Expected a subcommand"),
         }
     }
@@ -221,6 +231,7 @@ mod tests {
                 }
                 _ => panic!("Expected Init command"),
             },
+            Some(_) => panic!("Unexpected command"),
             None => panic!("Expected a subcommand"),
         }
     }
@@ -239,6 +250,7 @@ mod tests {
                 }
                 _ => panic!("Expected Init command"),
             },
+            Some(_) => panic!("Unexpected command"),
             None => panic!("Expected a subcommand"),
         }
     }
@@ -253,6 +265,7 @@ mod tests {
                 }
                 _ => panic!("Expected GenerateKey command"),
             },
+            Some(_) => panic!("Unexpected command"),
             None => panic!("Expected a subcommand"),
         }
     }

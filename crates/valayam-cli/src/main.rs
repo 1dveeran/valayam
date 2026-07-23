@@ -142,6 +142,12 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
         }
+    } else if let Some(cli::Commands::SyncVulndb { cdn, output }) = &args.command {
+        if let Err(e) = crate::orchestrator::sync_vulndb(cdn, output).await {
+            tracing::error!("Failed to sync vulnerability database: {}", e);
+            std::process::exit(1);
+        }
+        return Ok(());
     } else if let Some(t) = &args.template {
         (t.as_str(), false)
     } else if let Some(n) = &args.nuclei_template {

@@ -3,9 +3,9 @@ mod common;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use valayam_core::core::executor::ScanExecutor;
+use valayam_engine::executor::ScanExecutor;
 use valayam_core::core::plugins::HttpScanPlugin;
-use valayam_core::core::registry::PluginRegistry;
+use valayam_engine::registry::PluginRegistry;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
 #[test]

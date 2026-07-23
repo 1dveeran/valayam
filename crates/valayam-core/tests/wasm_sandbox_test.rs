@@ -1,9 +1,8 @@
-use valayam_core::core::wasm_plugin::WasmPluginBridge;
-use valayam_core::core::traits::{ScanPlugin, ScanContext, PluginOutcome};
+use valayam_engine::wasm_plugin::WasmPluginBridge;
+use valayam_engine::traits::{ScanPlugin, ScanContext, PluginOutcome};
 use valayam_core::template::schema::VulnerabilityTemplate;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use std::path::PathBuf;
 
 #[tokio::test]
 async fn test_wasm_plugin_initialization_missing_exports() {
@@ -59,7 +58,7 @@ async fn test_wasm_plugin_execution_success() {
     let init_result = plugin.init().await;
     assert!(init_result.is_ok(), "Init should succeed: {:?}", init_result.err());
 
-    let (tx, _) = mpsc::channel::<valayam_core::core::traits::FindingOwned>(1);
+    let (tx, _) = mpsc::channel::<valayam_engine::traits::FindingOwned>(1);
     let template_yaml = r#"
 id: test-template
 info:
@@ -73,7 +72,7 @@ info:
         target_host: "example.com".to_string(),
         template: Arc::new(template),
         finding_tx: tx,
-        variables: Arc::new(tokio::sync::RwLock::new(valayam_core::core::traits::VariableScope::new(std::collections::HashMap::new()))),
+        variables: Arc::new(tokio::sync::RwLock::new(valayam_engine::traits::VariableScope::new(std::collections::HashMap::new()))),
         cancellation: tokio_util::sync::CancellationToken::new(),
     };
 

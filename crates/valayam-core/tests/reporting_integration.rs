@@ -4,8 +4,8 @@ use tempfile::NamedTempFile;
 use valayam_core::core::reporters::composite::CompositeReporter;
 use valayam_core::core::reporters::console::ConsoleReporter;
 use valayam_core::core::reporters::json::JsonReporter;
-use valayam_core::core::traits::FindingOwned;
-use valayam_core::core::traits::Reporter;
+use valayam_engine::traits::FindingOwned;
+use valayam_engine::traits::Reporter;
 
 /// Helper to create multiple sample findings for reporter tests.
 fn sample_findings() -> Vec<FindingOwned> {

@@ -1,0 +1,22 @@
+[package]
+name = "valayam-plugin-iac-audit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+valayam-engine = { workspace = true }
+valayam-models = { workspace = true }
+valayam-network = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+hcl-rs = { workspace = true }
+
+chrono = { workspace = true }
+url = { workspace = true }
+toml = { workspace = true }
+reqwest = { workspace = true }
+tracing = "0.1.44"
+regex = { workspace = true }

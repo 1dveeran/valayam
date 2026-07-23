@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use valayam_core::features::crawler::Crawler;
 use valayam_core::network::http::StealthHttpClient;
-use valayam_core::core::rate_limiter::RateLimiter;
+use valayam_engine::rate_limiter::RateLimiter;
 
 fn crawler_benchmark(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();

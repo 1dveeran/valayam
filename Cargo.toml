@@ -1,8 +1,20 @@
 [workspace]
 members = [
     "crates/valayam-core",
-    "crates/valayam-cli"
-, "crates/valayam-plugin-grpc-example", "crates/valayam-plugin-wasm-example", "crates/valayam-ebpf-agent", "crates/valayam-models", "crates/valayam-network", "crates/valayam-engine"]
+    "crates/valayam-cli",
+    "crates/valayam-plugin-grpc-example",
+    "crates/valayam-plugin-wasm-example",
+    "crates/valayam-ebpf-agent",
+    "crates/valayam-models",
+    "crates/valayam-network",
+    "crates/valayam-engine",
+    "crates/valayam-plugin-dependency-audit",
+    "crates/valayam-plugin-graphql-audit",
+    "crates/valayam-plugin-iac-audit",
+    "crates/valayam-plugin-iot-audit",
+    "crates/valayam-plugin-mobile-audit",
+    "crates/valayam-plugin-oauth-audit"
+]
 resolver = "2"
 
 [workspace.package]

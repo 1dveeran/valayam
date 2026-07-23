@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use valayam_core::core::registry::PluginRegistry;
+use valayam_engine::registry::PluginRegistry;
 
 #[test]
 fn test_vpa_plugin_packaging_and_loading() {

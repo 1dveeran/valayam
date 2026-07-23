@@ -1,4 +1,4 @@
-use valayam_core::core::crypto::PluginCrypto;
+use valayam_engine::crypto::PluginCrypto;
 
 #[test]
 fn test_plugin_crypto_sign_and_verify() {

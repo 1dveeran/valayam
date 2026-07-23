@@ -166,13 +166,17 @@ pub async fn execute(
             })
             .collect();
 
-        let body_bytes = match resp.bytes().await {
-            Ok(b) => b,
-            Err(e) => {
-                tracing::warn!(target = %target_url, error = %e, "Failed to read response body");
-                continue;
+        let mut body_bytes = Vec::new();
+        let max_size = 10 * 1024 * 1024; // 10MB limit
+        let mut resp_mut = resp;
+        
+        while let Ok(Some(chunk)) = resp_mut.chunk().await {
+            if body_bytes.len() + chunk.len() > max_size {
+                tracing::warn!(target = %target_url, "Response exceeded 10MB limit, truncating");
+                break;
             }
-        };
+            body_bytes.extend_from_slice(&chunk);
+        }
 
         tracing::trace!(
             status = %status,
@@ -230,7 +234,7 @@ pub async fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::matcher::ResponseMatcher;
+    use valayam_models::templates::matcher::ResponseMatcher;
 
     // -----------------------------------------------------------------------
     // evaluate_stream tests

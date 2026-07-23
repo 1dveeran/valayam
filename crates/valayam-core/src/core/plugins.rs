@@ -174,17 +174,6 @@ impl_scan_plugin!(DeepAnalysisPlugin, "deep_analysis", deep_analysis,
     }
 );
 
-impl_scan_plugin!(IacAuditPlugin, "iac_audit", iac_audit,
-    |ctx, template, finding_tx| {
-        if let Some(res) = crate::features::iac_audit::executor::execute(
-            &template.iac_audit, &template.id, &template.info,
-        ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            return PluginOutcome::Matched { count: 1 };
-        }
-        PluginOutcome::NoMatch
-    }
-);
 
 impl_scan_plugin!(SbomAuditPlugin, "sbom_audit", sbom_audit,
     state: { client: Arc<StealthHttpClient> },
@@ -214,19 +203,6 @@ impl_scan_plugin!(GrpcAuditPlugin, "grpc_audit", grpc_audit,
     }
 );
 
-impl_scan_plugin!(GraphqlAuditPlugin, "graphql_audit", graphql_audit,
-    state: { client: Arc<StealthHttpClient> },
-    |self, ctx, template, finding_tx| {
-        if let Some(res) = crate::features::graphql_audit::executor::execute(
-            &ctx.target, &self.client, &template.graphql_audit,
-            &template.id, &template.info,
-        ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            return PluginOutcome::Matched { count: 1 };
-        }
-        PluginOutcome::NoMatch
-    }
-);
 
 impl_scan_plugin!(DriftDetectPlugin, "drift_detect", drift_detect,
     state: { client: Arc<StealthHttpClient> },
@@ -256,19 +232,6 @@ impl_scan_plugin!(CredMonitorPlugin, "cred_monitor", cred_monitor,
     }
 );
 
-impl_scan_plugin!(OauthAuditPlugin, "oauth_audit", oauth_audit,
-    state: { client: Arc<StealthHttpClient> },
-    |self, ctx, template, finding_tx| {
-        if let Some(res) = crate::features::oauth_audit::executor::execute(
-            &ctx.target, &self.client, &template.oauth_audit,
-            &template.id, &template.info,
-        ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            return PluginOutcome::Matched { count: 1 };
-        }
-        PluginOutcome::NoMatch
-    }
-);
 
 impl_scan_plugin!(IdpAuditPlugin, "idp_audit", idp_audit,
     state: { client: Arc<StealthHttpClient> },
@@ -326,17 +289,6 @@ impl_scan_plugin!(BrowserAuditPlugin, "browser_audit", browser_audit,
     }
 );
 
-impl_scan_plugin!(IotAuditPlugin, "iot_audit", iot_audit,
-    |ctx, template, finding_tx| {
-        if let Some(res) = crate::features::iot_audit::executor::execute(
-            &template.iot_audit, &template.id, &template.info,
-        ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            return PluginOutcome::Matched { count: 1 };
-        }
-        PluginOutcome::NoMatch
-    }
-);
 
 impl_scan_plugin!(ScadaAuditPlugin, "scada_audit", scada_audit,
     |ctx, template, finding_tx| {
@@ -616,17 +568,6 @@ impl_scan_plugin!(CicdAuditPlugin, "cicd_audit", cicd_audit,
     }
 );
 
-impl_scan_plugin!(DependencyAuditPlugin, "dependency_audit", dependency_audit,
-    |ctx, template, finding_tx| {
-        if let Some(res) = crate::features::dependency_audit::executor::execute(
-            &template.dependency_audit, &template.id, &template.info,
-        ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
-            return PluginOutcome::Matched { count: 1 };
-        }
-        PluginOutcome::NoMatch
-    }
-);
 
 #[cfg(test)]
 mod tests {

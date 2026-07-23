@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion, black_box};
 use std::collections::HashMap;
-use valayam_core::core::variables::{
+use valayam_engine::variables::{
     build_initial_context, extract_placeholder_names, resolve_variables, resolve_variables_advanced,
 };
 

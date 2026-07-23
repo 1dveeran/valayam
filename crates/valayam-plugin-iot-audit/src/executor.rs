@@ -1,4 +1,4 @@
-use crate::core::result::ScanResult;
+use valayam_models::result::ScanResult;
 use valayam_models::templates::schema::TemplateInfo;
 use valayam_models::templates::iot_audit::IotAuditTemplate;
 use chrono::Utc;

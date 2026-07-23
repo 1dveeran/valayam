@@ -1,6 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::result::ScanResult;
 use valayam_models::templates::schema::TemplateInfo;
-use crate::network::http::StealthHttpClient;
+use valayam_network::network::http::StealthHttpClient;
 use chrono::Utc;
 use valayam_models::templates::oauth_audit::OauthAuditTemplate;
 

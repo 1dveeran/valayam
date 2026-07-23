@@ -41,7 +41,11 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 rand.workspace = true
 colored = "3.1.1"
 chrono = { workspace = true }
-
+valayam-plugin-dependency-audit = { path = "../valayam-plugin-dependency-audit" }
+valayam-plugin-graphql-audit = { path = "../valayam-plugin-graphql-audit" }
+valayam-plugin-iac-audit = { path = "../valayam-plugin-iac-audit" }
+valayam-plugin-iot-audit = { path = "../valayam-plugin-iot-audit" }
+valayam-plugin-oauth-audit = { path = "../valayam-plugin-oauth-audit" }
 [dev-dependencies]
 assert_cmd = "2.2.2"
 predicates = "3.1.4"

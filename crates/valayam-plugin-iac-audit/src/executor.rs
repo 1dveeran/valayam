@@ -6,7 +6,7 @@
 // - Add CIS Benchmark checks for Terraform configurations.
 // - Support remote state backends (S3, GCS, Azure) for policy-as-code gate checks.
 
-use crate::core::result::ScanResult;
+use valayam_models::result::ScanResult;
 use valayam_models::templates::schema::TemplateInfo;
 use chrono::Utc;
 use std::fs;
