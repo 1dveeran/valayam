@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // TODO: Implement IaC Scanning (Phase 13).
 // - Static analysis for Terraform, K8s YAML, and Dockerfiles.
 // - Misconfiguration matchers (e.g. privileged containers, exposed secrets).

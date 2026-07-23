@@ -6,7 +6,6 @@ use tokio_util::sync::CancellationToken;
 
 use valayam_engine::registry::PluginRegistry;
 use valayam_engine::traits::FindingOwned;
-use valayam_engine::traits::ScanPlugin;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
 #[tokio::test]
@@ -37,7 +36,7 @@ async fn test_multilang_plugins() {
     std::fs::write(plugins_dir.join("valayam-plugin-python.bat"), bat_content).unwrap();
 
     // 4. Initialize PluginRegistry
-    let mut reg = PluginRegistry::new();
+    let reg = PluginRegistry::new();
     reg.load_external_plugins(&plugins_dir).unwrap();
     
     // We expect at least 2 plugins: Go and Python wrappers

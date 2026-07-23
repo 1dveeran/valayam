@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::sync::Arc;
 use valayam_engine::traits::FindingOwned;
 use valayam_core::network::http::StealthHttpClient;

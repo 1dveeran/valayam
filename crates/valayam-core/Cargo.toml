@@ -68,7 +68,7 @@ name = "crawler_bench"
 harness = false
 
 [dev-dependencies]
-criterion = "0.8.2"
+criterion = { version = "0.5", features = ["async_tokio"] }
 mockito = "1.7.2"
 tempfile = { workspace = true }
 wat = "1.253.0"

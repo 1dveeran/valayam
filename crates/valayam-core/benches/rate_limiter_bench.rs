@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
-use std::sync::Arc;
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use valayam_engine::rate_limiter::{RateLimiter, RateLimiterConfig};

@@ -26,7 +26,6 @@ impl Notifier {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use valayam_core::core::result::ScanResult;
 
     #[test]
