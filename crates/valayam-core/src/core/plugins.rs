@@ -4,7 +4,7 @@
 
 use valayam_engine::impl_scan_plugin;
 use valayam_engine::traits::PluginOutcome;
-use crate::core::scan_result_bridge::scan_result_to_finding;
+use valayam_models::TemplateMetadata;
 use valayam_network::network::http::StealthHttpClient;
 use std::sync::Arc;
 
@@ -17,7 +17,7 @@ impl_scan_plugin!(
         let mut vars = ctx.snapshot_variables().await;
         let results = crate::features::http_scan::executor::execute(
             &self.client, &ctx.target, &template.requests,
-            &template.id, &template.info, &mut vars,
+            &template.id, &template.info as &dyn TemplateMetadata, &mut vars,
         ).await;
         {
             let mut scope = ctx.variables.write().await;
@@ -28,7 +28,7 @@ impl_scan_plugin!(
         if !results.is_empty() {
             let count = results.len();
             for res in results {
-                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+                let _ = finding_tx.send(res).await;
             }
             PluginOutcome::Matched { count }
         } else {
@@ -43,12 +43,12 @@ impl_scan_plugin!(
         let target_host = &ctx.target_host;
         let results = crate::features::network_scan::executor::execute(
             &ctx.target, target_host, &template.network,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await;
         if !results.is_empty() {
             let count = results.len();
             for res in results {
-                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+                let _ = finding_tx.send(res).await;
             }
             PluginOutcome::Matched { count }
         } else {
@@ -62,10 +62,10 @@ impl_scan_plugin!(
     |ctx, template, finding_tx| {
         let vars = ctx.snapshot_variables().await;
         let result = crate::features::dns_audit::executor::execute(
-            &template.dns, &template.id, &template.info, &vars,
+            &template.dns, &template.id, &template.info as &dyn TemplateMetadata, &vars,
         ).await;
         if let Some(res) = result {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             PluginOutcome::Matched { count: 1 }
         } else {
             PluginOutcome::NoMatch
@@ -78,12 +78,12 @@ impl_scan_plugin!(
     |ctx, template, finding_tx| {
         let vars = ctx.snapshot_variables().await;
         let results = crate::features::tls_audit::executor::execute(
-            &template.tls, &template.id, &template.info, &vars,
+            &template.tls, &template.id, &template.info as &dyn TemplateMetadata, &vars,
         ).await;
         if !results.is_empty() {
             let count = results.len();
             for res in results {
-                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+                let _ = finding_tx.send(res).await;
             }
             PluginOutcome::Matched { count }
         } else {
@@ -98,10 +98,10 @@ impl_scan_plugin!(
         let vars = ctx.snapshot_variables().await;
         let result = crate::features::scripting::executor::execute(
             &ctx.target, &ctx.target_host, &template.scripts,
-            &template.id, &template.info, &vars,
+            &template.id, &template.info as &dyn TemplateMetadata, &vars,
         ).await;
         if let Some(res) = result {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             PluginOutcome::Matched { count: 1 }
         } else {
             PluginOutcome::NoMatch
@@ -115,10 +115,10 @@ impl_scan_plugin!(
     |self, ctx, template, finding_tx| {
         let result = crate::features::fuzzer::executor::execute(
             &self.client, &ctx.target, &template.fuzz,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await;
         if let Some(res) = result {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             PluginOutcome::Matched { count: 1 }
         } else {
             PluginOutcome::NoMatch
@@ -135,7 +135,7 @@ impl_scan_plugin!(CloudSecPlugin, "cloud_sec", cloud,
             if let Some(res) = crate::features::cloud_sec::executor::execute_cloud_probe(
                 &self.client, &ctx.target, cloud_t,
             ).await {
-                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+                let _ = finding_tx.send(res).await;
                 return PluginOutcome::Matched { count: 1 };
             }
         }
@@ -150,9 +150,9 @@ impl_scan_plugin!(AuthLogicPlugin, "auth_logic", logic,
             let vars = ctx.snapshot_variables().await;
             if let Some(res) = crate::features::auth_logic::executor::execute(
                 &self.client, &ctx.target, &template.logic, auth,
-                &template.id, &template.info, &vars,
+                &template.id, &template.info as &dyn TemplateMetadata, &vars,
             ).await {
-                let _ = finding_tx.send(scan_result_to_finding(res)).await;
+                let _ = finding_tx.send(res).await;
                 return PluginOutcome::Matched { count: 1 };
             }
         }
@@ -165,9 +165,9 @@ impl_scan_plugin!(DeepAnalysisPlugin, "deep_analysis", deep_analysis,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::deep_analysis::executor::execute(
             &self.client, &ctx.target, &template.deep_analysis,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -180,9 +180,9 @@ impl_scan_plugin!(SbomAuditPlugin, "sbom_audit", sbom_audit,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::sbom_audit::executor::execute(
             &ctx.target, &self.client, &template.sbom_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -194,9 +194,9 @@ impl_scan_plugin!(GrpcAuditPlugin, "grpc_audit", grpc_audit,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::grpc_audit::executor::execute(
             &ctx.target, &self.client, &template.grpc_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -209,9 +209,9 @@ impl_scan_plugin!(DriftDetectPlugin, "drift_detect", drift_detect,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::drift_detect::executor::execute(
             &ctx.target, &self.client, &template.drift_detect,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -223,9 +223,9 @@ impl_scan_plugin!(CredMonitorPlugin, "cred_monitor", cred_monitor,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::cred_monitor::executor::execute(
             &ctx.target, &self.client, &template.cred_monitor,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -237,10 +237,10 @@ impl_scan_plugin!(IdpAuditPlugin, "idp_audit", idp_audit,
     state: { client: Arc<StealthHttpClient> },
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::idp_audit::executor::execute(
-            &template.idp_audit, &template.id, &template.info,
+            &template.idp_audit, &template.id, &template.info as &dyn TemplateMetadata,
             &self.client, &ctx.target,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -252,9 +252,9 @@ impl_scan_plugin!(AwsEscalatePlugin, "aws_escalate", aws_escalate,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::aws_escalate::executor::execute(
             &ctx.target, &self.client, &template.aws_escalate,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -266,9 +266,9 @@ impl_scan_plugin!(AzureGcpEscalatePlugin, "azure_gcp_escalate", azure_gcp_escala
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::azure_gcp_escalate::executor::execute(
             &ctx.target, &self.client, &template.azure_gcp_escalate,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -280,9 +280,9 @@ impl_scan_plugin!(BrowserAuditPlugin, "browser_audit", browser_audit,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::browser_audit::executor::execute(
             &ctx.target, &self.client, &template.browser_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -293,9 +293,9 @@ impl_scan_plugin!(BrowserAuditPlugin, "browser_audit", browser_audit,
 impl_scan_plugin!(ScadaAuditPlugin, "scada_audit", scada_audit,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::scada_audit::executor::execute(
-            &ctx.target, &template.scada_audit, &template.id, &template.info,
+            &ctx.target, &template.scada_audit, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -305,9 +305,9 @@ impl_scan_plugin!(ScadaAuditPlugin, "scada_audit", scada_audit,
 impl_scan_plugin!(AutoRedteamPlugin, "auto_redteam", auto_redteam,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::auto_redteam::executor::execute(
-            &template.auto_redteam, &template.id, &template.info,
+            &template.auto_redteam, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -317,9 +317,9 @@ impl_scan_plugin!(AutoRedteamPlugin, "auto_redteam", auto_redteam,
 impl_scan_plugin!(ImplantDeployPlugin, "implant_deploy", implant_deploy,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::implant_deploy::executor::execute(
-            &template.implant_deploy, &template.id, &template.info,
+            &template.implant_deploy, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -331,9 +331,9 @@ impl_scan_plugin!(ClientSecretAuditPlugin, "client_secret_audit", client_secret_
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::client_secret_audit::executor::execute(
             &ctx.target, &self.client, &template.client_secret_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -345,9 +345,9 @@ impl_scan_plugin!(DomRedirectAuditPlugin, "dom_redirect_audit", dom_redirect_aud
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::dom_redirect_audit::executor::execute(
             &ctx.target, &self.client, &template.dom_redirect_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -359,9 +359,9 @@ impl_scan_plugin!(CorsAuditPlugin, "cors_audit", cors_audit,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::cors_audit::executor::execute(
             &ctx.target, &self.client, &template.cors_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -373,9 +373,9 @@ impl_scan_plugin!(CspAuditPlugin, "csp_audit", csp_audit,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::csp_audit::executor::execute(
             &ctx.target, &self.client, &template.csp_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -387,9 +387,9 @@ impl_scan_plugin!(WafBypassVerifyPlugin, "waf_bypass_verify", waf_bypass_verify,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::waf_bypass_verify::executor::execute(
             &ctx.target_host, &self.client, &template.waf_bypass_verify,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -401,9 +401,9 @@ impl_scan_plugin!(HeaderScorecardPlugin, "header_scorecard", header_scorecard,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::header_scorecard::executor::execute(
             &ctx.target, &self.client, &template.header_scorecard,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -413,9 +413,9 @@ impl_scan_plugin!(HeaderScorecardPlugin, "header_scorecard", header_scorecard,
 impl_scan_plugin!(ReputationAuditPlugin, "reputation_audit", reputation_audit,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::reputation_audit::executor::execute(
-            &template.reputation_audit, &template.id, &template.info,
+            &template.reputation_audit, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -426,9 +426,9 @@ impl_scan_plugin!(CtLogAuditPlugin, "ct_log_audit", ct_log_audit,
     state: { client: Arc<StealthHttpClient> },
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::ct_log_audit::executor::execute(
-            &template.ct_log_audit, &template.id, &template.info, &self.client,
+            &template.ct_log_audit, &template.id, &template.info as &dyn TemplateMetadata, &self.client,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -457,9 +457,9 @@ impl_scan_plugin!(MitreMappingPlugin, "mitre_mapping", mitre_mapping,
 impl_scan_plugin!(ContainerAuditPlugin, "container_audit", container_audit,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::container_audit::executor::execute(
-            &template.container_audit, &template.id, &template.info,
+            &template.container_audit, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -469,9 +469,9 @@ impl_scan_plugin!(ContainerAuditPlugin, "container_audit", container_audit,
 impl_scan_plugin!(K8sAuditPlugin, "k8s_audit", k8s_audit,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::k8s_audit::executor::execute(
-            &template.k8s_audit, &template.id, &template.info,
+            &template.k8s_audit, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -481,9 +481,9 @@ impl_scan_plugin!(K8sAuditPlugin, "k8s_audit", k8s_audit,
 impl_scan_plugin!(SastTaintPlugin, "sast_taint", sast_taint,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::sast_taint::executor::execute(
-            &template.sast_taint, &template.id, &template.info,
+            &template.sast_taint, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -493,9 +493,9 @@ impl_scan_plugin!(SastTaintPlugin, "sast_taint", sast_taint,
 impl_scan_plugin!(SastSecretsPlugin, "sast_secrets", sast_secrets,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::sast_secrets::executor::execute(
-            &template.sast_secrets, &template.id, &template.info,
+            &template.sast_secrets, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -506,9 +506,9 @@ impl_scan_plugin!(SubdomainTakeoverPlugin, "subdomain_takeover", subdomain_takeo
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::subdomain_takeover::executor::execute(
             &ctx.target_host, &template.subdomain_takeover,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -519,9 +519,9 @@ impl_scan_plugin!(PortScanPlugin, "port_scan", port_scan,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::port_scan::executor::execute(
             &ctx.target_host, &template.port_scan,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -533,9 +533,9 @@ impl_scan_plugin!(SchemaDriftPlugin, "schema_drift", schema_drift,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::schema_drift::executor::execute(
             &ctx.target, &self.client, &template.schema_drift,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -547,9 +547,9 @@ impl_scan_plugin!(PiiLeakAuditPlugin, "pii_leak_audit", pii_leak_audit,
     |self, ctx, template, finding_tx| {
         if let Some(res) = crate::features::pii_leak_audit::executor::execute(
             &ctx.target, &self.client, &template.pii_leak_audit,
-            &template.id, &template.info,
+            &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch
@@ -559,9 +559,9 @@ impl_scan_plugin!(PiiLeakAuditPlugin, "pii_leak_audit", pii_leak_audit,
 impl_scan_plugin!(CicdAuditPlugin, "cicd_audit", cicd_audit,
     |ctx, template, finding_tx| {
         if let Some(res) = crate::features::cicd_audit::executor::execute(
-            &template.cicd_audit, &template.id, &template.info,
+            &template.cicd_audit, &template.id, &template.info as &dyn TemplateMetadata,
         ).await {
-            let _ = finding_tx.send(scan_result_to_finding(res)).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch

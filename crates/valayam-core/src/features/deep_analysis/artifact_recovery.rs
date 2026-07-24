@@ -1,4 +1,4 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
 use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 
@@ -115,7 +115,7 @@ pub async fn recover(
     _client: &StealthHttpClient,
     _target_url: &str,
     _template: &DeepAnalysisTemplate,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     // MVP: Artifact recovery
     // 1. If target is .env, fetch and parse key-value pairs
     // 2. If target is .git/config, fetch and parse for credentials

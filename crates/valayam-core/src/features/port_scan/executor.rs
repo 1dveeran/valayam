@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::tcp;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::port_scan::PortScanTemplate;
 
 /// Define commonly exposed administrative/dangerous services that should not be publicly accessible
@@ -269,8 +268,8 @@ pub async fn execute(
     target_host: &str,
     templates: &[PortScanTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host_to_scan = template
             .target
@@ -347,19 +346,7 @@ pub async fn execute(
         all_findings.extend(findings);
 
         if !all_findings.is_empty() {
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: template_info.severity.clone(),
-                target: host_to_scan,
-                payload: format!("Sensitive services detected: {}", all_findings.join("; ")),
-                cvss_score: None,
-                reference: None,
-                solution: None,
-                tags: Vec::new(),
-                compliance: Default::default(),
-            });
+            return Some(FindingOwned::from_template_and_info(template_id, template_meta, host_to_scan, format!("Sensitive services detected: {}", all_findings.join("; "))));
         }
     }
 

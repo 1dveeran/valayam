@@ -1,7 +1,7 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use valayam_engine::variables::resolve_variables;
 use crate::network::tls;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::tls_audit::TlsAuditTemplate;
 use chrono::{DateTime, Utc};
 use regex::Regex;
@@ -10,9 +10,9 @@ use std::collections::HashMap;
 pub async fn execute(
     tls_rules: &[TlsAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
+    template_meta: &dyn TemplateMetadata,
     variables: &HashMap<String, String>,
-) -> Vec<ScanResult> {
+) -> Vec<FindingOwned> {
     let mut findings = Vec::new();
 
     for rule in tls_rules {
@@ -49,19 +49,12 @@ pub async fn execute(
                         else { 0 }
                     };
                     if version_rank(negotiated) < version_rank(min_v) {
-                        findings.push(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: template_info.severity.clone(),
-                            target: format!("{}:{}", host, rule.port),
-                            payload: format!("Server negotiated protocol {} which is lower than required minimum version {}", negotiated, min_v),
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        findings.push(FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            format!("{}:{}", host, rule.port),
+                            format!("Server negotiated protocol {} which is lower than required minimum version {}", negotiated, min_v),
+                        ));
                     }
                 }
             }
@@ -69,22 +62,15 @@ pub async fn execute(
 
         if rule.matchers.is_empty() {
             if let Some(c) = cert_info {
-                findings.push(ScanResult { schema_version: "1.0.0".to_string(),
-                    timestamp: Utc::now(),
-                    template_id: template_id.to_string(),
-                    template_name: template_info.name.clone(),
-                    template_severity: template_info.severity.clone(),
-                    target: format!("{}:{}", host, rule.port),
-                    payload: format!(
+                findings.push(FindingOwned::from_template_and_info(
+                    template_id,
+                    template_meta,
+                    format!("{}:{}", host, rule.port),
+                    format!(
                         "Issuer: {}, Subject: {}, Expires: {}, Self-signed: {}, SANs: {:?}, Public Key: {} {}bit",
                         c.issuer, c.subject, c.not_after, c.is_self_signed, c.subject_alternative_names, c.public_key_algorithm, c.public_key_bits.unwrap_or(0)
                     ),
-                    cvss_score: None,
-                    reference: None,
-                    solution: None,
-                    tags: Vec::new(),
-                    compliance: Default::default(),
-                });
+                ));
             }
             continue;
         }
@@ -249,19 +235,12 @@ pub async fn execute(
                     },
                 };
 
-                findings.push(ScanResult { schema_version: "1.0.0".to_string(),
-                    timestamp: Utc::now(),
-                    template_id: template_id.to_string(),
-                    template_name: template_info.name.clone(),
-                    template_severity: template_info.severity.clone(),
-                    target: format!("{}:{}", host, rule.port),
+                findings.push(FindingOwned::from_template_and_info(
+                    template_id,
+                    template_meta,
+                    format!("{}:{}", host, rule.port),
                     payload,
-                    cvss_score: None,
-                    reference: None,
-                    solution: None,
-                    tags: Vec::new(),
-                    compliance: Default::default(),
-                });
+                ));
             }
         }
     }

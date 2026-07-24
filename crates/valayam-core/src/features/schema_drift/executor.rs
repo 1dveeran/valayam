@@ -1,11 +1,11 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::core::error::ScannerError;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use crate::features::crawler::Crawler;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -285,8 +285,8 @@ pub async fn execute(
     http_client: &StealthHttpClient,
     templates: &[SchemaDriftTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_host);
         let crawl_depth = template.crawl_depth;
@@ -422,30 +422,27 @@ pub async fn execute(
                 "Schema drift detected"
             );
 
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: template_info.severity.clone(),
-                target: host.clone(),
-                payload: format!(
-                    "Schema drift detected (scan #{}) — {} finding(s):\n{}",
-                    scan_count + 1,
-                    total,
-                    findings.join("\n"),
-                ),
-                cvss_score: None,
-                reference: None,
-                solution: None,
-                tags: vec![
-                    "schema-drift".to_string(),
-                    if diff.shadow_apis.is_empty() {
-                        "spec-change".to_string()
-                    } else {
-                        "shadow-api".to_string()
-                    },
-                ],
-                compliance: Default::default(),
+            return Some({
+                let tag2 = if diff.shadow_apis.is_empty() {
+                    "spec-change"
+                } else {
+                    "shadow-api"
+                };
+                let mut meta = HashMap::new();
+                meta.insert("template_id".to_string(), template_id.to_string());
+                meta.insert("template_name".to_string(), template_meta.template_name().to_string());
+                meta.insert("template_severity".to_string(), template_meta.template_severity().to_string());
+                meta.insert("tags".to_string(), format!("schema-drift,{}", tag2));
+                FindingOwned::from_template(
+                    host.clone(),
+                    format!(
+                        "Schema drift detected (scan #{}) — {} finding(s):\n{}",
+                        scan_count + 1,
+                        total,
+                        findings.join("\n"),
+                    ),
+                    meta,
+                )
             });
         } else {
             debug!(

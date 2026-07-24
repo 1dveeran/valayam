@@ -4,10 +4,9 @@
 // - Integrate with external ATT&CK TAXII feeds for real-time updates.
 // - Add CVSS-to-MITRE severity correlation.
 
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::{TemplateInfo, TemplateMetadata};
 use valayam_models::templates::mitre_mapping::MitreMappingTemplate;
-use chrono::Utc;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
@@ -257,9 +256,9 @@ const CWE_KEYWORDS: &[(&str, &[&str])] = &[
 pub async fn execute(
     templates: &[MitreMappingTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-    mut findings: Vec<ScanResult>,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+    mut findings: Vec<FindingOwned>,
+) -> Option<FindingOwned> {
     for template in templates {
         if !template.enable_mapping {
             continue;
@@ -270,8 +269,8 @@ pub async fn execute(
         let mut all_tactics: Vec<String> = Vec::new();
 
         for finding in &mut findings {
-            let cwe = finding.compliance.get("cwe").cloned();
-            let payload_lower = finding.payload.to_lowercase();
+            let cwe = finding.metadata.get("cwe").cloned();
+            let payload_lower = finding.matched_at.to_lowercase();
 
             // Step 1: Direct CWE lookup
             let mut matched = Vec::new();
@@ -302,14 +301,14 @@ pub async fn execute(
                 let tactic_list: Vec<&str> = matched.iter().map(|t| t.tactic.as_str()).collect();
 
                 // Tag the finding with MITRE technique IDs and tactics
-                finding.compliance.insert("mitre_techniques".to_string(), technique_ids.join(", "));
-                finding.compliance.insert("mitre_tactics".to_string(), tactic_list.join(", "));
+                finding.metadata.insert("mitre_techniques".to_string(), technique_ids.join(", "));
+                finding.metadata.insert("mitre_tactics".to_string(), tactic_list.join(", "));
 
                 // Store full technique details as JSON for reporting
                 let details: Vec<String> = matched.iter().map(|t| {
                     format!("{}:{} ({})", t.technique_id, t.name, t.tactic)
                 }).collect();
-                finding.compliance.insert("mitre_details".to_string(), details.join(" | "));
+                finding.metadata.insert("mitre_details".to_string(), details.join(" | "));
 
                 total_techniques += matched.len();
                 all_technique_ids.extend(technique_ids);
@@ -323,10 +322,10 @@ pub async fn execute(
             all_tactics.sort();
             all_tactics.dedup();
 
-            let mut compliance = HashMap::new();
-            compliance.insert("mitre_techniques".to_string(), all_technique_ids.join(", "));
-            compliance.insert("mitre_tactics".to_string(), all_tactics.join(", "));
-            compliance.insert("reporting".to_string(), "MITRE ATT&CK Mapping Complete".to_string());
+            let mut metadata = HashMap::new();
+            metadata.insert("mitre_techniques".to_string(), all_technique_ids.join(", "));
+            metadata.insert("mitre_tactics".to_string(), all_tactics.join(", "));
+            metadata.insert("reporting".to_string(), "MITRE ATT&CK Mapping Complete".to_string());
 
             tracing::info!(
                 findings = findings.len(),
@@ -334,24 +333,22 @@ pub async fn execute(
                 "MITRE ATT&CK mapping completed"
             );
 
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
+            return Some(FindingOwned {
                 template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Info".to_string(),
+                template_name: template_meta.template_name().to_string(),
+                severity: template_meta.template_severity().to_string(),
                 target: "System".to_string(),
-                payload: format!(
+                matched_at: format!(
                     "Mapped {} findings to {} unique MITRE ATT&CK techniques across {} tactics: {}",
                     findings.len(),
                     all_technique_ids.len(),
                     all_tactics.len(),
                     all_technique_ids.join(", ")
                 ),
-                cvss_score: None,
-                reference: None,
+                description: None,
                 solution: None,
-                tags: vec!["mitre".to_string(), "mapping".to_string()],
-                compliance,
+                extracted_data: None,
+                metadata,
             });
         }
     }
@@ -362,25 +359,22 @@ pub async fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
-    fn make_finding(payload: &str, cwe: Option<&str>) -> ScanResult {
-        let mut compliance = HashMap::new();
+    fn make_finding(payload: &str, cwe: Option<&str>) -> FindingOwned {
+        let mut metadata = HashMap::new();
         if let Some(c) = cwe {
-            compliance.insert("cwe".to_string(), c.to_string());
+            metadata.insert("cwe".to_string(), c.to_string());
         }
-        ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: chrono::Utc::now(),
+        FindingOwned {
             template_id: "test".to_string(),
             template_name: "Test".to_string(),
-            template_severity: "High".to_string(),
+            severity: "High".to_string(),
             target: "test".to_string(),
-            payload: payload.to_string(),
-            cvss_score: None,
-            reference: None,
+            matched_at: payload.to_string(),
+            description: None,
             solution: None,
-            tags: Vec::new(),
-            compliance,
+            extracted_data: None,
+            metadata,
         }
     }
 
@@ -398,8 +392,8 @@ mod tests {
         let result = execute(&[template], "test", &info, findings).await;
         assert!(result.is_some());
         let r = result.unwrap();
-        assert!(r.payload.contains("T1190"));
-        assert!(r.compliance.contains_key("mitre_techniques"));
+        assert!(r.matched_at.contains("T1190"));
+        assert!(r.metadata.contains_key("mitre_techniques"));
     }
 
     #[tokio::test]
@@ -412,7 +406,7 @@ mod tests {
         assert!(result.is_some());
         let r = result.unwrap();
         // Should match via keyword "sql injection"
-        assert!(r.compliance.get("mitre_techniques").map_or(false, |v| v.contains("T1190")));
+        assert!(r.metadata.get("mitre_techniques").map_or(false, |v| v.contains("T1190")));
     }
 
     #[tokio::test]

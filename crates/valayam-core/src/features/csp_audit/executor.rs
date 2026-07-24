@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::TemplateMetadata;
 use lazy_static::lazy_static;
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -257,8 +256,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[CspAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
 
@@ -323,36 +322,27 @@ pub async fn execute(
 
         if all_csp_strings.is_empty() {
             // No CSP at all — this is itself a finding
-            return Some(
-                ScanResult::default()
-                    .with_tag("csp")
-                    .with_tag("missing-header")
-                    .with_cvss_score(8.0)
-                    .with_solution(
-                        "Implement a Content Security Policy using the strictest possible directives.",
-                    )
-                    .with_reference(
-                        "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP",
-                    )
-                    .with_compliance("owasp", "OWASP-XXE-1")
-                    .with_compliance("cwe", "CWE-693")
-                    .with_compliance(
-                        "severity",
-                        format_args!("{} (CVSS: {})", "High", 8.0).to_string(),
-                    ),
-            )
-            .map(|base| ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "High".to_string(),
-                target: host.clone(),
-                payload: "Content Security Policy (CSP) header is missing entirely. \
-                          The application is vulnerable to XSS and data injection attacks \
-                          without a defense-in-depth layer."
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                host.clone(),
+                "Content Security Policy (CSP) header is missing entirely. \
+                 The application is vulnerable to XSS and data injection attacks \
+                 without a defense-in-depth layer."
                     .to_string(),
-                ..base
-            });
+            );
+            finding.severity = "High".to_string();
+            finding.solution = Some(
+                "Implement a Content Security Policy using the strictest possible directives."
+                    .to_string(),
+            );
+            finding.metadata.insert("::cvss_score".to_string(), "8.0".to_string());
+            finding.metadata.insert("::reference".to_string(), "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP".to_string());
+            finding.metadata.insert("::tags".to_string(), "csp,missing-header".to_string());
+            finding.metadata.insert("owasp".to_string(), "OWASP-XXE-1".to_string());
+            finding.metadata.insert("cwe".to_string(), "CWE-693".to_string());
+            finding.metadata.insert("severity".to_string(), "High (CVSS: 8.0)".to_string());
+            return Some(finding);
         }
 
         // --- Analyse each CSP string ---
@@ -467,28 +457,25 @@ pub async fn execute(
             .collect();
         let cwe_list: Vec<&str> = cwe_set.into_iter().collect();
 
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: worst_severity_label,
-            target: host.clone(),
+        let tags_list = {
+            let mut t = vec!["csp".to_string()];
+            t.push(format!("finding-count:{}", findings.len()));
+            t.join(",")
+        };
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            host.clone(),
             payload,
-            cvss_score: Some(worst_cvss),
-            reference: Some(reference),
-            solution: Some(solution),
-            tags: {
-                let mut t = vec!["csp".to_string()];
-                t.push(format!("finding-count:{}", findings.len()));
-                t
-            },
-            compliance: {
-                let mut m = HashMap::new();
-                m.insert("csp-issues".to_string(), findings.len().to_string());
-                m.insert("cwe".to_string(), cwe_list.join(", "));
-                m
-            },
-        });
+        );
+        finding.severity = worst_severity_label;
+        finding.solution = Some(solution);
+        finding.metadata.insert("::cvss_score".to_string(), worst_cvss.to_string());
+        finding.metadata.insert("::reference".to_string(), reference);
+        finding.metadata.insert("::tags".to_string(), tags_list);
+        finding.metadata.insert("csp-issues".to_string(), findings.len().to_string());
+        finding.metadata.insert("cwe".to_string(), cwe_list.join(", "));
+        return Some(finding);
     }
     None
 }

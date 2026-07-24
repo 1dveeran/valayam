@@ -1,4 +1,4 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use valayam_models::templates::cloud_sec::CloudTemplate;
 use crate::network::http::StealthHttpClient;
 
@@ -8,7 +8,7 @@ pub async fn execute_cloud_probe(
     client: &StealthHttpClient,
     target_url: &str,
     template: &CloudTemplate,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     let mut findings = Vec::new();
     let mut severity = "High";
     let provider = template.provider.to_lowercase();
@@ -19,7 +19,7 @@ pub async fn execute_cloud_probe(
             let token_url = format!("{}/latest/api/token", target_url.trim_end_matches('/'));
             let mut headers = std::collections::HashMap::new();
             headers.insert("X-aws-ec2-metadata-token-ttl-seconds".to_string(), "21600".to_string());
-            
+
             let token = if let Ok(resp) = client.send_request("PUT", &token_url, Some(&headers), None).await {
                 if resp.status().is_success() {
                     resp.text().await.ok()
@@ -97,18 +97,16 @@ pub async fn execute_cloud_probe(
     if findings.is_empty() {
         None
     } else {
-        Some(ScanResult { schema_version: "1.0.0".to_string(),
-            cvss_score: None,
-            reference: None,
-            solution: None,
-            tags: Vec::new(),
-            timestamp: chrono::Utc::now(),
+        Some(FindingOwned {
             template_id: format!("cloud-{}-probe", provider),
             template_name: format!("{} API Discovery", template.provider),
-            template_severity: severity.to_string(),
+            severity: severity.to_string(),
             target: target_url.to_string(),
-            payload: findings.join("\n"),
-            compliance: std::collections::HashMap::new(),
+            matched_at: findings.join("\n"),
+            description: None,
+            solution: None,
+            extracted_data: None,
+            metadata: std::collections::HashMap::new(),
         })
     }
 }

@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use crate::network::http::StealthHttpClient;
-use chrono::Utc;
 use regex::Regex;
 use valayam_models::templates::dom_redirect_audit::DomRedirectAuditTemplate;
 
@@ -10,8 +9,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[DomRedirectAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
 
@@ -24,19 +23,14 @@ pub async fn execute(
                     let dom_re = Regex::new(r"(?i)(window\.location|location\.href|location\.replace)\s*=\s*[^;]*(location\.hash|location\.search|window\.location\.search)").unwrap();
                     
                     if dom_re.is_match(&body) {
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: "High".to_string(),
-                            target: host.clone(),
-                            payload: "DOM-based Open Redirect vulnerability pattern detected in JavaScript.".to_string(),
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        let mut finding = FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            host.clone(),
+                            "DOM-based Open Redirect vulnerability pattern detected in JavaScript.".to_string(),
+                        );
+                        finding.severity = "High".to_string();
+                        return Some(finding);
                     }
                 }
             }

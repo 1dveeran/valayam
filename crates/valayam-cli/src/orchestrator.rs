@@ -404,9 +404,7 @@ pub async fn run_scan(
                         return;
                     }
                 };
-                if let Some(res) = exec_nuclei.execute_scan(&target_url, template).await {
-                    // Nuclei executor returns legacy ScanResult. Convert it to FindingOwned.
-                    let finding = valayam_core::core::scan_result_bridge::scan_result_to_finding(res);
+                if let Some(finding) = exec_nuclei.execute_scan(&target_url, template).await {
                     let _ = finding_tx_clone.send(finding).await;
                 }
             } else {

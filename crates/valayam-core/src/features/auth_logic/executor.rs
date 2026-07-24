@@ -1,8 +1,8 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use valayam_engine::variables::resolve_variables;
 use valayam_models::templates::auth_logic::{AuthTemplate, LogicTemplate};
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use std::collections::HashMap;
 
 /// Executes auth logic tests such as IDOR detection.
@@ -12,9 +12,9 @@ pub async fn execute(
     logic: &[LogicTemplate],
     auth: &AuthTemplate,
     template_id: &str,
-    template_info: &TemplateInfo,
+    template_meta: &dyn TemplateMetadata,
     variables: &HashMap<String, String>,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     for l in logic {
         if l.r#type.to_lowercase() == "idor" {
             // Resolve primary and secondary auth headers
@@ -30,7 +30,7 @@ pub async fn execute(
             // Step 1: Baseline request with primary auth
             let mut p_headers = HashMap::new();
             p_headers.insert("Authorization".to_string(), primary_auth.clone());
-            
+
             let p_status = if let Ok(resp) = client.send_request(&l.method, &full_url, Some(&p_headers), None).await {
                 resp.status().as_u16()
             } else {
@@ -40,7 +40,7 @@ pub async fn execute(
             // Step 2: Attacker request with secondary auth
             let mut s_headers = HashMap::new();
             s_headers.insert("Authorization".to_string(), secondary_auth.clone());
-            
+
             if let Ok(resp) = client.send_request(&l.method, &full_url, Some(&s_headers), None).await {
                 let status = resp.status().as_u16();
                 let body = resp.text().await.unwrap_or_default();
@@ -68,22 +68,15 @@ pub async fn execute(
                         }
                     })
                 };
-                
+
                 // If it matches our vulnerable conditions, and the baseline didn't fail
                 if is_match && (200..400).contains(&p_status) {
-                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        timestamp: chrono::Utc::now(),
-                        template_id: template_id.to_string(),
-                        template_name: template_info.name.clone(),
-                        template_severity: template_info.severity.clone(),
-                        target: full_url.clone(),
-                        payload: format!("IDOR Detected via token swapping on {} {}", l.method, path),
-                        compliance: template_info.compliance.clone(),
-                        tags: Vec::new(),
-                    });
+                    return Some(FindingOwned::from_template_and_info(
+                        template_id,
+                        template_meta,
+                        full_url.clone(),
+                        format!("IDOR Detected via token swapping on {} {}", l.method, path),
+                    ));
                 }
             }
         }
@@ -95,19 +88,15 @@ pub async fn execute(
     if raw_token.split('.').count() == 3 {
         // Looks like a JWT
         if let Some(cracked_secret) = super::jwt_cracker::JwtCracker::crack_jwt_secret(raw_token) {
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                cvss_score: None,
-                reference: None,
-                solution: None,
-                timestamp: chrono::Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: format!("{} - Offline JWT Cracking", template_info.name),
-                template_severity: "Critical".to_string(),
-                target: target_url.to_string(),
-                payload: format!("Successfully cracked JWT secret offline! The signing key is: '{}'", cracked_secret),
-                compliance: template_info.compliance.clone(),
-                tags: Vec::new(),
-            });
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                target_url.to_string(),
+                format!("Successfully cracked JWT secret offline! The signing key is: '{}'", cracked_secret),
+            );
+            finding.template_name = format!("{} - Offline JWT Cracking", template_meta.template_name());
+            finding.severity = "Critical".to_string();
+            return Some(finding);
         }
     }
     None

@@ -1,9 +1,8 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::drift_detect::DriftDetectTemplate;
 use super::state::{load_state, save_state, ScanState};
-use chrono::Utc;
 use std::collections::HashSet;
 use tracing::{debug, info, warn};
 
@@ -126,8 +125,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[DriftDetectTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
         let backend = template.storage_backend.clone();
@@ -196,24 +195,19 @@ pub async fn execute(
                         "Drift detected"
                     );
 
-                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        timestamp: Utc::now(),
-                        template_id: template_id.to_string(),
-                        template_name: template_info.name.clone(),
-                        template_severity: template_info.severity.clone(),
-                        target: host.clone(),
-                        payload: format!(
+                    let mut finding = FindingOwned::from_template_and_info(
+                        template_id,
+                        template_meta,
+                        host.clone(),
+                        format!(
                             "Drift detected (sensitivity: {}): {} change(s):\n{}",
                             sensitivity,
                             diffs.len(),
                             diffs.join("\n"),
                         ),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: vec!["drift-detect".to_string(), sensitivity.to_string()],
-                        compliance: Default::default(),
-                    });
+                    );
+                    finding.metadata.insert("::tags".to_string(), format!("drift-detect,{}", sensitivity));
+                    return Some(finding);
                 } else {
                     debug!(
                         target = %host,

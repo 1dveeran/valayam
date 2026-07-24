@@ -1,4 +1,4 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
 use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 
@@ -6,7 +6,7 @@ pub async fn analyze(
     client: &StealthHttpClient,
     target_url: &str,
     template: &DeepAnalysisTemplate,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     if template.analysis_type == "wasm_decompile" {
         // Fetch WASM file
         if let Ok(res) = client.client().get(target_url).send().await {
@@ -26,20 +26,18 @@ pub async fn analyze(
                         }
                     }
                 }
-                
+
                 if !found_strings.is_empty() {
-                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: Vec::new(),
-                        timestamp: chrono::Utc::now(),
+                    return Some(FindingOwned {
                         template_id: "deep-analysis-wasm".to_string(),
                         template_name: "WASM Hardcoded Secrets".to_string(),
-                        template_severity: "HIGH".to_string(),
+                        severity: "HIGH".to_string(),
                         target: target_url.to_string(),
-                        payload: format!("Found {} suspicious strings", found_strings.len()),
-                        compliance: std::collections::HashMap::new(),
+                        matched_at: format!("Found {} suspicious strings", found_strings.len()),
+                        description: None,
+                        solution: None,
+                        extracted_data: None,
+                        metadata: std::collections::HashMap::new(),
                     });
                 }
             }
@@ -53,18 +51,16 @@ pub async fn analyze(
                         for src_id in 0..sm.get_source_count() {
                             if let Some(content) = sm.get_source_contents(src_id) {
                                 if content.contains("process.env.API_KEY") || content.contains("AWS_ACCESS_KEY_ID") {
-                                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: Vec::new(),
-                                        timestamp: chrono::Utc::now(),
+                                    return Some(FindingOwned {
                                         template_id: "deep-analysis-sourcemap".to_string(),
                                         template_name: "Source Map Secrets Exposure".to_string(),
-                                        template_severity: "CRITICAL".to_string(),
+                                        severity: "CRITICAL".to_string(),
                                         target: target_url.to_string(),
-                                        payload: "Exposed environment variables found in source map".to_string(),
-                                        compliance: std::collections::HashMap::new(),
+                                        matched_at: "Exposed environment variables found in source map".to_string(),
+                                        description: None,
+                                        solution: None,
+                                        extracted_data: None,
+                                        metadata: std::collections::HashMap::new(),
                                     });
                                 }
                             }
@@ -74,6 +70,6 @@ pub async fn analyze(
             }
         }
     }
-    
+
     None
 }

@@ -1,11 +1,10 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use valayam_engine::variables::resolve_variables;
 use crate::features::extractors::engine::extract_from_response;
 use valayam_models::templates::helpers::evaluate_helpers;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::http_scan::HttpRequestTemplate;
-use chrono::Utc;
 use regex::bytes::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -100,9 +99,9 @@ pub async fn execute(
     target_url: &str,
     requests: &[HttpRequestTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
+    template_meta: &dyn TemplateMetadata,
     variables: &mut HashMap<String, String>,
-) -> Vec<ScanResult> {
+) -> Vec<FindingOwned> {
     let mut findings = Vec::new();
 
     for req_rule in requests {
@@ -212,19 +211,9 @@ pub async fn execute(
 
         if matchers_succeeded {
             tracing::debug!("Vulnerability match found for template {} on {}", template_id, full_url);
-            findings.push(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: template_info.severity.clone(),
-                target: target_url.to_string(),
-                payload: resolved_path,
-                cvss_score: None,
-                reference: None,
-                solution: None,
-                tags: Vec::new(),
-                compliance: Default::default(),
-            });
+            findings.push(FindingOwned::from_template_and_info(
+                template_id, template_meta, target_url.to_string(), resolved_path,
+            ));
         }
     }
 

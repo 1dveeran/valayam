@@ -19,17 +19,7 @@ impl_scan_plugin!(GraphqlAuditPlugin, "graphql_audit", graphql_audit,
             &ctx.target, &self.client, &template.graphql_audit,
             &template.id, &template.info,
         ).await {
-            let _ = finding_tx.send(valayam_models::finding::FindingOwned {
-                template_id: res.template_id.clone(),
-                template_name: res.template_name.clone(),
-                severity: res.template_severity.clone(),
-                target: res.target.clone(),
-                matched_at: res.payload.clone(),
-                description: res.solution.clone(),
-                solution: None,
-                extracted_data: None,
-                metadata: res.compliance.clone(),
-            }).await;
+            let _ = finding_tx.send(res).await;
             return PluginOutcome::Matched { count: 1 };
         }
         PluginOutcome::NoMatch

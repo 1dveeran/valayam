@@ -1,9 +1,8 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use super::cve_sync::{self, CveFinding, CveSeverity};
 use valayam_models::templates::sbom_audit::SbomAuditTemplate;
-use chrono::Utc;
 use std::collections::HashMap;
 use tracing::{debug, warn};
 
@@ -280,8 +279,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[SbomAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
         let base = host.trim_end_matches('/');
@@ -316,26 +315,21 @@ pub async fn execute(
         let packages = parse_packages(&body, file_type);
         if packages.is_empty() {
             // File was fetched but couldn't be parsed — return a minimal finding
-            let mut compliance = HashMap::new();
-            compliance.insert("recon".to_string(), "SBOM".to_string());
-
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Info".to_string(),
-                target: url.clone(),
-                payload: format!(
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                url.clone(),
+                format!(
                     "Exposed SBOM file detected at: {} ({} bytes) but no dependencies could be parsed.",
                     url,
                     body.len()
                 ),
-                cvss_score: None,
-                reference: None,
-                solution: Some("Remove or restrict access to the manifest/SBOM file if it is not intended for public access.".to_string()),
-                tags: vec!["sbom".to_string(), "exposure".to_string(), "info".to_string()],
-                compliance,
-            });
+            );
+            finding.severity = "Info".to_string();
+            finding.metadata.insert("::solution".to_string(), "Remove or restrict access to the manifest/SBOM file if it is not intended for public access.".to_string());
+            finding.metadata.insert("::tags".to_string(), "sbom,exposure,info".to_string());
+            finding.metadata.insert("recon".to_string(), "SBOM".to_string());
+            return Some(finding);
         }
 
         debug!(
@@ -363,20 +357,30 @@ pub async fn execute(
         let (payload, severity_score) = build_cve_payload(&all_findings, packages.len());
         let severity = severity_score_to_str(severity_score);
 
-        let mut compliance = HashMap::new();
-        compliance.insert("recon".to_string(), "SBOM".to_string());
-        if severity_score >= 40 {
-            compliance.insert(
-                "standard".to_string(),
-                "OWASP Top 10 A06:2021 - Vulnerable and Outdated Components".to_string(),
-            );
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            url.clone(),
+            payload,
+        );
+        finding.severity = severity.to_string();
+
+        if severity_score > 0 {
+            finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", (severity_score as f32) / 10.0));
         }
 
-        let cvss = if severity_score > 0 {
-            Some((severity_score as f32) / 10.0)
-        } else {
-            None
-        };
+        if all_findings.values().any(|v| v.iter().any(|f| !f.reference_urls.is_empty())) {
+            finding.metadata.insert("::reference".to_string(), "https://osv.dev/ | https://nvd.nist.gov/".to_string());
+        }
+
+        if all_findings.values().any(|v| !v.is_empty()) {
+            finding.metadata.insert("::solution".to_string(),
+                "Update affected packages to their latest patched versions. \
+                 Review and remediate Critical/High severity CVEs as a priority. \
+                 Consider integrating automated dependency scanning in CI/CD."
+                    .to_string(),
+            );
+        }
 
         let mut tags = vec![
             "sbom".to_string(),
@@ -389,36 +393,16 @@ pub async fn execute(
             tags.push(format!("severity-{}", severity.to_ascii_lowercase()));
         }
 
-        let reference = if all_findings.values().any(|v| v.iter().any(|f| !f.reference_urls.is_empty())) {
-            Some("https://osv.dev/ | https://nvd.nist.gov/".to_string())
-        } else {
-            None
-        };
+        finding.metadata.insert("::tags".to_string(), tags.join(","));
+        finding.metadata.insert("recon".to_string(), "SBOM".to_string());
+        if severity_score >= 40 {
+            finding.metadata.insert(
+                "standard".to_string(),
+                "OWASP Top 10 A06:2021 - Vulnerable and Outdated Components".to_string(),
+            );
+        }
 
-        let solution = if all_findings.values().any(|v| !v.is_empty()) {
-            Some(
-                "Update affected packages to their latest patched versions. \
-                 Review and remediate Critical/High severity CVEs as a priority. \
-                 Consider integrating automated dependency scanning in CI/CD."
-                    .to_string(),
-            )
-        } else {
-            None
-        };
-
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: severity.to_string(),
-            target: url.clone(),
-            payload,
-            cvss_score: cvss,
-            reference,
-            solution,
-            tags,
-            compliance,
-        });
+        return Some(finding);
     }
 
     None

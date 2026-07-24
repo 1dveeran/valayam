@@ -7,6 +7,7 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
 pub use valayam_models::finding::{FindingOwned, PluginOutcomeKind, PluginMetrics, PluginHealth};
+pub use valayam_models::template_info::TemplateMetadata;
 pub use valayam_models::ScanResult;
 pub const MINIMUM_API_VERSION: &str = "1.0";
 // ─── VariableScope ──────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ impl ScanContext {
     pub async fn emit_finding(&self, mut finding: FindingOwned) -> Result<(), mpsc::error::SendError<FindingOwned>> {
         // Auto-inject description if the plugin omitted it
         if finding.description.is_none() {
-            finding.description = self.template.info.description.clone();
+            finding.description = self.template.description().map(|s| s.to_string());
         }
         self.finding_tx.send(finding).await
     }

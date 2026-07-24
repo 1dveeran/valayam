@@ -6,9 +6,8 @@
 // - Add CIS Benchmark checks for Terraform configurations.
 // - Support remote state backends (S3, GCS, Azure) for policy-as-code gate checks.
 
-use valayam_models::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use std::fs;
 use std::path::Path;
 use valayam_models::templates::iac_audit::IacAuditTemplate;
@@ -271,27 +270,25 @@ fn check_cloudformation(content: &str, _config: &IacAuditConfig) -> Vec<IacFindi
     findings
 }
 
-/// Aggregate findings into a single ScanResult.
+/// Aggregate findings into a single FindingOwned.
 fn aggregate_findings(
     all_findings: &[IacFinding],
     target: &str,
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     if all_findings.is_empty() {
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: "Info".to_string(),
-            target: target.to_string(),
-            payload: format!("IaC Audit: No security issues found in '{}'.", target),
-            cvss_score: Some(0.0),
-            reference: Some("https://owasp.org/www-community/Infrastructure_as_Code_Security".to_string()),
-            solution: None,
-            tags: vec!["iac".to_string(), "audit".to_string(), "clean".to_string()],
-            compliance: Default::default(),
-        });
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            target.to_string(),
+            format!("IaC Audit: No security issues found in '{}'.", target),
+        );
+        finding.severity = "Info".to_string();
+        finding.metadata.insert("::cvss_score".to_string(), "0.0".to_string());
+        finding.metadata.insert("::reference".to_string(), "https://owasp.org/www-community/Infrastructure_as_Code_Security".to_string());
+        finding.metadata.insert("::tags".to_string(), "iac,audit,clean".to_string());
+        return Some(finding);
     }
 
     let worst = all_findings.iter()
@@ -317,31 +314,31 @@ fn aggregate_findings(
         .map(|f| format!("iac:{}:{}", f.finding_type, f.severity.to_lowercase()))
         .collect();
 
-    Some(ScanResult { schema_version: "1.0.0".to_string(),
-        timestamp: Utc::now(),
-        template_id: template_id.to_string(),
-        template_name: template_info.name.clone(),
-        template_severity: worst.severity.to_string(),
-        target: target.to_string(),
-        payload: format!(
+    let tags_list: Vec<String> = {
+        let mut t = vec!["iac".to_string(), "audit".to_string(), format!("issues:{}", all_findings.len())];
+        t.extend(finding_types);
+        t
+    };
+    let mut finding = FindingOwned::from_template_and_info(
+        template_id,
+        template_meta,
+        target.to_string(),
+        format!(
             "IaC Audit Report for '{}': {} issue(s) found.\n- {}",
             target,
             all_findings.len(),
             details.join("\n- "),
         ),
-        cvss_score: Some(worst_cvss),
-        reference: Some("https://owasp.org/www-community/Infrastructure_as_Code_Security".to_string()),
-        solution: Some(format!(
-            "Remediation steps:\n- {}",
-            solution_lines.join("\n- "),
-        )),
-        tags: {
-            let mut t = vec!["iac".to_string(), "audit".to_string(), format!("issues:{}", all_findings.len())];
-            t.extend(finding_types);
-            t
-        },
-        compliance: Default::default(),
-    })
+    );
+    finding.severity = worst.severity.to_string();
+    finding.solution = Some(format!(
+        "Remediation steps:\n- {}",
+        solution_lines.join("\n- "),
+    ));
+    finding.metadata.insert("::cvss_score".to_string(), worst_cvss.to_string());
+    finding.metadata.insert("::reference".to_string(), "https://owasp.org/www-community/Infrastructure_as_Code_Security".to_string());
+    finding.metadata.insert("::tags".to_string(), tags_list.join(","));
+    Some(finding)
 }
 
 fn severity_rank(severity: &str) -> u8 {
@@ -358,8 +355,8 @@ fn severity_rank(severity: &str) -> u8 {
 pub async fn execute(
     templates: &[IacAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     let config = IacAuditConfig::default();
 
     for template in templates {
@@ -400,7 +397,7 @@ pub async fn execute(
             }
         }
 
-        return aggregate_findings(&all_findings, &template.target, template_id, template_info);
+        return aggregate_findings(&all_findings, &template.target, template_id, template_meta);
     }
     None
 }
@@ -480,7 +477,7 @@ Resources:
     fn test_aggregate_empty() {
         let result = aggregate_findings(&[], "test.tf", "test", &TemplateInfo::default());
         assert!(result.is_some());
-        assert_eq!(result.unwrap().template_severity, "Info");
+        assert_eq!(result.unwrap().severity, "Info");
     }
 
     #[test]

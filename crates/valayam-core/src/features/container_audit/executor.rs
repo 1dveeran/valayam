@@ -7,9 +7,8 @@
 // - Add CIS Docker Benchmark checks for running containers.
 // - Implement multi-architecture image support (arm64, amd64, etc.).
 
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::finding::FindingOwned;
+use valayam_models::{TemplateInfo, TemplateMetadata};
 use valayam_models::templates::container_audit::ContainerAuditTemplate;
 
 /// Container image audit configuration.
@@ -413,27 +412,25 @@ fn run_checks(
     all_findings
 }
 
-/// Aggregate findings into a ScanResult.
+/// Aggregate findings into a FindingOwned.
 fn aggregate_container_findings(
     all_findings: Vec<ContainerFinding>,
     image: &str,
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     if all_findings.is_empty() {
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: "Info".to_string(),
-            target: image.to_string(),
-            payload: format!("Container Audit: No security issues found for image '{}'.", image),
-            cvss_score: Some(0.0),
-            reference: Some("https://docs.docker.com/engine/security/".to_string()),
-            solution: None,
-            tags: vec!["container".to_string(), "audit".to_string(), "clean".to_string()],
-            compliance: Default::default(),
-        });
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            image.to_string(),
+            format!("Container Audit: No security issues found for image '{}'.", image),
+        );
+        finding.severity = "Info".to_string();
+        finding.metadata.insert("::cvss_score".to_string(), "0.0".to_string());
+        finding.metadata.insert("::reference".to_string(), "https://docs.docker.com/engine/security/".to_string());
+        finding.metadata.insert("::tags".to_string(), "container,audit,clean".to_string());
+        return Some(finding);
     }
 
     let worst = all_findings.iter()
@@ -456,43 +453,43 @@ fn aggregate_container_findings(
         .map(|f| format!("container:{}:{}", f.finding_type, f.severity.to_lowercase()))
         .collect();
 
-    Some(ScanResult { schema_version: "1.0.0".to_string(),
-        timestamp: Utc::now(),
-        template_id: template_id.to_string(),
-        template_name: template_info.name.clone(),
-        template_severity: worst.severity.to_string(),
-        target: image.to_string(),
-        payload: format!(
+    let tags_list: Vec<String> = {
+        let mut t = vec![
+            "container".to_string(),
+            "audit".to_string(),
+            format!("issues:{}", all_findings.len()),
+        ];
+        t.extend(finding_tags);
+        t
+    };
+    let mut finding = FindingOwned::from_template_and_info(
+        template_id,
+        template_meta,
+        image.to_string(),
+        format!(
             "Container Audit Report for '{}': {} issue(s) found.\n- {}",
             image,
             all_findings.len(),
             details.join("\n- "),
         ),
-        cvss_score: Some(worst_cvss),
-        reference: Some("https://docs.docker.com/engine/security/".to_string()),
-        solution: Some(format!(
-            "Remediation steps:\n- {}",
-            solution_text.join("\n- "),
-        )),
-        tags: {
-            let mut t = vec![
-                "container".to_string(),
-                "audit".to_string(),
-                format!("issues:{}", all_findings.len()),
-            ];
-            t.extend(finding_tags);
-            t
-        },
-        compliance: Default::default(),
-    })
+    );
+    finding.severity = worst.severity.to_string();
+    finding.solution = Some(format!(
+        "Remediation steps:\n- {}",
+        solution_text.join("\n- "),
+    ));
+    finding.metadata.insert("::cvss_score".to_string(), worst_cvss.to_string());
+    finding.metadata.insert("::reference".to_string(), "https://docs.docker.com/engine/security/".to_string());
+    finding.metadata.insert("::tags".to_string(), tags_list.join(","));
+    Some(finding)
 }
 
 /// Main container audit executor.
 pub async fn execute(
     templates: &[ContainerAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     let config = ContainerAuditConfig::default();
 
     if let Some(template) = templates.iter().next() {
@@ -501,7 +498,7 @@ pub async fn execute(
 
         let all_findings = run_checks(image, checks, &config);
 
-        return aggregate_container_findings(all_findings, image, template_id, template_info);
+        return aggregate_container_findings(all_findings, image, template_id, template_meta);
     }
     None
 }
@@ -571,7 +568,7 @@ mod tests {
     fn test_aggregate_empty_no_findings() {
         let result = aggregate_container_findings(vec![], "nginx:latest", "test", &TemplateInfo::default());
         assert!(result.is_some());
-        assert_eq!(result.unwrap().template_severity, "Info");
+        assert_eq!(result.unwrap().severity, "Info");
     }
 
     #[test]
@@ -586,6 +583,6 @@ mod tests {
         }];
         let result = aggregate_container_findings(findings, "test:latest", "test", &TemplateInfo::default());
         assert!(result.is_some());
-        assert_eq!(result.unwrap().template_severity, "Medium");
+        assert_eq!(result.unwrap().severity, "Medium");
     }
 }

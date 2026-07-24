@@ -2,7 +2,8 @@
 // - Ensure `{{variable}}` context flows thread-safely between phases.
 // - Add telemetry spans for performance monitoring of each execution slice.
 use valayam_engine::rate_limiter::RateLimiter;
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_engine::variables::build_initial_context;
 use crate::features::{dns_audit, http_scan, network_scan, scripting, tls_audit, fuzzer, easm};
 use crate::network::http::StealthHttpClient;
@@ -26,7 +27,7 @@ pub async fn execute_template_inner(
     target_url: &str,
     template: &VulnerabilityTemplate,
     rate_limiter: Option<&RateLimiter>,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     // Derive the bare hostname once for slices that need it
     let target_host = Url::parse(target_url)
         .ok()
@@ -44,7 +45,7 @@ pub async fn execute_template_inner(
             &target_host,
             &template.easm,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -65,7 +66,7 @@ pub async fn execute_template_inner(
             target_url,
             &template.requests,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
             &mut variables,
         )
         .await;
@@ -81,7 +82,7 @@ pub async fn execute_template_inner(
             &target_host,
             &template.network,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await;
         if !results.is_empty() {
@@ -94,7 +95,7 @@ pub async fn execute_template_inner(
         if let Some(result) = dns_audit::executor::execute(
             &template.dns,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
             &variables,
         )
         .await
@@ -108,7 +109,7 @@ pub async fn execute_template_inner(
         let results = tls_audit::executor::execute(
             &template.tls,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
             &variables,
         )
         .await;
@@ -124,7 +125,7 @@ pub async fn execute_template_inner(
             &target_host,
             &template.scripts,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
             &variables,
         )
         .await
@@ -140,7 +141,7 @@ pub async fn execute_template_inner(
             target_url,
             &template.fuzz,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -172,7 +173,7 @@ pub async fn execute_template_inner(
                 &template.logic,
                 auth,
                 &template.id,
-                &template.info,
+                &template.info as &dyn TemplateMetadata,
                 &variables,
             )
             .await
@@ -189,7 +190,7 @@ pub async fn execute_template_inner(
             target_url,
             &template.deep_analysis,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -204,7 +205,7 @@ pub async fn execute_template_inner(
             client,
             &template.sbom_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -219,7 +220,7 @@ pub async fn execute_template_inner(
             client,
             &template.grpc_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -234,7 +235,7 @@ pub async fn execute_template_inner(
             client,
             &template.drift_detect,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -247,7 +248,7 @@ pub async fn execute_template_inner(
             client,
             &template.cred_monitor,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -258,7 +259,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::container_audit::executor::execute(
             &template.container_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -269,7 +270,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::cicd_audit::executor::execute(
             &template.cicd_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -282,7 +283,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::idp_audit::executor::execute(
             &template.idp_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
             client,
             target_url,
         )
@@ -299,7 +300,7 @@ pub async fn execute_template_inner(
             client,
             &template.aws_escalate,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -312,7 +313,7 @@ pub async fn execute_template_inner(
             client,
             &template.azure_gcp_escalate,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -329,7 +330,7 @@ pub async fn execute_template_inner(
             client,
             &template.browser_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -343,7 +344,7 @@ pub async fn execute_template_inner(
             target_url,
             &template.scada_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -356,7 +357,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::auto_redteam::executor::execute(
             &template.auto_redteam,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -367,7 +368,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::implant_deploy::executor::execute(
             &template.implant_deploy,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -382,7 +383,7 @@ pub async fn execute_template_inner(
             client,
             &template.client_secret_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -395,7 +396,7 @@ pub async fn execute_template_inner(
             client,
             &template.dom_redirect_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -410,7 +411,7 @@ pub async fn execute_template_inner(
             client,
             &template.cors_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -423,7 +424,7 @@ pub async fn execute_template_inner(
             client,
             &template.csp_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -438,7 +439,7 @@ pub async fn execute_template_inner(
             client,
             &template.waf_bypass_verify,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -451,7 +452,7 @@ pub async fn execute_template_inner(
             client,
             &template.header_scorecard,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -464,7 +465,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::reputation_audit::executor::execute(
             &template.reputation_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -475,7 +476,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::ct_log_audit::executor::execute(
             &template.ct_log_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
             client,
         )
         .await
@@ -491,7 +492,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::container_audit::executor::execute(
             &template.container_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -502,7 +503,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::k8s_audit::executor::execute(
             &template.k8s_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -515,7 +516,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::sast_taint::executor::execute(
             &template.sast_taint,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -526,7 +527,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::sast_secrets::executor::execute(
             &template.sast_secrets,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -540,7 +541,7 @@ pub async fn execute_template_inner(
             &target_host,
             &template.subdomain_takeover,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -552,7 +553,7 @@ pub async fn execute_template_inner(
             &target_host,
             &template.port_scan,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -567,7 +568,7 @@ pub async fn execute_template_inner(
             client,
             &template.pii_leak_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -580,7 +581,7 @@ pub async fn execute_template_inner(
         if let Some(result) = crate::features::cicd_audit::executor::execute(
             &template.cicd_audit,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -595,7 +596,7 @@ pub async fn execute_template_inner(
             client,
             &template.schema_drift,
             &template.id,
-            &template.info,
+            &template.info as &dyn TemplateMetadata,
         )
         .await
         {
@@ -612,7 +613,7 @@ pub async fn execute_template(
     target_url: &str,
     template: VulnerabilityTemplate,
     rate_limiter: Option<&RateLimiter>,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     let result = execute_template_inner(client, target_url, &template, rate_limiter).await;
 
     if let Some(res) = result {
@@ -620,7 +621,7 @@ pub async fn execute_template(
             if let Some(_mitre_res) = crate::features::mitre_mapping::executor::execute(
                 &template.mitre_mapping,
                 &template.id,
-                &template.info,
+                &template.info as &dyn TemplateMetadata,
                 vec![res.clone()],
             ).await {
                 // For MVP, we ignore the modified return to avoid complex ownership logic
@@ -630,7 +631,7 @@ pub async fn execute_template(
             if let Some(_rem_res) = crate::features::remediation_gen::executor::execute(
                 &template.remediation_gen,
                 &template.id,
-                &template.info,
+                &template.info as &dyn TemplateMetadata,
                 vec![res.clone()],
             ).await {
                 // Similarly ignore modified return

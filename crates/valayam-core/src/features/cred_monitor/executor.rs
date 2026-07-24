@@ -6,14 +6,12 @@
 // - Store findings in local SQLite database with deduplication by (domain, email, credential_hash).
 // - Support notification integrations (Slack, PagerDuty, email) on new critical findings.
 
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use crate::network::http::StealthHttpClient;
-use chrono::Utc;
 use valayam_models::templates::cred_monitor::CredMonitorTemplate;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
-use std::collections::HashMap;
 
 /// Configuration for credential monitoring checks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -367,8 +365,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[CredMonitorTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     let config = CredMonitorConfig::default();
 
     if let Some(template) = templates.iter().next() {
@@ -402,23 +400,20 @@ pub async fn execute(
 
         if all_findings.is_empty() {
             // No findings — return informational result
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Info".to_string(),
-                target: domain.clone(),
-                payload: format!(
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                domain.clone(),
+                format!(
                     "Credential Monitor: No credentials found in known breach datasets for domain '{}'. Reviewed {} email(s).",
                     domain,
                     template.emails.len(),
                 ),
-                cvss_score: None,
-                reference: Some("https://haveibeenpwned.com/".to_string()),
-                solution: None,
-                tags: vec!["credential".to_string(), "monitoring".to_string(), "clean".to_string()],
-                compliance: Default::default(),
-            });
+            );
+            finding.severity = "Info".to_string();
+            finding.metadata.insert("::reference".to_string(), "https://haveibeenpwned.com/".to_string());
+            finding.metadata.insert("::tags".to_string(), "credential,monitoring,clean".to_string());
+            return Some(finding);
         }
 
         // Aggregate findings
@@ -449,41 +444,37 @@ pub async fn execute(
             .map(|f| format!("{}:{}", f.finding_type, f.severity))
             .collect();
 
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: worst_severity,
-            target: domain.clone(),
-            payload: format!(
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            domain.clone(),
+            format!(
                 "Credential Monitor Report for '{}': {} finding(s) detected.\n- {}",
                 domain,
                 all_findings.len(),
                 finding_summaries.join("\n- "),
             ),
-            cvss_score: Some(worst_cvss),
-            reference: Some("https://haveibeenpwned.com/".to_string()),
-            solution: Some(format!(
-                "Recommended actions:\n- {}",
-                solution_text.join("\n- "),
-            )),
-            tags: {
-                let mut t = vec![
-                    "credential".to_string(),
-                    "monitoring".to_string(),
-                    format!("findings:{}", all_findings.len()),
-                ];
-                t.extend(finding_types);
-                t
-            },
-            compliance: {
-                let mut m = HashMap::new();
-                m.insert("finding-count".to_string(), all_findings.len().to_string());
-                m.insert("domain".to_string(), domain.clone());
-                m.insert("emails-checked".to_string(), template.emails.len().to_string());
-                m
-            },
+        );
+        finding.severity = worst_severity;
+        finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", worst_cvss));
+        finding.metadata.insert("::reference".to_string(), "https://haveibeenpwned.com/".to_string());
+        finding.metadata.insert("::solution".to_string(), format!(
+            "Recommended actions:\n- {}",
+            solution_text.join("\n- "),
+        ));
+        finding.metadata.insert("::tags".to_string(), {
+            let mut t = vec![
+                "credential".to_string(),
+                "monitoring".to_string(),
+                format!("findings:{}", all_findings.len()),
+            ];
+            t.extend(finding_types);
+            t.join(",")
         });
+        finding.metadata.insert("finding-count".to_string(), all_findings.len().to_string());
+        finding.metadata.insert("domain".to_string(), domain.clone());
+        finding.metadata.insert("emails-checked".to_string(), template.emails.len().to_string());
+        return Some(finding);
     }
     None
 }

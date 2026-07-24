@@ -1,6 +1,7 @@
 // TODO: Expand ScanResult for Compliance & Reporting.
 // - Add `compliance` mapping fields (e.g. OWASP, MITRE ATT&CK).
 // - Support multiple output formats natively (JSON, SARIF).
+use crate::template_info::TemplateMetadata;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -120,18 +121,18 @@ impl Default for ScanResult {
 impl ScanResult {
     pub fn new(
         template_id: &str,
-        template_info: &crate::template_info::TemplateInfo,
+        template_meta: &dyn TemplateMetadata,
         target_url: &str,
     ) -> Self {
         Self {
             schema_version: default_schema_version(),
             timestamp: Utc::now(),
             template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: template_info.severity.clone(),
+            template_name: template_meta.template_name().to_string(),
+            template_severity: template_meta.template_severity().to_string(),
             target: target_url.to_string(),
             payload: String::new(),
-            compliance: template_info.compliance.clone(),
+            compliance: template_meta.compliance().clone(),
             cvss_score: None,
             solution: None,
             reference: None,

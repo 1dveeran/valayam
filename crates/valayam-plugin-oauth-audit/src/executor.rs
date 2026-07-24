@@ -1,7 +1,6 @@
-use valayam_models::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_network::network::http::StealthHttpClient;
-use chrono::Utc;
 use valayam_models::templates::oauth_audit::OauthAuditTemplate;
 
 pub async fn execute(
@@ -9,8 +8,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[OauthAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
 
@@ -47,19 +46,19 @@ pub async fn execute(
                             payload_msg = "OAuth provider supports the deprecated and insecure Implicit Flow (response_type=token), which risks leaking access tokens in the browser history or referrer headers.".to_string();
                         }
 
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: if has_implicit_flow { "High".to_string() } else { "Medium".to_string() },
-                            target: host.clone(),
-                            payload: payload_msg,
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        let severity = if has_implicit_flow {
+                            "High".to_string()
+                        } else {
+                            "Medium".to_string()
+                        };
+                        let mut finding = FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            host.clone(),
+                            payload_msg,
+                        );
+                        finding.severity = severity;
+                        return Some(finding);
                     }
                 }
             }

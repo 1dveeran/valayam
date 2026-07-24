@@ -6,9 +6,8 @@
 // - Add Kyverno policy integration for complementary policy checks.
 // - Implement live cluster auditing via kubeconfig authentication.
 
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use serde_yaml::Value;
 use std::fs;
 use valayam_models::templates::k8s_audit::K8sAuditTemplate;
@@ -500,27 +499,20 @@ fn check_network_policies(kind: &str, name: &str, namespace: &str, _val: &Value)
     Vec::new()
 }
 
-/// Aggregate findings into ScanResult.
+/// Aggregate findings into FindingOwned.
 fn aggregate_k8s_findings(
     all_findings: Vec<K8sFinding>,
     target: &str,
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     if all_findings.is_empty() {
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: "Info".to_string(),
-            target: target.to_string(),
-            payload: format!("K8s Audit: No security issues found in '{}'.", target),
-            cvss_score: Some(0.0),
-            reference: Some("https://www.cisecurity.org/benchmark/kubernetes".to_string()),
-            solution: None,
-            tags: vec!["k8s".to_string(), "audit".to_string(), "clean".to_string()],
-            compliance: Default::default(),
-        });
+        return Some(FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            target.to_string(),
+            format!("K8s Audit: No security issues found in '{}'.", target),
+        ));
     }
 
     let worst = all_findings.iter()
@@ -543,39 +535,38 @@ fn aggregate_k8s_findings(
         .map(|f| format!("k8s:{}:{}", f.finding_type, f.severity.to_lowercase()))
         .collect();
 
-    Some(ScanResult { schema_version: "1.0.0".to_string(),
-        timestamp: Utc::now(),
-        template_id: template_id.to_string(),
-        template_name: template_info.name.clone(),
-        template_severity: worst.severity.to_string(),
-        target: target.to_string(),
-        payload: format!(
+    let mut finding = FindingOwned::from_template_and_info(
+        template_id,
+        template_meta,
+        target.to_string(),
+        format!(
             "K8s Audit Report for '{}': {} issue(s) found.\n- {}",
             target,
             all_findings.len(),
             details.join("\n- "),
         ),
-        cvss_score: Some(worst_cvss),
-        reference: Some("https://www.cisecurity.org/benchmark/kubernetes".to_string()),
-        solution: Some(format!(
-            "Remediation steps:\n- {}",
-            solution_text.join("\n- "),
-        )),
-        tags: {
-            let mut t = vec!["k8s".to_string(), "audit".to_string(), format!("issues:{}", all_findings.len())];
-            t.extend(finding_tags);
-            t
-        },
-        compliance: Default::default(),
-    })
+    );
+    finding.severity = worst.severity.to_string();
+    finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", worst_cvss));
+    finding.metadata.insert("::reference".to_string(), "https://www.cisecurity.org/benchmark/kubernetes".to_string());
+    finding.metadata.insert("::solution".to_string(), format!(
+        "Remediation steps:\n- {}",
+        solution_text.join("\n- "),
+    ));
+    finding.metadata.insert("::tags".to_string(), {
+        let mut t = vec!["k8s".to_string(), "audit".to_string(), format!("issues:{}", all_findings.len())];
+        t.extend(finding_tags);
+        t.join(",")
+    });
+    Some(finding)
 }
 
 /// Main K8s audit executor.
 pub async fn execute(
     templates: &[K8sAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     let config = K8sAuditConfig::default();
 
     for template in templates {
@@ -632,7 +623,7 @@ pub async fn execute(
             }
         }
 
-        return aggregate_k8s_findings(all_findings, &template.target_manifest, template_id, template_info);
+        return aggregate_k8s_findings(all_findings, &template.target_manifest, template_id, template_meta);
     }
     None
 }

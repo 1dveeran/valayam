@@ -1,6 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::ct_log_audit::CtLogAuditTemplate;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -356,9 +356,9 @@ fn score_to_severity(score: u8) -> &'static str {
 pub async fn execute(
     templates: &[CtLogAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
+    template_meta: &dyn TemplateMetadata,
     client: &StealthHttpClient,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     for template in templates {
         let query_domain = template.query_domain.trim().to_ascii_lowercase();
         let crt_sh_url = format!(
@@ -439,42 +439,26 @@ pub async fn execute(
         if findings.is_empty() {
             // No notable findings — return Info-level result anyway to indicate
             // the domain was checked
-            let mut compliance = HashMap::new();
-            compliance.insert("recon".to_string(), "OSINT".to_string());
-
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Info".to_string(),
-                target: query_domain.clone(),
-                payload: format!(
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                query_domain.clone(),
+                format!(
                     "Certificate Transparency audit completed for '{}'. {} certificate(s) found, no suspicious patterns detected.",
                     query_domain,
                     entries.len()
                 ),
-                cvss_score: None,
-                reference: Some("https://crt.sh/".to_string()),
-                solution: None,
-                tags: vec![
-                    "ct-log".to_string(),
-                    "certificate".to_string(),
-                    "osint".to_string(),
-                ],
-                compliance,
-            });
+            );
+            finding.severity = "Info".to_string();
+            finding.metadata.insert("::reference".to_string(), "https://crt.sh/".to_string());
+            finding.metadata.insert("::tags".to_string(), "ct-log,certificate,osint".to_string());
+            finding.metadata.insert("recon".to_string(), "OSINT".to_string());
+            return Some(finding);
         }
 
         let (payload, severity_score) = findings_to_payload(&findings);
         let severity = score_to_severity(severity_score);
         let cvss = (severity_score as f32) / 10.0;
-
-        let mut compliance = HashMap::new();
-        compliance.insert("recon".to_string(), "OSINT".to_string());
-        compliance.insert(
-            "standard".to_string(),
-            "CA/Browser Forum Baseline Requirements".to_string(),
-        );
 
         // Build tags based on finding types
         let mut tags: Vec<String> = vec![
@@ -516,24 +500,28 @@ pub async fn execute(
 
         let final_payload = format!("{}\n\n{}", payload, technical_details);
 
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: template_info.name.clone(),
-            template_severity: severity.to_string(),
-            target: query_domain.clone(),
-            payload: final_payload,
-            cvss_score: Some(cvss),
-            reference: Some("https://crt.sh/ | https://letsencrypt.org/docs/ct-logs/".to_string()),
-            solution: Some(
-                "Review certificate issuance for unauthorized subdomains. \
-                 Consider using CAA DNS records to restrict which CAs can issue \
-                 certificates for your domain. Monitor CT logs regularly for unexpected certificates."
-                    .to_string(),
-            ),
-            tags,
-            compliance,
-        });
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            query_domain.clone(),
+            final_payload,
+        );
+        finding.severity = severity.to_string();
+        finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", cvss));
+        finding.metadata.insert("::reference".to_string(), "https://crt.sh/ | https://letsencrypt.org/docs/ct-logs/".to_string());
+        finding.metadata.insert("::solution".to_string(),
+            "Review certificate issuance for unauthorized subdomains. \
+             Consider using CAA DNS records to restrict which CAs can issue \
+             certificates for your domain. Monitor CT logs regularly for unexpected certificates."
+                .to_string(),
+        );
+        finding.metadata.insert("::tags".to_string(), tags.join(","));
+        finding.metadata.insert("recon".to_string(), "OSINT".to_string());
+        finding.metadata.insert(
+            "standard".to_string(),
+            "CA/Browser Forum Baseline Requirements".to_string(),
+        );
+        return Some(finding);
     }
 
     None

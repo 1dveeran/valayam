@@ -1,24 +1,22 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use crate::network::http::StealthHttpClient;
 use valayam_models::templates::idp_audit::IdpAuditTemplate;
-use chrono::Utc;
-use std::collections::HashMap;
 
 pub async fn execute(
     templates: &[IdpAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
+    template_meta: &dyn TemplateMetadata,
     client: &StealthHttpClient,
     base_url: &str,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     for template in templates {
         let url = if template.target.starts_with("http") {
             template.target.clone()
         } else {
             format!("{}/{}", base_url.trim_end_matches('/'), template.target.trim_start_matches('/'))
         };
-        
+
         let idp_endpoints = vec![
             "/adfs/ls/idpinitiatedsignon.htm", // Common ADFS endpoint that can be abused for enumeration
             "/oauth2/default/.well-known/openid-configuration", // Okta discovery
@@ -36,22 +34,15 @@ pub async fn execute(
         }
 
         if !findings.is_empty() {
-            let mut compliance = HashMap::new();
-            compliance.insert("cwe".to_string(), "CWE-16".to_string());
-            
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Medium".to_string(),
-                target: url,
-                payload: format!("Exposed Identity Provider (IDP) discovery/sign-on endpoints detected: {:?}", findings),
-                cvss_score: None,
-                reference: None,
-                solution: None,
-                tags: Vec::new(),
-                compliance,
-            });
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                url.clone(),
+                format!("Exposed Identity Provider (IDP) discovery/sign-on endpoints detected: {:?}", findings),
+            );
+            finding.severity = "Medium".to_string();
+            finding.metadata.insert("cwe".to_string(), "CWE-16".to_string());
+            return Some(finding);
         }
     }
     None

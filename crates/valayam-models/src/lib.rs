@@ -7,4 +7,4 @@ pub mod templates;
 
 pub use result::ScanResult;
 pub use finding::{FindingOwned, PluginOutcomeKind, PluginMetrics, PluginHealth};
-pub use template_info::TemplateInfo;
+pub use template_info::{TemplateInfo, TemplateMetadata};

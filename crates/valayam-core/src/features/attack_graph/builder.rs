@@ -1,13 +1,13 @@
 use super::graph::{AttackGraph, NodeData, NodeType, EdgeData, EdgeType};
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use url::Url;
 
 impl AttackGraph {
-    /// Ingest a ScanResult and add corresponding nodes and edges to the graph.
-    pub fn ingest_result(&mut self, result: &ScanResult) {
+    /// Ingest a FindingOwned and add corresponding nodes and edges to the graph.
+    pub fn ingest_result(&mut self, result: &FindingOwned) {
         // Example logic: Create a node for the target domain/IP
         let target_node_id = result.target.clone();
-        
+
         let target_type = if Url::parse(&target_node_id).is_ok() {
             NodeType::Domain
         } else {
@@ -27,7 +27,7 @@ impl AttackGraph {
             id: vuln_node_id.clone(),
             label: result.template_name.clone(),
             node_type: NodeType::Vulnerability,
-            severity: Some(result.template_severity.clone()),
+            severity: Some(result.severity.clone()),
         });
 
         // Add an edge: Domain -> HasVulnerability -> Vulnerability
@@ -35,9 +35,9 @@ impl AttackGraph {
             edge_type: EdgeType::HasVulnerability,
             description: None,
         });
-        
+
         // Example: if the payload contains credentials, link it as ExposesSecret
-        if result.payload.contains("password=") || result.payload.contains("secret=") {
+        if result.matched_at.contains("password=") || result.matched_at.contains("secret=") {
             let secret_id = format!("{}-secret", vuln_node_id);
             self.add_node(NodeData {
                 id: secret_id.clone(),

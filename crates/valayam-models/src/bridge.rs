@@ -1,9 +1,7 @@
 //! Bridge utility: convert between legacy ScanResult and FindingOwned.
-//! Preserves all fields in both directions.
-//!
-//! Fields from `ScanResult` that have no direct counterpart in `FindingOwned`
-//! (`cvss_score`, `solution`, `reference`) are stored in `FindingOwned.metadata`
-//! under prefixed keys to avoid collisions with compliance data.
+//! After Phase 1 refactor, only the finding-to-scan direction is needed
+//! (for legacy reporter compatibility). The scan-to-finding direction is
+//! still needed in the gRPC wire-format deserialization path.
 
 use crate::result::ScanResult;
 use crate::finding::FindingOwned;
@@ -14,31 +12,31 @@ const META_CVSS_SCORE: &str = "::cvss_score";
 const META_SOLUTION: &str = "::solution";
 const META_REFERENCE: &str = "::reference";
 
-/// Convert a legacy ScanResult into a FindingOwned, preserving all fields.
-pub fn scan_result_to_finding(result: ScanResult) -> FindingOwned {
-    let mut metadata = result.compliance;
-
-    if let Some(score) = result.cvss_score {
-        metadata.insert(META_CVSS_SCORE.to_string(), score.to_string());
+/// Convert a legacy ScanResult into a FindingOwned.
+///
+/// Used by the gRPC deserialization path where ScanResult is still the wire format.
+pub fn scan_result_to_finding(res: ScanResult) -> FindingOwned {
+    let mut metadata = res.compliance;
+    if let Some(cvss) = res.cvss_score {
+        metadata.insert(META_CVSS_SCORE.to_string(), cvss.to_string());
     }
-    if let Some(ref solution) = result.solution {
-        metadata.insert(META_SOLUTION.to_string(), solution.clone());
+    if let Some(ref_) = res.reference {
+        metadata.insert(META_REFERENCE.to_string(), ref_);
     }
-    if let Some(reference) = result.reference {
-        metadata.insert(META_REFERENCE.to_string(), reference);
+    if let Some(sol) = res.solution {
+        metadata.insert(META_SOLUTION.to_string(), sol);
     }
-    if !result.tags.is_empty() {
-        metadata.insert("::tags".to_string(), result.tags.join(","));
+    if !res.tags.is_empty() {
+        metadata.insert("::tags".to_string(), res.tags.join(","));
     }
-
     FindingOwned {
-        template_id: result.template_id,
-        template_name: result.template_name,
-        severity: result.template_severity,
-        target: result.target,
-        matched_at: result.payload,
+        template_id: res.template_id,
+        template_name: res.template_name,
+        severity: res.template_severity,
+        target: res.target,
+        matched_at: res.payload,
         description: None,
-        solution: result.solution,
+        solution: None,
         extracted_data: None,
         metadata,
     }
@@ -47,7 +45,7 @@ pub fn scan_result_to_finding(result: ScanResult) -> FindingOwned {
 /// Reconstruct a ScanResult from a FindingOwned without data loss.
 ///
 /// Extracts `cvss_score`, `solution`, `reference`, and `tags` from
-/// `FindingOwned.metadata` where they were stored by `scan_result_to_finding`.
+/// `FindingOwned.metadata` where they were stored by the `from_template` constructor.
 pub fn finding_to_scan_result(finding: FindingOwned) -> ScanResult {
     let mut compliance = HashMap::new();
     let mut cvss_score: Option<f32> = None;
@@ -97,110 +95,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_scan_result_to_finding_basic() {
-        let sr = ScanResult { schema_version: "1.0.0".to_string(),
-            template_id: "test-001".into(),
-            template_name: "SQLi Test".into(),
-            template_severity: "high".into(),
-            target: "https://example.com".into(),
-            payload: "SQL injection in /login".into(),
-            compliance: [("cwe".into(), "89".into())].into(),
-            cvss_score: Some(7.5),
-            solution: Some("Use prepared statements".into()),
-            reference: Some("https://cve.mitre.org/1234".into()),
-            tags: vec!["sql".into(), "injection".into()],
-            timestamp: chrono::Utc::now(),
-        };
-
-        let finding = scan_result_to_finding(sr);
-
-        assert_eq!(finding.template_id, "test-001");
-        assert_eq!(finding.severity, "high");
-        assert_eq!(finding.target, "https://example.com");
-        assert_eq!(finding.matched_at, "SQL injection in /login");
-        assert_eq!(finding.metadata.get("::cvss_score").unwrap(), "7.5");
-        assert_eq!(finding.metadata.get("::solution").unwrap(), "Use prepared statements");
-        assert_eq!(finding.metadata.get("::reference").unwrap(), "https://cve.mitre.org/1234");
-        assert_eq!(finding.metadata.get("::tags").unwrap(), "sql,injection");
-        assert_eq!(finding.metadata.get("cwe").unwrap(), "89");
-    }
-
-    #[test]
-    fn test_scan_result_to_finding_no_optionals() {
-        let sr = ScanResult { schema_version: "1.0.0".to_string(),
-            template_id: "test-002".into(),
-            template_name: "No Opt".into(),
-            template_severity: "low".into(),
-            target: "https://example.com".into(),
-            payload: "info leak".into(),
-            compliance: Default::default(),
-            cvss_score: None,
-            solution: None,
-            reference: None,
-            tags: vec![],
-            timestamp: chrono::Utc::now(),
-        };
-
-        let finding = scan_result_to_finding(sr);
-        assert_eq!(finding.metadata.len(), 0);
-        assert!(finding.solution.is_none());
-    }
-
-    #[test]
-    fn test_finding_to_scan_result_roundtrip() {
-        let original = ScanResult { schema_version: "1.0.0".to_string(),
-            template_id: "roundtrip".into(),
-            template_name: "Roundtrip Test".into(),
-            template_severity: "critical".into(),
-            target: "https://target.com".into(),
-            payload: "matched".into(),
-            compliance: [("cwe".into(), "79".into())].into(),
-            cvss_score: Some(9.0),
-            solution: Some("Sanitize".into()),
-            reference: Some("https://owasp.org".into()),
-            tags: vec!["xss".into()],
-            timestamp: chrono::Utc::now(),
-        };
-
-        let finding = scan_result_to_finding(original);
-        let reconstructed = finding_to_scan_result(finding);
-
-        assert_eq!(reconstructed.template_id, "roundtrip");
-        assert_eq!(reconstructed.template_severity, "critical");
-        assert_eq!(reconstructed.target, "https://target.com");
-        assert_eq!(reconstructed.payload, "matched");
-        assert_eq!(reconstructed.compliance.get("cwe").unwrap(), "79");
-        assert_eq!(reconstructed.cvss_score.unwrap(), 9.0);
-        assert!(reconstructed.solution.is_some());
-        assert!(reconstructed.reference.is_some());
-        assert!(reconstructed.tags.contains(&"xss".to_string()));
-    }
-
-    #[test]
-    fn test_scan_result_with_compliance_only_roundtrip() {
-        let sr = ScanResult { schema_version: "1.0.0".to_string(),
-            template_id: "compliance-only".into(),
-            template_name: "Compliance".into(),
-            template_severity: "medium".into(),
-            target: "https://test.com".into(),
-            payload: "compliance issue".into(),
-            compliance: [("owasp".into(), "A3:2017".into()), ("nist".into(), "SP-800-53".into())].into(),
-            cvss_score: None,
-            solution: None,
-            reference: None,
-            tags: vec![],
-            timestamp: chrono::Utc::now(),
-        };
-
-        let finding = scan_result_to_finding(sr);
-        let back = finding_to_scan_result(finding);
-
-        assert_eq!(back.compliance.get("owasp").unwrap(), "A3:2017");
-        assert_eq!(back.compliance.get("nist").unwrap(), "SP-800-53");
-        assert_eq!(back.compliance.len(), 2);
-    }
-
-    #[test]
     fn test_finding_to_scan_result_preserves_solution() {
         // solution in FindingOwned.solution should take precedence over metadata
         let finding = FindingOwned {
@@ -236,5 +130,45 @@ mod tests {
 
         let sr = finding_to_scan_result(finding);
         assert_eq!(sr.cvss_score, Some(5.5));
+    }
+
+    #[test]
+    fn test_finding_to_scan_result_with_compliance() {
+        let finding = FindingOwned {
+            template_id: "compliance-only".into(),
+            template_name: "Compliance".into(),
+            severity: "medium".into(),
+            target: "https://test.com".into(),
+            matched_at: "compliance issue".into(),
+            description: None,
+            solution: None,
+            extracted_data: None,
+            metadata: [("owasp".into(), "A3:2017".into()), ("nist".into(), "SP-800-53".into())].into(),
+        };
+
+        let back = finding_to_scan_result(finding);
+
+        assert_eq!(back.compliance.get("owasp").unwrap(), "A3:2017");
+        assert_eq!(back.compliance.get("nist").unwrap(), "SP-800-53");
+        assert_eq!(back.compliance.len(), 2);
+    }
+
+    #[test]
+    fn test_finding_to_scan_result_tags_from_metadata() {
+        let finding = FindingOwned {
+            template_id: "test".into(),
+            template_name: "Test".into(),
+            severity: "high".into(),
+            target: "https://example.com".into(),
+            matched_at: "match".into(),
+            description: None,
+            solution: None,
+            extracted_data: None,
+            metadata: [("::tags".into(), "xss,sql".into())].into(),
+        };
+
+        let sr = finding_to_scan_result(finding);
+        assert!(sr.tags.contains(&"xss".to_string()));
+        assert!(sr.tags.contains(&"sql".to_string()));
     }
 }

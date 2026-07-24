@@ -1,6 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 
 pub async fn execute(
@@ -8,8 +8,8 @@ pub async fn execute(
     target_url: &str,
     templates: &[DeepAnalysisTemplate],
     _template_id: &str,
-    _template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    _template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for t in templates {
         match t.analysis_type.as_str() {
             "llm_mutation" => {
@@ -31,19 +31,14 @@ pub async fn execute(
                 tracing::info!("Running deep analysis: Entropy and statistical variance on {}", target_url);
                 // Simulate calculating Shannon entropy of HTTP responses
                 // This would drop the ScanResult if the variance is high (likely false positive).
-                return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: Vec::new(),
-                    timestamp: chrono::Utc::now(),
-                    target: target_url.to_string(),
-                    template_id: _template_id.to_string(),
-                    template_name: format!("{} (Deep Verified)", _template_info.name),
-                    template_severity: _template_info.severity.clone(),
-                    payload: "Statistical variance confirmed vulnerability (Entropy: 7.82)".to_string(),
-                    compliance: Default::default(),
-                });
+                let mut finding = FindingOwned::from_template_and_info(
+                    _template_id,
+                    _template_meta,
+                    target_url.to_string(),
+                    "Statistical variance confirmed vulnerability (Entropy: 7.82)".to_string(),
+                );
+                finding.template_name = format!("{} (Deep Verified)", _template_meta.template_name());
+                return Some(finding);
             }
             _ => {
                 // Log unknown analysis type

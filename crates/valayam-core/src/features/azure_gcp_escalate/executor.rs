@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use crate::network::http::StealthHttpClient;
-use chrono::Utc;
 use valayam_models::templates::azure_gcp_escalate::AzureGcpEscalateTemplate;
 
 pub async fn execute(
@@ -9,8 +8,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[AzureGcpEscalateTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
 
@@ -26,22 +25,17 @@ pub async fn execute(
             if let Ok(resp) = req_client.get(reqwest_url.clone())
                 .query(&[("url", payload_url)])
                 .send().await {
-                
+
                 if let Ok(body) = resp.text().await {
                     if (template.provider == "gcp" && body.contains("instance/")) || (template.provider == "azure" && body.contains("compute")) {
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: "Critical".to_string(),
-                            target: host.clone(),
-                            payload: format!("Azure/GCP Escalate: SSRF vulnerability leading to {} metadata exposure detected.", template.provider),
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        let mut finding = FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            host.clone(),
+                            format!("Azure/GCP Escalate: SSRF vulnerability leading to {} metadata exposure detected.", template.provider),
+                        );
+                        finding.severity = "Critical".to_string();
+                        return Some(finding);
                     }
                 }
             }

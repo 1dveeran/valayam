@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::dns;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::subdomain_takeover::SubdomainTakeoverTemplate;
 
 const VULNERABLE_CNAMES: &[&str] = &[
@@ -17,8 +16,8 @@ pub async fn execute(
     target_host: &str,
     templates: &[SubdomainTakeoverTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let domain = template.target.replace("{{Hostname}}", target_host);
 
@@ -27,19 +26,12 @@ pub async fn execute(
         for cname in &cnames {
             for &vuln in VULNERABLE_CNAMES {
                 if cname.contains(vuln) {
-                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        timestamp: Utc::now(),
-                        template_id: template_id.to_string(),
-                        template_name: template_info.name.clone(),
-                        template_severity: template_info.severity.clone(),
-                        target: domain.clone(),
-                        payload: format!("Dangling CNAME record detected pointing to {}. Vulnerable to subdomain takeover.", cname),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: Vec::new(),
-                        compliance: Default::default(),
-                    });
+                    return Some(FindingOwned::from_template_and_info(
+                        template_id,
+                        template_meta,
+                        domain.clone(),
+                        format!("Dangling CNAME record detected pointing to {}. Vulnerable to subdomain takeover.", cname),
+                    ));
                 }
             }
         }

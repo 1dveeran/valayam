@@ -1,8 +1,6 @@
-use valayam_models::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::iot_audit::IotAuditTemplate;
-use chrono::Utc;
-use std::collections::HashMap;
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{timeout, Duration};
@@ -11,8 +9,8 @@ use url::Url;
 pub async fn execute(
     templates: &[IotAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = if template.target.starts_with("mqtt") || template.target.starts_with("http") {
             if let Ok(parsed) = Url::parse(&template.target) {
@@ -47,24 +45,17 @@ pub async fn execute(
             ];
 
             if stream.write_all(&mqtt_connect_packet).await.is_ok() {
-                // If it accepts the connection and packet without immediate termination, 
+                // If it accepts the connection and packet without immediate termination,
                 // it might be an open anonymous MQTT broker.
-                let mut compliance = HashMap::new();
-                compliance.insert("cwe".to_string(), "CWE-284".to_string());
-                
-                return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                    timestamp: Utc::now(),
-                    template_id: template_id.to_string(),
-                    template_name: template_info.name.clone(),
-                    template_severity: "High".to_string(),
-                    target: addr,
-                    payload: "IoT/MQTT Broker is exposed and accepting connections on port 1883.".to_string(),
-                    cvss_score: None,
-                    reference: None,
-                    solution: None,
-                    tags: Vec::new(),
-                    compliance,
-                });
+                let mut finding = FindingOwned::from_template_and_info(
+                    template_id,
+                    template_meta,
+                    addr.clone(),
+                    "IoT/MQTT Broker is exposed and accepting connections on port 1883.".to_string(),
+                );
+                finding.severity = "High".to_string();
+                finding.metadata.insert("cwe".to_string(), "CWE-284".to_string());
+                return Some(finding);
             }
         }
     }

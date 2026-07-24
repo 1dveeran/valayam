@@ -1,8 +1,7 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::fuzzer::FuzzTemplate;
-use chrono::Utc;
 use url::Url;
 
 fn mutate_query_url(
@@ -32,8 +31,8 @@ pub async fn execute(
     target_url: &str,
     fuzz_rules: &[FuzzTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     let Ok(base_url) = Url::parse(target_url) else {
         return None;
     };
@@ -66,38 +65,24 @@ pub async fn execute(
                             if matcher.r#type == "status" {
                                 if let Some(ref statuses) = matcher.status {
                                     if statuses.contains(&status_code) {
-                                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                                            cvss_score: None,
-                                            reference: None,
-                                            solution: None,
-                                            tags: Vec::new(),
-                                            timestamp: Utc::now(),
-                                            template_id: template_id.to_string(),
-                                            template_name: template_info.name.clone(),
-                                            template_severity: template_info.severity.clone(),
-                                            target: target_url.to_string(),
-                                            payload: format!("Fuzz matched status {} on query key '{}' with payload '{}'", status_code, key, payload),
-                                            compliance: Default::default(),
-                                        });
+                                        return Some(FindingOwned::from_template_and_info(
+                                            template_id,
+                                            template_meta,
+                                            target_url.to_string(),
+                                            format!("Fuzz matched status {} on query key '{}' with payload '{}'", status_code, key, payload),
+                                        ));
                                     }
                                 }
                             } else if matcher.r#type == "regex" && matcher.part == "body" {
                                 for pattern in &matcher.regex {
                                     if let Ok(re) = regex::Regex::new(pattern) {
                                         if re.is_match(&body_text) {
-                                            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                                            cvss_score: None,
-                                            reference: None,
-                                            solution: None,
-                                            tags: Vec::new(),
-                                                timestamp: Utc::now(),
-                                                template_id: template_id.to_string(),
-                                                template_name: template_info.name.clone(),
-                                                template_severity: template_info.severity.clone(),
-                                                target: target_url.to_string(),
-                                                payload: format!("Fuzz matched regex '{}' on query key '{}' with payload '{}'", pattern, key, payload),
-                                                compliance: Default::default(),
-                                            });
+                                            return Some(FindingOwned::from_template_and_info(
+                                                template_id,
+                                                template_meta,
+                                                target_url.to_string(),
+                                                format!("Fuzz matched regex '{}' on query key '{}' with payload '{}'", pattern, key, payload),
+                                            ));
                                         }
                                     }
                                 }

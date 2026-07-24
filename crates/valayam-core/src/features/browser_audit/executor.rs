@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use crate::network::http::StealthHttpClient;
-use chrono::Utc;
 use valayam_models::templates::browser_audit::BrowserAuditTemplate;
 
 // TODO: Headless Browser Audit Engine — Full Implementation Plan
@@ -63,8 +62,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[BrowserAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
 
@@ -77,19 +76,12 @@ pub async fn execute(
                     // and reflecting script tags in the body.
 
                     if body.contains("<script>") && !body.contains("X-XSS-Protection") {
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: "High".to_string(),
-                            target: host.clone(),
-                            payload: "Browser Audit: Potential XSS or client-side execution vulnerability detected (missing protections).".to_string(),
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        return Some(FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            &host,
+                            "Browser Audit: Potential XSS or client-side execution vulnerability detected (missing protections).",
+                        ));
                     }
                 }
             }

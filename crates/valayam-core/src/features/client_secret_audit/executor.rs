@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use crate::network::http::StealthHttpClient;
-use chrono::Utc;
 use regex::Regex;
 use valayam_models::templates::client_secret_audit::ClientSecretAuditTemplate;
 
@@ -10,8 +9,8 @@ pub async fn execute(
     client: &StealthHttpClient,
     templates: &[ClientSecretAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_url);
 
@@ -23,19 +22,14 @@ pub async fn execute(
                     let secret_re = Regex::new(r#"(?i)(api_key|apikey|secret|password|passwd|pwd|aws_access_key_id|aws_secret_access_key)\s*[:=]\s*['""][a-zA-Z0-9/+=]{10,}['""]"#).unwrap();
                     
                     if secret_re.is_match(&body) {
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: "High".to_string(),
-                            target: host.clone(),
-                            payload: "Hardcoded client secret or API token found in client-side bundle response.".to_string(),
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        let mut finding = FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            host.clone(),
+                            "Hardcoded client secret or API token found in client-side bundle response.".to_string(),
+                        );
+                        finding.severity = "High".to_string();
+                        return Some(finding);
                     }
                 }
             }

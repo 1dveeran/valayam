@@ -168,6 +168,14 @@ pub struct VulnerabilityTemplate {
 }
 
 pub use crate::template_info::TemplateInfo;
+pub use crate::template_info::TemplateMetadata;
+
+impl TemplateMetadata for VulnerabilityTemplate {
+    fn template_name(&self) -> &str { &self.info.name }
+    fn template_severity(&self) -> &str { &self.info.severity }
+    fn description(&self) -> Option<&str> { self.info.description.as_deref() }
+    fn compliance(&self) -> &std::collections::HashMap<String, String> { &self.info.compliance }
+}
 
 impl VulnerabilityTemplate {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, crate::error::ScannerError> {

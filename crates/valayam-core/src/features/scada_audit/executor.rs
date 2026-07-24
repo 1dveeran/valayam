@@ -1,6 +1,5 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use url::Url;
 use valayam_models::templates::scada_audit::ScadaAuditTemplate;
 
@@ -8,8 +7,8 @@ pub async fn execute(
     target_url: &str,
     templates: &[ScadaAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         // Parse host from target_url
         let host = if let Ok(parsed) = Url::parse(target_url) {
@@ -34,19 +33,12 @@ pub async fn execute(
         let results = crate::network::tcp::scan_ports(&host, &[port.to_string()], None, false, None).await;
 
         if let Some(_open_port) = results.first() {
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Critical".to_string(),
-                target: host.clone(),
-                payload: format!("CRITICAL: Exposed {} SCADA interface detected on port {}!", protocol.to_uppercase(), port),
-                cvss_score: None,
-                reference: None,
-                solution: None,
-                tags: Vec::new(),
-                compliance: Default::default(),
-            });
+            return Some(FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                &host,
+                format!("CRITICAL: Exposed {} SCADA interface detected on port {}!", protocol.to_uppercase(), port),
+            ));
         }
     }
     None

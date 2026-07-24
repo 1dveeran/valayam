@@ -1,4 +1,4 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
 use valayam_models::templates::deep_analysis::DeepAnalysisTemplate;
 use serde_json::json;
@@ -104,7 +104,7 @@ pub async fn mutate_and_test(
     client: &StealthHttpClient,
     target_url: &str,
     template: &DeepAnalysisTemplate,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     // Basic MVP: assume a local llama.cpp server is running at http://localhost:8080
     // In a real scenario, this endpoint could be configurable.
     let llm_endpoint = "http://localhost:8080/completion";
@@ -138,18 +138,16 @@ pub async fn mutate_and_test(
 
             if let Ok(res) = test_req {
                 if res.status().is_success() {
-                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: Vec::new(),
-                        timestamp: chrono::Utc::now(),
+                    return Some(FindingOwned {
                         template_id: "deep-analysis-llm".to_string(),
                         template_name: "LLM Mutator WAF Bypass".to_string(),
-                        template_severity: "CRITICAL".to_string(),
+                        severity: "CRITICAL".to_string(),
                         target: target_url.to_string(),
-                        payload: mutated_payload.to_string(),
-                        compliance: std::collections::HashMap::new(),
+                        matched_at: mutated_payload.to_string(),
+                        description: None,
+                        solution: None,
+                        extracted_data: None,
+                        metadata: std::collections::HashMap::new(),
                     });
                 }
             }

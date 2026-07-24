@@ -1,9 +1,8 @@
-use crate::core::result::ScanResult;
 use crate::network::tcp;
 use crate::network::udp;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::network_scan::NetworkRequestTemplate;
-use chrono::Utc;
 use regex::bytes::Regex;
 use std::collections::HashMap;
 
@@ -307,8 +306,8 @@ pub async fn execute(
     target_host: &str,
     network_rules: &[NetworkRequestTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Vec<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Vec<FindingOwned> {
     let mut all_findings = Vec::new();
 
     for net_rule in network_rules {
@@ -394,7 +393,7 @@ pub async fn execute(
             }
 
             if net_rule.matchers.is_empty() {
-                let severity = template_info.severity.clone();
+                let severity = template_meta.template_severity().to_string();
                 let adjusted_severity = if is_critical && !vuln_check.is_none() {
                     if severity == "Info" { "Medium".to_string() }
                     else if severity == "Low" { "High".to_string() }
@@ -408,19 +407,12 @@ pub async fn execute(
                     severity
                 };
                 
-                let result = ScanResult { schema_version: "1.0.0".to_string(),
-                    timestamp: Utc::now(),
-                    template_id: template_id.to_string(),
-                    template_name: template_info.name.clone(),
-                    template_severity: adjusted_severity,
-                    target: format!("{}:{}", host_to_scan, port_result.port),
-                    payload: finding_details,
-                    cvss_score,
-                    reference: None,
-                    solution,
-                    tags: Vec::new(),
-                    compliance,
-                };
+                let result = FindingOwned::from_template_and_info(
+                    template_id,
+                    template_meta,
+                    format!("{}:{}", host_to_scan, port_result.port),
+                    finding_details,
+                );
                 if is_critical {
                     critical_findings.push(result);
                 } else {
@@ -450,7 +442,7 @@ pub async fn execute(
                 }
                 
                 if matched {
-                    let severity = template_info.severity.clone();
+                    let severity = template_meta.template_severity().to_string();
                     let adjusted_severity = if is_critical && !vuln_check.is_none() {
                         if severity == "Info" { "Medium".to_string() }
                         else if severity == "Low" { "High".to_string() }
@@ -464,19 +456,12 @@ pub async fn execute(
                         severity
                     };
                     
-                    let result = ScanResult { schema_version: "1.0.0".to_string(),
-                        timestamp: Utc::now(),
-                        template_id: template_id.to_string(),
-                        template_name: template_info.name.clone(),
-                        template_severity: adjusted_severity,
-                        target: format!("{}:{}", host_to_scan, port_result.port),
-                        payload: finding_details,
-                        cvss_score,
-                        reference: None,
-                        solution,
-                        tags: Vec::new(),
-                        compliance,
-                    };
+                    let result = FindingOwned::from_template_and_info(
+                        template_id,
+                        template_meta,
+                        format!("{}:{}", host_to_scan, port_result.port),
+                        finding_details,
+                    );
                     if is_critical {
                         critical_findings.push(result);
                     } else {

@@ -1,6 +1,5 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use std::fs;
 use std::path::Path;
 use valayam_models::templates::cicd_audit::CicdAuditTemplate;
@@ -8,8 +7,8 @@ use valayam_models::templates::cicd_audit::CicdAuditTemplate;
 pub async fn execute(
     templates: &[CicdAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let dir_path = Path::new(&template.target_repo);
         if !dir_path.exists() { continue; }
@@ -24,19 +23,14 @@ pub async fn execute(
                             if let Ok(content) = fs::read_to_string(&path) {
                                 // Check for dangerous pull_request_target which can lead to pwn request
                                 if content.contains("pull_request_target:") && content.contains("checkout") {
-                                    return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                                        timestamp: Utc::now(),
-                                        template_id: template_id.to_string(),
-                                        template_name: template_info.name.clone(),
-                                        template_severity: "High".to_string(),
-                                        target: path.to_string_lossy().to_string(),
-                                        payload: "CI/CD Audit: GitHub Action workflow uses 'pull_request_target' with 'actions/checkout', which is vulnerable to malicious PRs (Pwn Request).".to_string(),
-                                        cvss_score: None,
-                                        reference: None,
-                                        solution: None,
-                                        tags: Vec::new(),
-                                        compliance: Default::default(),
-                                    });
+                                    let mut finding = FindingOwned::from_template_and_info(
+                                        template_id,
+                                        template_meta,
+                                        path.to_string_lossy().to_string(),
+                                        "CI/CD Audit: GitHub Action workflow uses 'pull_request_target' with 'actions/checkout', which is vulnerable to malicious PRs (Pwn Request).".to_string(),
+                                    );
+                                    finding.severity = "High".to_string();
+                                    return Some(finding);
                                 }
                             }
                         }

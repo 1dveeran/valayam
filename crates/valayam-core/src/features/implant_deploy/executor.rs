@@ -1,5 +1,5 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::implant_deploy::ImplantDeployTemplate;
 
 // TODO: Implant Deploy Engine — Full Implementation Plan
@@ -93,8 +93,8 @@ use valayam_models::templates::implant_deploy::ImplantDeployTemplate;
 pub async fn execute(
     _templates: &[ImplantDeployTemplate],
     _template_id: &str,
-    _template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    _template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     // TODO: Stub for validation analysis only.
     None
 }

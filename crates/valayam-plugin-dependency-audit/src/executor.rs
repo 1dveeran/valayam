@@ -1,6 +1,5 @@
-use valayam_models::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use std::path::Path;
 use valayam_models::templates::dependency_audit::DependencyAuditTemplate;
 use super::extractor::extract_dependencies;
@@ -9,8 +8,8 @@ use super::vuln_db::{ApiVulnDb, LocalVulnDb};
 pub async fn execute(
     templates: &[DependencyAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     // Only return the first found critical vulnerability for now
     for template in templates {
         let dir_path = Path::new(&template.target_repo);
@@ -51,19 +50,14 @@ pub async fn execute(
                     if !vulns.is_empty() {
                         // Return the first vulnerability found
                         let vuln = &vulns[0];
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: vuln.severity.clone(),
-                            target: lockfile.to_string_lossy().to_string(),
-                            payload: format!("Dependency Audit: Package {}@{} is vulnerable to {}", dep.name, dep.version, vuln.cve_id),
-                            cvss_score: None,
-                            reference: None,
-                            solution: None,
-                            tags: Vec::new(),
-                            compliance: Default::default(),
-                        });
+                        let mut finding = FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            lockfile.to_string_lossy().to_string(),
+                            format!("Dependency Audit: Package {}@{} is vulnerable to {}", dep.name, dep.version, vuln.cve_id),
+                        );
+                        finding.severity = vuln.severity.clone();
+                        return Some(finding);
                     }
                 }
             }

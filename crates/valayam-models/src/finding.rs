@@ -22,6 +22,83 @@ pub struct FindingOwned {
 }
 
 impl FindingOwned {
+    /// Construct a FindingOwned from a metadata HashMap.
+    ///
+    /// The metadata HashMap should contain:
+    /// - `template_id`, `template_name`, `template_severity` — extracted to proper fields
+    /// - `cvss_score`, `solution`, `reference`, `tags` — stored with `::` prefix in metadata
+    /// - Everything else (compliance data, etc.) — stored verbatim in metadata
+    pub fn from_template(
+        target: impl Into<String>,
+        matched_at: impl Into<String>,
+        metadata: std::collections::HashMap<String, String>,
+    ) -> Self {
+        let target = target.into();
+        let matched_at = matched_at.into();
+
+        let template_id = metadata.get("template_id").cloned().unwrap_or_default();
+        let template_name = metadata.get("template_name").cloned().unwrap_or_default();
+        let severity = metadata.get("template_severity").cloned().unwrap_or_default();
+
+        let mut meta = std::collections::HashMap::new();
+        for (key, value) in metadata {
+            match key.as_str() {
+                "template_id" | "template_name" | "template_severity" => {
+                    // Already extracted as proper fields above
+                }
+                "cvss_score" => {
+                    meta.insert("::cvss_score".to_string(), value);
+                }
+                "solution" => {
+                    meta.insert("::solution".to_string(), value);
+                }
+                "reference" => {
+                    meta.insert("::reference".to_string(), value);
+                }
+                "tags" => {
+                    meta.insert("::tags".to_string(), value);
+                }
+                other => {
+                    meta.insert(other.to_string(), value);
+                }
+            }
+        }
+
+        Self {
+            template_id,
+            template_name,
+            severity,
+            target,
+            matched_at,
+            description: None,
+            solution: None,
+            extracted_data: None,
+            metadata: meta,
+        }
+    }
+
+    /// Convenience constructor for executors that have template metadata.
+    /// Compliance data from the template is automatically included in metadata.
+    /// Use this when no extra fields (cvss, solution, etc.) are needed.
+    pub fn from_template_and_info(
+        template_id: impl Into<String>,
+        template_meta: &dyn crate::template_info::TemplateMetadata,
+        target: impl Into<String>,
+        matched_at: impl Into<String>,
+    ) -> Self {
+        Self {
+            template_id: template_id.into(),
+            template_name: template_meta.template_name().to_string(),
+            severity: template_meta.template_severity().to_string(),
+            target: target.into(),
+            matched_at: matched_at.into(),
+            description: template_meta.description().map(|s| s.to_string()),
+            solution: None,
+            extracted_data: None,
+            metadata: template_meta.compliance().clone(),
+        }
+    }
+
     /// Produces a deduplication key from the triple `(template_id, target, matched_at)`.
     /// Two findings with the same key are considered duplicates.
     #[must_use]

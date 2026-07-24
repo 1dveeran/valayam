@@ -1,8 +1,7 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use super::engine::ScriptEngine;
 use valayam_models::templates::scripting::{ScriptSource, ScriptTemplate};
-use chrono::Utc;
 use std::collections::HashMap;
 
 /// Executes all script rules from a template against the target.
@@ -12,9 +11,9 @@ pub async fn execute(
     target_host: &str,
     scripts: &[ScriptTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
+    template_meta: &dyn TemplateMetadata,
     variables_in: &HashMap<String, String>,
-) -> Option<ScanResult> {
+) -> Option<FindingOwned> {
     for script_rule in scripts {
         // Only support the "rhai" engine for now; skip unknown engines gracefully
         let "rhai" = script_rule.engine.as_str() else {
@@ -43,8 +42,8 @@ pub async fn execute(
 
         // Clone what we need for the blocking closure
         let template_id = template_id.to_string();
-        let template_name = template_info.name.clone();
-        let template_severity = template_info.severity.clone();
+        let template_name = template_meta.template_name().to_string();
+        let template_severity = template_meta.template_severity().to_string();
         let target_owned = target_url.to_string();
 
         // Bridge sync Rhai eval into the async runtime via spawn_blocking
@@ -58,19 +57,11 @@ pub async fn execute(
             match engine.execute(&script_code, &mut variables) {
                 Ok(true) => {
                     tracing::debug!(target = %target_owned, "Vulnerability script match found");
-                    Some(ScanResult { schema_version: "1.0.0".to_string(),
-                        timestamp: Utc::now(),
-                        template_id,
-                        template_name,
-                        template_severity,
-                        target: target_owned,
-                        payload: "Rhai script execution matched".to_string(),
-                        cvss_score: None,
-                        reference: None,
-                        solution: None,
-                        tags: Vec::new(),
-                        compliance: Default::default(),
-                    })
+                    let mut meta = HashMap::new();
+                    meta.insert("template_id".to_string(), template_id);
+                    meta.insert("template_name".to_string(), template_name);
+                    meta.insert("template_severity".to_string(), template_severity);
+                    Some(FindingOwned::from_template(target_owned, "Rhai script execution matched", meta))
                 },
                 Ok(false) => {
                     tracing::trace!("Script executed successfully but returned false");

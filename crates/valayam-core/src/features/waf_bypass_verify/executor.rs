@@ -1,7 +1,6 @@
-use crate::core::result::ScanResult;
+use valayam_models::finding::FindingOwned;
 use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::TemplateInfo;
-use chrono::Utc;
+use valayam_models::TemplateMetadata;
 use tracing::{debug, warn};
 use valayam_models::templates::waf_bypass_verify::WafBypassVerifyTemplate;
 
@@ -226,8 +225,8 @@ pub async fn execute(
     http_client: &StealthHttpClient,
     templates: &[WafBypassVerifyTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let host = template.target.replace("{{Hostname}}", target_host);
 
@@ -258,24 +257,21 @@ pub async fn execute(
                     let status = response.status().as_u16();
                     if !is_waf_block(status) {
                         // WAF did not block the raw payload — this is a finding
-                        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                            timestamp: Utc::now(),
-                            template_id: template_id.to_string(),
-                            template_name: template_info.name.clone(),
-                            template_severity: "Critical".to_string(),
-                            target: host.clone(),
-                            payload: format!(
+                        let mut finding = FindingOwned::from_template_and_info(
+                            template_id,
+                            template_meta,
+                            host.clone(),
+                            format!(
                                 "Raw payload '{}' bypassed WAF (HTTP {}). No evasive mutation was needed.",
                                 payload, status
                             ),
-                            cvss_score: Some(8.0),
-                            reference: Some("https://owasp.org/www-community/attacks/WAF_Evasion".to_string()),
-                            solution: Some(
-                                "Review WAF rules — the raw payload bypassed WAF filtering entirely.".to_string(),
-                            ),
-                            tags: vec!["waf-bypass".to_string(), "raw-payload".to_string()],
-                            compliance: Default::default(),
-                        });
+                        );
+                        finding.severity = "Critical".to_string();
+                        finding.metadata.insert("::cvss_score".to_string(), "8.0".to_string());
+                        finding.metadata.insert("::reference".to_string(), "https://owasp.org/www-community/attacks/WAF_Evasion".to_string());
+                        finding.metadata.insert("::solution".to_string(), "Review WAF rules — the raw payload bypassed WAF filtering entirely.".to_string());
+                        finding.metadata.insert("::tags".to_string(), "waf-bypass,raw-payload".to_string());
+                        return Some(finding);
                     }
                 }
                 Err(e) => {
@@ -410,31 +406,25 @@ pub async fn execute(
         let reference =
             "https://owasp.org/www-community/attacks/WAF_Evasion".to_string();
 
-        return Some(ScanResult { schema_version: "1.0.0".to_string(),
-            timestamp: Utc::now(),
-            template_id: template_id.to_string(),
-            template_name: format!("{} - WAF Bypass", template_info.name),
-            template_severity: worst_severity_label.to_string(),
-            target: host.clone(),
+        let mut finding = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            host.clone(),
             payload,
-            cvss_score: Some(worst_cvss),
-            reference: Some(reference),
-            solution: Some(solution),
-            tags: {
-                let mut t = vec!["waf-bypass".to_string(), format!("count:{}", successful_bypasses.len())];
-                t.extend(techniques_used.into_iter().map(|n| format!("technique:{}", n)));
-                t
-            },
-            compliance: {
-                let mut m = std::collections::HashMap::new();
-                m.insert("bypass-count".to_string(), successful_bypasses.len().to_string());
-                m.insert(
-                    "techniques".to_string(),
-                    techniques_desc.join(", "),
-                );
-                m
-            },
-        });
+        );
+        finding.template_name = format!("{} - WAF Bypass", template_meta.template_name());
+        finding.severity = worst_severity_label.to_string();
+        finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", worst_cvss));
+        finding.metadata.insert("::reference".to_string(), reference);
+        finding.metadata.insert("::solution".to_string(), solution);
+        {
+            let mut tags = vec!["waf-bypass".to_string(), format!("count:{}", successful_bypasses.len())];
+            tags.extend(techniques_used.into_iter().map(|n| format!("technique:{}", n)));
+            finding.metadata.insert("::tags".to_string(), tags.join(","));
+        }
+        finding.metadata.insert("bypass-count".to_string(), successful_bypasses.len().to_string());
+        finding.metadata.insert("techniques".to_string(), techniques_desc.join(", "));
+        return Some(finding);
     }
     None
 }

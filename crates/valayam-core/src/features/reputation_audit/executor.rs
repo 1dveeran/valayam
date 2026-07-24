@@ -1,10 +1,8 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::reputation_audit::ReputationAuditTemplate;
-use chrono::Utc;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::Resolver;
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::time::Duration;
@@ -416,13 +414,13 @@ fn estimate_domain_trust(ips: &[IpAddr], dnsbl_count: usize) -> u8 {
 
 /// Execute reputation audit against a target domain or IP.
 ///
-/// Returns a `ScanResult` if the target has a poor reputation score, `None` if
+/// Returns a `FindingOwned` if the target has a poor reputation score, `None` if
 /// the target appears clean.
 pub async fn execute(
     templates: &[ReputationAuditTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     for template in templates {
         let target = &template.target;
         let (maybe_ip, clean_domain) = parse_target(target);
@@ -528,16 +526,6 @@ pub async fn execute(
         let cvss = (final_score as f32) / 10.0;
 
         if final_score >= 30 || blocked_by_ip || blocked_by_domain {
-            let mut compliance = HashMap::new();
-            compliance.insert(
-                "recon".to_string(),
-                "Threat Intelligence".to_string(),
-            );
-            compliance.insert(
-                "standard".to_string(),
-                "CWE-1104: Use of Unmaintained Third-Party Components".to_string(),
-            );
-
             let payload = if findings.is_empty() {
                 format!(
                     "Reputation score: {}/100. Target '{}' shows suspicious characteristics.",
@@ -551,54 +539,55 @@ pub async fn execute(
                 )
             };
 
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: severity.to_string(),
-                target: clean_domain.clone(),
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                clean_domain.clone(),
                 payload,
-                cvss_score: Some(cvss),
-                reference: Some(
-                    "https://www.spamhaus.org/drop/ | https://sslbl.abuse.ch/".to_string(),
-                ),
-                solution: Some(
-                    "Review network connections to this target. If it is a C2 / phishing domain, \
-                     block at the firewall level and conduct incident response."
-                        .to_string(),
-                ),
-                tags: vec![
-                    "reputation".to_string(),
-                    "blocklist".to_string(),
-                    "threat-intel".to_string(),
-                    format!("score-{}", final_score),
-                ],
-                compliance,
-            });
+            );
+            finding.severity = severity.to_string();
+            finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", cvss));
+            finding.metadata.insert(
+                "::reference".to_string(),
+                "https://www.spamhaus.org/drop/ | https://sslbl.abuse.ch/".to_string(),
+            );
+            finding.metadata.insert(
+                "::solution".to_string(),
+                "Review network connections to this target. If it is a C2 / phishing domain, \
+                 block at the firewall level and conduct incident response."
+                    .to_string(),
+            );
+            finding.metadata.insert("::tags".to_string(), vec![
+                "reputation".to_string(),
+                "blocklist".to_string(),
+                "threat-intel".to_string(),
+                format!("score-{}", final_score),
+            ].join(","));
+            finding.metadata.insert("recon".to_string(), "Threat Intelligence".to_string());
+            finding.metadata.insert(
+                "standard".to_string(),
+                "CWE-1104: Use of Unmaintained Third-Party Components".to_string(),
+            );
+            return Some(finding);
         }
 
         // If the score is low but we still have some signal, optionally still report
         // as Info if the template explicitly requested certain blocklists
         if !template.blocklists.is_empty() && dnsbl_count > 0 {
-            let mut compliance = HashMap::new();
-            compliance.insert("recon".to_string(), "DNSBL".to_string());
-
-            return Some(ScanResult { schema_version: "1.0.0".to_string(),
-                timestamp: Utc::now(),
-                template_id: template_id.to_string(),
-                template_name: template_info.name.clone(),
-                template_severity: "Low".to_string(),
-                target: clean_domain.clone(),
-                payload: format!(
+            let mut finding = FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                clean_domain.clone(),
+                format!(
                     "Target domain/IP appeared in {} requested DNSBL zone(s). Score: {}/100.",
                     dnsbl_count, final_score
                 ),
-                cvss_score: Some(cvss),
-                reference: None,
-                solution: None,
-                tags: vec!["reputation".to_string(), "dnsbl".to_string()],
-                compliance,
-            });
+            );
+            finding.severity = "Low".to_string();
+            finding.metadata.insert("::cvss_score".to_string(), format!("{:.1}", cvss));
+            finding.metadata.insert("::tags".to_string(), "reputation,dnsbl".to_string());
+            finding.metadata.insert("recon".to_string(), "DNSBL".to_string());
+            return Some(finding);
         }
     }
 

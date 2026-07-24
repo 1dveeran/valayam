@@ -1,5 +1,5 @@
-use crate::core::result::ScanResult;
-use valayam_models::templates::schema::TemplateInfo;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::easm::EasmTemplate;
 use reqwest::Client;
 use super::{crtsh, alienvault};
@@ -11,8 +11,8 @@ pub async fn execute(
     target_host: &str,
     templates: &[EasmTemplate],
     template_id: &str,
-    template_info: &TemplateInfo,
-) -> Option<ScanResult> {
+    template_meta: &dyn TemplateMetadata,
+) -> Option<FindingOwned> {
     let mut discovered_subdomains = HashSet::new();
 
     for easm in templates {
@@ -51,8 +51,14 @@ pub async fn execute(
         
         // In a real implementation we would dynamically route these back 
         // into the execution pipeline. For now we record them as a finding.
-        let mut result = ScanResult::new(template_id, template_info, target_url);
-        result.set_extracted("discovered_subdomains", results.join(", "));
+        let subdomains_str = results.join(", ");
+        let mut result = FindingOwned::from_template_and_info(
+            template_id,
+            template_meta,
+            target_url,
+            format!("discovered_subdomains: {}", subdomains_str),
+        );
+        result.extracted_data = Some(subdomains_str);
         return Some(result);
     }
 
