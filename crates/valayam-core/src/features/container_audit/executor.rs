@@ -8,7 +8,9 @@
 // - Implement multi-architecture image support (arm64, amd64, etc.).
 
 use valayam_models::finding::FindingOwned;
-use valayam_models::{TemplateInfo, TemplateMetadata};
+#[cfg(test)]
+use valayam_models::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::container_audit::ContainerAuditTemplate;
 
 /// Container image audit configuration.

@@ -828,7 +828,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_single_match_plugin() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockMatchPlugin { name: "match_plugin" });
 
         let (finding_tx, mut finding_rx) = mpsc::channel(100);
@@ -856,7 +856,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_match_plugin() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockNoMatchPlugin { name: "no_match_plugin" });
 
         let (finding_tx, _) = mpsc::channel(100);
@@ -937,7 +937,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_panic_isolation() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockMatchPlugin { name: "good_plugin" });
         registry.register(MockPanicPlugin);
         registry.register(MockMatchPlugin { name: "another_good" });
@@ -963,7 +963,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_enforcement() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockTimeoutPlugin);
 
         let (finding_tx, _) = mpsc::channel(100);
@@ -988,7 +988,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dependency_ordering() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockDependentPlugin {
             name: "plugin_a",
             deps: &[],
@@ -1018,7 +1018,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dependency_cycle_detection() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockDependentPlugin {
             name: "plugin_a",
             deps: &["plugin_b"],
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_three_plugin_chain() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         // A → B → C chain
         registry.register(MockDependentPlugin {
             name: "plugin_a",
@@ -1083,7 +1083,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execution_order_with_mock_order_plugin() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         let order = Arc::new(std::sync::Mutex::new(Vec::new()));
 
         // B depends on A → A must execute before B
@@ -1120,7 +1120,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_registry_init_and_shutdown() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockMatchPlugin { name: "test_plugin" });
 
         let init_result = registry.init_all().await;
@@ -1191,7 +1191,7 @@ mod tests {
             }
         }
 
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(OldApiPlugin);
         // Plugin should have been rejected — registry stays empty
         assert!(registry.is_empty());
@@ -1235,7 +1235,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_template_applicable_plugins() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockMatchPlugin { name: "validator" });
         let result = registry.validate_template(&dummy_template());
         assert!(result.is_ok());
@@ -1256,7 +1256,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_template_with_rate_limiter() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockMatchPlugin { name: "rl_plugin" });
 
         let rl = crate::rate_limiter::RateLimiter::new_simple(1000);
@@ -1278,7 +1278,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_template_with_cancellation_pre_check() {
-        let mut registry = PluginRegistry::new();
+        let registry = PluginRegistry::new();
         registry.register(MockMatchPlugin { name: "cancel_plugin" });
 
         let (finding_tx, _) = mpsc::channel(100);

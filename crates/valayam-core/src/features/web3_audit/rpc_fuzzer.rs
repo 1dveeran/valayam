@@ -70,7 +70,7 @@ impl EvmRpcFuzzer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
 
     // Mocking an actual HTTP test would require a mock server.
     // For now, this just validates compilation.

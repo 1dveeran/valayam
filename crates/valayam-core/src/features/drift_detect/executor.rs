@@ -254,7 +254,7 @@ pub async fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
+    
 
     fn sample_state() -> ScanState {
         ScanState {

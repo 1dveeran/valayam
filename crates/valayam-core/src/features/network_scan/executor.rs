@@ -394,7 +394,7 @@ pub async fn execute(
 
             if net_rule.matchers.is_empty() {
                 let severity = template_meta.template_severity().to_string();
-                let adjusted_severity = if is_critical && !vuln_check.is_none() {
+                let _adjusted_severity = if is_critical && !vuln_check.is_none() {
                     if severity == "Info" { "Medium".to_string() }
                     else if severity == "Low" { "High".to_string() }
                     else if severity == "Medium" { "High".to_string() }
@@ -443,7 +443,7 @@ pub async fn execute(
                 
                 if matched {
                     let severity = template_meta.template_severity().to_string();
-                    let adjusted_severity = if is_critical && !vuln_check.is_none() {
+                    let _adjusted_severity = if is_critical && !vuln_check.is_none() {
                         if severity == "Info" { "Medium".to_string() }
                         else if severity == "Low" { "High".to_string() }
                         else if severity == "Medium" { "High".to_string() }

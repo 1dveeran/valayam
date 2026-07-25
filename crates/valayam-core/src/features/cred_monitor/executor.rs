@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn test_domain_spoof_patterns() {
         // Domain with "rn" pattern (rn looks like m)
-        let client = StealthHttpClient::new(false, false, None, false).unwrap();
+        let _client = StealthHttpClient::new(false, false, None, false).unwrap();
         // Can't easily test async check_domain_security in sync test,
         // but the spoof pattern logic is tested inline
         let domain_lower = "rnicrosoft.com".to_lowercase();

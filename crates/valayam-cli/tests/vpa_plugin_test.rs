@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use valayam_engine::registry::PluginRegistry;
 
 #[test]
@@ -48,7 +47,7 @@ entrypoint: "run.bat"
     std::fs::rename(vpa_output, plugins_dir.join("mock.vpa")).unwrap();
 
     // 5. Initialize the PluginRegistry and verify it discovers and extracts the VPA
-    let mut registry = PluginRegistry::new();
+    let registry = PluginRegistry::new();
     registry.load_external_plugins(&plugins_dir).expect("Registry should load VPA successfully");
 
     // We expect exactly 1 plugin to be loaded

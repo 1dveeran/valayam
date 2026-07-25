@@ -5,7 +5,9 @@
 // - Add CVSS-to-MITRE severity correlation.
 
 use valayam_models::finding::FindingOwned;
-use valayam_models::{TemplateInfo, TemplateMetadata};
+#[cfg(test)]
+use valayam_models::TemplateInfo;
+use valayam_models::TemplateMetadata;
 use valayam_models::templates::mitre_mapping::MitreMappingTemplate;
 use lazy_static::lazy_static;
 use std::collections::HashMap;

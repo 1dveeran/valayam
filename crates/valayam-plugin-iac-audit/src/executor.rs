@@ -7,6 +7,8 @@
 // - Support remote state backends (S3, GCS, Azure) for policy-as-code gate checks.
 
 use valayam_models::finding::FindingOwned;
+#[cfg(test)]
+use valayam_models::TemplateInfo;
 use valayam_models::TemplateMetadata;
 use std::fs;
 use std::path::Path;
