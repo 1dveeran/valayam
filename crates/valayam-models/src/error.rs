@@ -78,6 +78,9 @@ pub enum ScannerError {
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
 
+    #[error("Circuit breaker is open")]
+    CircuitBreakerOpen,
+
     // Configuration Errors
     #[error("Invalid configuration: {0}")]
     ConfigurationError(String),
@@ -151,6 +154,7 @@ impl ScannerError {
             ScannerError::NetworkError(_) |
             ScannerError::TimeoutError(_) |
             ScannerError::RateLimitExceeded |
+            ScannerError::CircuitBreakerOpen |
             ScannerError::TlsHandshakeError { .. } |
             ScannerError::DnsResolutionError { .. } |
             ScannerError::TcpConnectionError { .. } |
@@ -179,6 +183,7 @@ impl ScannerError {
             ScannerError::InvalidTarget(_) => "INVALID_TARGET",
             ScannerError::InvalidPort(_) => "INVALID_PORT",
             ScannerError::RateLimitExceeded => "RATE_LIMIT_EXCEEDED",
+            ScannerError::CircuitBreakerOpen => "CIRCUIT_BREAKER_OPEN",
             ScannerError::ConfigurationError(_) => "CONFIGURATION_ERROR",
             ScannerError::ResourceExhausted(_) => "RESOURCE_EXHAUSTED",
             ScannerError::TimeoutError(_) => "TIMEOUT_ERROR",

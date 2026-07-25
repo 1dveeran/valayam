@@ -1,9 +1,7 @@
 mod cli;
 mod orchestrator;
-pub mod mitm;
 pub mod notifications;
 pub mod reporting;
-pub mod cert_auth;
 pub mod state;
 pub mod plugin_cli;
 
@@ -16,7 +14,7 @@ use walkdir::WalkDir;
 use opentelemetry_otlp::WithExportConfig;
 
 use valayam_engine::rate_limiter::RateLimiter;
-use valayam_core::features::nuclei_compat::executor::NucleiExecutor;
+// NucleiExecutor moved to Wasm
 use valayam_core::network::http::StealthHttpClient;
 use valayam_core::stealth::proxy::ProxyRotator;
 
@@ -141,11 +139,78 @@ async fn main() -> anyhow::Result<()> {
                 }
                 return Ok(());
             }
+            cli::PluginCommands::Install { name, url, pubkey } => {
+                if let Err(e) = crate::plugin_cli::install_plugin(name, url, pubkey.as_deref()).await {
+                    tracing::error!("Failed to install plugin: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+            cli::PluginCommands::Push { file, repo, tag, signature } => {
+                if let Err(e) = crate::plugin_cli::push_plugin(file, repo, tag, signature.as_deref()).await {
+                    tracing::error!("Failed to push plugin to OCI registry: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+            cli::PluginCommands::Uninstall { name } => {
+                if let Err(e) = crate::plugin_cli::uninstall_plugin(name) {
+                    tracing::error!("Failed to uninstall plugin: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+            cli::PluginCommands::List => {
+                if let Err(e) = crate::plugin_cli::list_plugins() {
+                    tracing::error!("Failed to list plugins: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
         }
     } else if let Some(cli::Commands::SyncVulndb { cdn, output }) = &args.command {
         if let Err(e) = crate::orchestrator::sync_vulndb(cdn, output).await {
             tracing::error!("Failed to sync vulnerability database: {}", e);
             std::process::exit(1);
+        }
+        return Ok(());
+    } else if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
+        use valayam_engine::plugin_rpc::scanner_client::ScannerClient;
+        use valayam_engine::plugin_rpc::ControlRequest;
+        
+        let url = format!("http://127.0.0.1:{}", port);
+        let mut client = match ScannerClient::connect(url.clone()).await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Failed to connect to control plane at {}: {}", url, e);
+                std::process::exit(1);
+            }
+        };
+
+        let req = tonic::Request::new(ControlRequest {
+            scan_id: scan_id.clone().unwrap_or_default(),
+        });
+
+        match action.as_str() {
+            "pause" => {
+                match client.pause_scan(req).await {
+                    Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+                    Err(e) => tracing::error!("Failed to pause scan: {}", e),
+                }
+            }
+            "resume" => {
+                match client.resume_scan(req).await {
+                    Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+                    Err(e) => tracing::error!("Failed to resume scan: {}", e),
+                }
+            }
+            "cancel" | "stop" => {
+                match client.cancel_scan(req).await {
+                    Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+                    Err(e) => tracing::error!("Failed to cancel scan: {}", e),
+                }
+            }
+            _ => tracing::error!("Unknown control action '{}'. Valid actions: pause, resume, cancel", action),
         }
         return Ok(());
     } else if let Some(t) = &args.template {
@@ -200,6 +265,21 @@ network:
         println!("{} Demo template created successfully.\n", "[+]".green().bold());
     }
 
+    let (state_tx, state_rx) = tokio::sync::watch::channel(valayam_engine::executor::ScanState::Running);
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+    let state_tx_clone = state_tx.clone();
+    let cancel_token_clone = cancel_token.clone();
+
+    // Start Telemetry & Control Server in background
+    tokio::spawn(async move {
+        // If args.control_port is set, we could use that, otherwise default to 50051.
+        let port = args.control_port.unwrap_or(50051);
+        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
+        if let Err(e) = valayam_engine::telemetry_server::start_telemetry_server(addr, Some(state_tx_clone), Some(cancel_token_clone)).await {
+            tracing::error!("Telemetry/Control server failed: {}", e);
+        }
+    });
+
     // 1. Initialize Stealth Core
     let proxy_rotator = if let Some(path) = &args.proxy_file {
         match ProxyRotator::load_from_file(path) {
@@ -222,25 +302,13 @@ network:
         None,
         true,
     )?);
-    let executor_nuclei = NucleiExecutor::new(Arc::clone(&http_client));
 
     if args.waf_detect {
-        println!("{} Starting WAF Detection on {}...", "[*]".blue().bold(), args.target);
-        let detections = valayam_core::features::waf_detect::detector::detect_waf(&http_client, &args.target).await;
-        if detections.is_empty() {
-            println!("{} No WAF detected. The target appears to be unshielded.", "[+]".green().bold());
-        } else {
-            println!("{} WAF Detected!", "[!]".yellow().bold());
-            for det in detections {
-                println!(" ├─ Product:  {}", det.product);
-                println!(" └─ Evidence: {}", det.evidence);
-            }
-        }
-        println!();
+        println!("  - WAF detection moved to Wasm plugin");
     }
 
     if let Some(port) = args.mitm_proxy {
-        mitm::start_proxy(port, Arc::clone(&http_client)).await;
+        valayam_core::features::ui_proxy::mitm::start_proxy(port, Arc::clone(&http_client)).await;
         return Ok(());
     }
 
@@ -335,16 +403,16 @@ network:
             }
         }
     }
-
     orchestrator::run_scan(
         args,
         template_files,
         is_nuclei,
         targets,
         http_client,
-        executor_nuclei,
         rate_limiter,
-        grpc_client
+        grpc_client,
+        Some(state_rx),
+        cancel_token,
     ).await?;
 
     opentelemetry::global::shutdown_tracer_provider();

@@ -10,12 +10,19 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanState {
+    Running,
+    Paused,
+}
+
 #[derive(Clone)]
 pub struct ScanExecutor {
     finding_tx: mpsc::Sender<FindingOwned>,
     registry: Arc<PluginRegistry>,
     rate_limiter: Option<Arc<RateLimiter>>,
     cancellation: CancellationToken,
+    state_rx: Option<tokio::sync::watch::Receiver<ScanState>>,
 }
 
 impl ScanExecutor {
@@ -25,7 +32,12 @@ impl ScanExecutor {
         rate_limiter: Option<Arc<RateLimiter>>,
         cancellation: CancellationToken,
     ) -> Self {
-        Self { finding_tx, registry, rate_limiter, cancellation }
+        Self { finding_tx, registry, rate_limiter, cancellation, state_rx: None }
+    }
+
+    pub fn with_state_rx(mut self, rx: tokio::sync::watch::Receiver<ScanState>) -> Self {
+        self.state_rx = Some(rx);
+        self
     }
 
     /// Execute a template against a target. Returns per-plugin metrics.
@@ -34,6 +46,15 @@ impl ScanExecutor {
         target: &str,
         template: Arc<VulnerabilityTemplate>,
     ) -> Vec<PluginMetrics> {
+        if let Some(mut rx) = self.state_rx.clone() {
+            let current_state = *rx.borrow();
+            if current_state == ScanState::Paused {
+                tracing::info!("Scan is paused, waiting to resume...");
+                let _ = rx.wait_for(|s| *s == ScanState::Running).await;
+                tracing::info!("Scan resumed.");
+            }
+        }
+
         self.registry.execute_template(
             target,
             template,

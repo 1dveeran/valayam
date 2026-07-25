@@ -1,6 +1,7 @@
 use std::collections::{HashSet, HashMap};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 use url::Url;
 
 use valayam_engine::rate_limiter::RateLimiter;
@@ -47,7 +48,6 @@ impl Crawler {
 }
 
 /// Helper function to parse HTML and extract links synchronously.
-/// This prevents scraper's non-Send types from contaminating the async state machine.
 fn extract_links_from_html(body_text: &str) -> HashSet<String> {
     let mut found = HashSet::new();
     let document = scraper::Html::parse_document(body_text);
@@ -67,109 +67,134 @@ fn extract_links_from_html(body_text: &str) -> HashSet<String> {
 impl Crawler {
     /// Entry point for crawling the target domain.
     pub async fn run(self) -> HashSet<String> {
-        
-        // 1. Proactively probe active wordlist paths for J2EE, Spring Actuator, GraphQL, WSDL schemas
-        let client_clone = Arc::clone(&self.client);
-        let visited_clone = Arc::clone(&self.visited);
-        let discovered_clone = Arc::clone(&self.discovered_urls);
-        let base_url_clone = self.target_url.clone();
-        let rl_clone = self.rate_limiter.clone();
-        let headers_clone = self.crawl_headers.clone();
+        let mut join_set = JoinSet::new();
 
-        tokio::spawn(async move {
-            for &path in CRAWLER_PROBE_PATHS {
-                if let Ok(probe_url) = base_url_clone.join(path) {
-                    let probe_url_str = probe_url.to_string();
-                    
-                    // Throttle
-                    if let Some(ref rl) = rl_clone {
-                        rl.acquire().await;
-                    }
+        // Mark the base URL as visited initially
+        {
+            let mut vis = self.visited.lock().await;
+            vis.insert(self.target_url.to_string());
+        }
 
-                    // Perform request
-                    if let Ok(resp) = client_clone.send_request("GET", &probe_url_str, headers_clone.as_ref(), None).await {
-                        if resp.status().is_success() {
-                            let mut disc = discovered_clone.lock().await;
-                            disc.insert(probe_url_str.clone());
-                            
-                            // If it's a Swagger/OpenAPI JSON, parse it immediately
-                            if probe_url_str.ends_with(".json") || probe_url_str.contains("api-docs") {
-                                if let Ok(body_text) = resp.text().await {
-                                    let api_endpoints = openapi::extract_openapi_endpoints(&body_text);
-                                    for endpoint in api_endpoints {
-                                        if let Ok(full_api_url) = base_url_clone.join(&endpoint) {
-                                            disc.insert(full_api_url.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    let mut vis = visited_clone.lock().await;
-                    vis.insert(probe_url_str);
-                }
-            }
+        // 1. Proactively probe active wordlist paths
+        let probe_clone = self.clone_instance();
+        join_set.spawn(async move {
+            probe_clone.probe_wordlists().await
         });
 
-        // 2. Perform regular recursive web crawling
-        self.crawl_url(self.target_url.clone(), 0).await;
+        // 2. Start the regular recursive crawl from depth 0
+        let self_clone = self.clone_instance();
+        let target_url = self.target_url.clone();
+        join_set.spawn(async move {
+            self_clone.crawl_url_inner(target_url, 0).await
+        });
+
+        // 3. Process the JoinSet to manage bounded crawling
+        let concurrency_semaphore = Arc::new(tokio::sync::Semaphore::new(10)); // max 10 concurrent requests
+
+        while let Some(res) = join_set.join_next().await {
+            if let Ok(discovered) = res {
+                for (new_url, new_depth) in discovered {
+                    let mut vis = self.visited.lock().await;
+                    let url_str = new_url.to_string();
+                    if !vis.contains(&url_str) && new_depth <= self.max_depth {
+                        vis.insert(url_str.clone());
+                        let worker_clone = self.clone_instance();
+                        let sem_clone = concurrency_semaphore.clone();
+                        
+                        join_set.spawn(async move {
+                            // Bound the concurrency using the semaphore
+                            let _permit = sem_clone.acquire().await;
+                            worker_clone.crawl_url_inner(new_url, new_depth).await
+                        });
+                    }
+                }
+            }
+        }
 
         let result = self.discovered_urls.lock().await;
         result.clone()
     }
 
-    async fn crawl_url(&self, url: Url, depth: usize) {
-        if depth > self.max_depth {
-            return;
-        }
+    async fn probe_wordlists(&self) -> Vec<(Url, usize)> {
+        let mut newly_discovered = Vec::new();
+        
+        for &path in CRAWLER_PROBE_PATHS {
+            if let Ok(probe_url) = self.target_url.join(path) {
+                let probe_url_str = probe_url.to_string();
+                
+                // Throttle
+                if let Some(ref rl) = self.rate_limiter {
+                    rl.acquire().await;
+                }
 
+                if let Ok(resp) = self.client.send_request("GET", &probe_url_str, self.crawl_headers.as_ref(), None).await {
+                    if resp.status().is_success() {
+                        {
+                            let mut disc = self.discovered_urls.lock().await;
+                            disc.insert(probe_url_str.clone());
+                        }
+                        
+                        // If it's a Swagger/OpenAPI JSON, parse it immediately
+                        if probe_url_str.ends_with(".json") || probe_url_str.contains("api-docs") {
+                            if let Ok(body_text) = resp.text().await {
+                                let api_endpoints = openapi::extract_openapi_endpoints(&body_text);
+                                for endpoint in api_endpoints {
+                                    if let Ok(full_api_url) = self.target_url.join(&endpoint) {
+                                        let api_url_str = full_api_url.to_string();
+                                        let mut disc = self.discovered_urls.lock().await;
+                                        disc.insert(api_url_str.clone());
+                                        // Also add to crawl list if we want to crawl endpoints
+                                        newly_discovered.push((full_api_url, 0));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                let mut vis = self.visited.lock().await;
+                vis.insert(probe_url_str);
+            }
+        }
+        
+        newly_discovered
+    }
+
+    async fn crawl_url_inner(&self, url: Url, depth: usize) -> Vec<(Url, usize)> {
         let url_str = url.to_string();
 
-        // Check if already visited
-        {
-            let mut vis = self.visited.lock().await;
-            if vis.contains(&url_str) {
-                return;
-            }
-            vis.insert(url_str.clone());
-        }
-
-        // Add to discovered list
         {
             let mut disc = self.discovered_urls.lock().await;
             disc.insert(url_str.clone());
         }
 
-        // Rate Limit check
         if let Some(ref rl) = self.rate_limiter {
             rl.acquire().await;
         }
 
         tracing::debug!(url = %url_str, depth = depth, "Crawling page");
 
-        // Fetch page
         let response = match self.client.send_request("GET", &url_str, self.crawl_headers.as_ref(), None).await {
             Ok(resp) => resp,
-            Err(_) => return,
+            Err(_) => return vec![],
         };
 
         if !response.status().is_success() {
-            return;
+            return vec![];
         }
 
-        // Parse content type to decide extraction strategy
         let content_type = response
             .headers()
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
 
+        let mut next_urls = Vec::new();
+
         if content_type.contains("javascript") || content_type.contains("typescript") || url_str.ends_with(".js") {
-            // A. JavaScript Bundle parsing
             if let Ok(body_text) = response.text().await {
                 let js_endpoints = javascript::extract_js_endpoints(&body_text);
-                self.process_discovered_routes(js_endpoints, depth);
+                next_urls.extend(self.process_discovered_routes(js_endpoints, depth));
                 
                 let js_params = javascript::extract_js_parameters(&body_text);
                 if !js_params.is_empty() {
@@ -177,23 +202,22 @@ impl Crawler {
                 }
             }
         } else if url_str.ends_with(".wasm") || content_type.contains("wasm") {
-            // B. WebAssembly parsing
             if let Ok(bytes) = response.bytes().await {
                 let wasm_endpoints = wasm::extract_wasm_endpoints(&bytes);
-                self.process_discovered_routes(wasm_endpoints, depth);
+                next_urls.extend(self.process_discovered_routes(wasm_endpoints, depth));
             }
         } else if content_type.contains("html") {
-            // C. Standard HTML Scraper
             if let Ok(body_text) = response.text().await {
                 let found_links = extract_links_from_html(&body_text);
-                self.process_discovered_routes(found_links, depth);
+                next_urls.extend(self.process_discovered_routes(found_links, depth));
             }
         }
+
+        next_urls
     }
 
-    /// Iterates over links/routes discovered from parsers, normalizes them,
-    /// verifies scope, and recursively queues them for crawling.
-    fn process_discovered_routes(&self, routes: HashSet<String>, depth: usize) {
+    fn process_discovered_routes(&self, routes: HashSet<String>, depth: usize) -> Vec<(Url, usize)> {
+        let mut valid_routes = Vec::new();
         for route in routes {
             let normalized_url = if route.starts_with("http://") || route.starts_with("https://") {
                 match Url::parse(&route) {
@@ -206,24 +230,19 @@ impl Crawler {
                     Err(_) => continue,
                 }
             } else {
-                // Relative URL
                 match self.target_url.join(&route) {
                     Ok(u) => u,
                     Err(_) => continue,
                 }
             };
 
-            // Restrict scope to target host
             if let Some(host) = normalized_url.host_str() {
                 if host == self.target_host {
-                    // Recursively crawl in background
-                    let self_clone = self.clone_instance();
-                    tokio::spawn(async move {
-                        self_clone.crawl_url(normalized_url, depth + 1).await;
-                    });
+                    valid_routes.push((normalized_url, depth + 1));
                 }
             }
         }
+        valid_routes
     }
 
     fn clone_instance(&self) -> Self {

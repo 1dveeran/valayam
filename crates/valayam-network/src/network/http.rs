@@ -131,6 +131,10 @@ pub struct StealthHttpClient {
     ja3_ja4_spoofer: Option<Ja3Ja4Spoofer>,
     /// Whether to follow meta-refresh redirects
     follow_meta_refresh: bool,
+    /// Global circuit breaker
+    circuit_breaker: Arc<crate::network::resilience::CircuitBreaker>,
+    /// Global adaptive rate limiter
+    adaptive_rate_limiter: Arc<crate::network::resilience::AdaptiveRateLimiter>,
 }
 
 impl StealthHttpClient {
@@ -210,6 +214,8 @@ impl StealthHttpClient {
             user_agent_rotator,
             ja3_ja4_spoofer,
             follow_meta_refresh,
+            circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(50, 30000)), // 50 fails, 30s timeout
+            adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(0, 0, 5000)),
         })
     }
 
@@ -221,6 +227,12 @@ impl StealthHttpClient {
         headers: Option<&HashMap<String, String>>,
         body: Option<&str>,
     ) -> Result<reqwest::Response, ScannerError> {
+        if self.circuit_breaker.is_open() {
+            return Err(ScannerError::CircuitBreakerOpen);
+        }
+
+        self.adaptive_rate_limiter.wait().await;
+        
         let http_method: reqwest::Method = method
             .parse()
             .map_err(|_| ScannerError::InvalidHttpMethod(method.to_string()))?;
@@ -273,7 +285,26 @@ impl StealthHttpClient {
         }
 
         // Send the request
-        let response = request_builder.send().await?;
+        let response_result = request_builder.send().await;
+
+        match &response_result {
+            Ok(resp) => {
+                if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    self.adaptive_rate_limiter.handle_too_many_requests();
+                    self.circuit_breaker.record_failure();
+                } else if resp.status().is_server_error() {
+                    self.circuit_breaker.record_failure();
+                } else {
+                    self.adaptive_rate_limiter.handle_success();
+                    self.circuit_breaker.record_success();
+                }
+            }
+            Err(_) => {
+                self.circuit_breaker.record_failure();
+            }
+        }
+
+        let response = response_result?;
 
         // Handle meta-refresh redirects if enabled
         if self.follow_meta_refresh {

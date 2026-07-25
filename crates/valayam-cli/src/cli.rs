@@ -97,6 +97,9 @@ pub struct Args {
     #[arg(long, help = "Resume a previously interrupted scan using its state ID")]
     pub resume: Option<String>,
 
+    #[arg(long, help = "Port to start the execution control API server on")]
+    pub control_port: Option<u16>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -107,6 +110,17 @@ pub enum Commands {
     Plugin {
         #[command(subcommand)]
         action: PluginCommands,
+    },
+    /// Execution control plane (pause/resume/cancel running scans)
+    Control {
+        /// The control action (pause, resume, cancel)
+        action: String,
+        /// Optional scan ID if controlling a multi-tenant worker node
+        #[arg(long)]
+        scan_id: Option<String>,
+        /// The gRPC control port (defaults to 50051)
+        #[arg(long, default_value = "50051")]
+        port: u16,
     },
     /// Sync the local vulnerability database from the Valayam CDN (Air-Gapped environments)
     SyncVulndb {
@@ -149,6 +163,36 @@ pub enum PluginCommands {
         #[arg(short, long, default_value = "valayam_plugin_key")]
         output: String,
     },
+    /// Install a Wasm plugin from a remote URL
+    Install {
+        /// The name of the plugin to cache it as
+        name: String,
+        /// The remote URL to download the plugin from (supports http:// and oci://)
+        url: String,
+        /// Optional public key (hex) to verify the plugin signature
+        #[arg(long)]
+        pubkey: Option<String>,
+    },
+    /// Push a packaged plugin to an OCI registry
+    Push {
+        /// The path to the packaged .vpa plugin file
+        file: String,
+        /// The OCI repository to push to (e.g., localhost:5000/my-plugin)
+        repo: String,
+        /// The tag for the OCI artifact (default: latest)
+        #[arg(short, long, default_value = "latest")]
+        tag: String,
+        /// Optional signature to attach to the OCI manifest
+        #[arg(long)]
+        signature: Option<String>,
+    },
+    /// Uninstall a plugin
+    Uninstall {
+        /// The name of the plugin to uninstall
+        name: String,
+    },
+    /// List installed plugins
+    List,
 }
 
 #[cfg(test)]

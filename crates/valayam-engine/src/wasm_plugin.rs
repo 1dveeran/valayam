@@ -1,44 +1,25 @@
 use valayam_models::error::ScannerError;
 use crate::traits::{FindingOwned, PluginOutcome, ScanContext, ScanPlugin};
 use std::path::PathBuf;
-use wasmtime::*;
+use extism::{Plugin, Manifest, Wasm};
 
-/// WASM ABI contract for Valayam plugins.
+/// WASM ABI contract for Valayam plugins via Extism.
 ///
-/// Guest modules must export:
-/// - `memory` — the module's linear memory
-/// - `valayam_alloc(size: i32) -> i32` — allocate `size` bytes, return offset
-/// - `valayam_execute(input_offset: i32, input_len: i32) -> i32` — execute scan,
-///   returns offset in memory where the null-terminated result JSON begins
+/// Guest modules must use the `valayam-plugin-sdk` (extism-pdk) to export
+/// an `execute_scan` function.
 ///
 /// The input JSON format: `{"template":{...},"context":{...}}`
 /// The result JSON format: `{"matched":true,"count":N,"findings":[...]}` or `{"matched":false}`
 pub struct WasmPluginBridge {
     name: String,
     wasm_path: PathBuf,
-    engine: Engine,
-    module: Module,
 }
 
 impl WasmPluginBridge {
     pub fn new(name: impl Into<String>, wasm_path: PathBuf) -> Self {
-        let mut config = Config::new();
-        // Enable WASM resource limits (fuel)
-        config.consume_fuel(true);
-
-        let engine = Engine::new(&config).unwrap_or_default();
-        // At construction time we attempt to compile; if it fails we still construct
-        // so init() can report the error with proper ScannerError type.
-        let module = Module::from_file(&engine, &wasm_path).unwrap_or_else(|e| {
-            tracing::warn!("Failed to load WASM module from {}: {}", wasm_path.display(), e);
-            // Create a minimal dummy module for error path — we validate in init()
-            Module::new(&engine, [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).expect("Empty module should always succeed")
-        });
         Self {
             name: name.into(),
             wasm_path,
-            engine,
-            module,
         }
     }
 }
@@ -50,29 +31,21 @@ impl ScanPlugin for WasmPluginBridge {
     }
 
     fn is_applicable(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
-        // Check if the module exports the required function
-        self.module.get_export("valayam_execute").is_some()
+        true
     }
 
     async fn init(&self) -> Result<(), ScannerError> {
-        // Validate the wasm file can be parsed and has required exports
-        let module = Module::from_file(&self.engine, &self.wasm_path)
-            .map_err(|e| ScannerError::PluginInitializationError(
-                format!("Invalid wasm module '{}': {}", self.wasm_path.display(), e)
-            ))?;
-
-        // Check required exports
-        if module.get_export("valayam_execute").is_none() {
+        let wasm = Wasm::file(&self.wasm_path);
+        let mut manifest = Manifest::new([wasm]);
+        manifest.allowed_paths = Some(std::collections::BTreeMap::from([(
+            "/".to_string(),
+            PathBuf::from("/"),
+        )]));
+        if let Err(e) = Plugin::new(&manifest, [], true) {
             return Err(ScannerError::PluginInitializationError(
-                format!("WASM plugin '{}' is missing required export 'valayam_execute'", self.name)
+                format!("Failed to load Wasm via Extism '{}': {}", self.wasm_path.display(), e)
             ));
         }
-        if module.get_export("valayam_alloc").is_none() {
-            return Err(ScannerError::PluginInitializationError(
-                format!("WASM plugin '{}' is missing required export 'valayam_alloc'", self.name)
-            ));
-        }
-
         Ok(())
     }
 
@@ -84,113 +57,54 @@ impl ScanPlugin for WasmPluginBridge {
         let vars = ctx.snapshot_variables().await;
         let context_json = serde_json::to_string(&vars).unwrap_or_default();
 
-        // Build combined input: {"template":..., "context":...}
         let input_json = format!(
             r#"{{"template":{},"context":{}}}"#,
             template_json, context_json
         );
-        let input_bytes = input_json.as_bytes();
-        let input_len = input_bytes.len() as i32;
 
-        // Create a fresh instance per execute (thread-safe, no shared state)
-        let module = match Module::from_file(&self.engine, &self.wasm_path) {
-            Ok(m) => m,
+        let wasm = Wasm::file(&self.wasm_path);
+        let mut manifest = Manifest::new([wasm]);
+        manifest.allowed_paths = Some(std::collections::BTreeMap::from([(
+            "/".to_string(),
+            PathBuf::from("/"),
+        )]));
+        let mut plugin = match extism::PluginBuilder::new(manifest)
+            .with_wasi(true)
+            .with_function(
+                "dns_resolve",
+                [extism::ValType::I64],
+                [extism::ValType::I64],
+                extism::UserData::new(()),
+                crate::host_functions::dns_resolve
+            )
+            .with_function(
+                "kv_get",
+                [extism::ValType::I64],
+                [extism::ValType::I64],
+                extism::UserData::new(()),
+                crate::host_functions::kv_get
+            )
+            .with_function(
+                "kv_set",
+                [extism::ValType::I64],
+                [extism::ValType::I64],
+                extism::UserData::new(()),
+                crate::host_functions::kv_set
+            )
+            .build()
+        {
+            Ok(p) => p,
             Err(e) => {
-                tracing::error!(plugin = %self.name, error = %e, "wasm module reload failed");
+                tracing::error!(plugin = %self.name, error = %e, "wasm module load failed");
                 return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError(format!("wasm reload: {}", e)),
+                    error: ScannerError::PluginExecutionError(format!("wasm load: {}", e)),
                     retryable: false,
                 };
             }
         };
 
-        let mut linker = Linker::new(&self.engine);
-        if let Err(e) = wasmtime_wasi::add_to_linker(&mut linker, |s| s) {
-            tracing::error!(plugin = %self.name, error = %e, "failed to add wasi to linker");
-            return PluginOutcome::Failed {
-                error: ScannerError::PluginExecutionError(format!("wasi linker: {}", e)),
-                retryable: false,
-            };
-        }
-
-        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
-        let mut store = Store::new(&self.engine, wasi);
-        
-        // Apply CPU cycle limit (Fuel) to prevent infinite loops (DoS protection)
-        if let Err(e) = store.set_fuel(100_000_000) {
-            tracing::error!(plugin = %self.name, error = %e, "failed to set fuel limit");
-        }
-
-        let instance = match linker.instantiate(&mut store, &module) {
-            Ok(i) => i,
-            Err(e) => {
-                tracing::error!(plugin = %self.name, error = %e, "wasm instantiation failed (fuel exhausted?)");
-                return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError(format!("wasm instantiate: {}", e)),
-                    retryable: false,
-                };
-            }
-        };
-
-        // Get memory export
-        let memory = match instance.get_memory(&mut store, "memory") {
-            Some(m) => m,
-            None => {
-                tracing::error!(plugin = %self.name, "WASM plugin missing 'memory' export");
-                return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError("missing memory export".into()),
-                    retryable: false,
-                };
-            }
-        };
-
-        // Get alloc function
-        let alloc_fn = match instance.get_typed_func::<i32, i32>(&mut store, "valayam_alloc") {
-            Ok(f) => f,
-            Err(e) => {
-                tracing::error!(plugin = %self.name, error = %e, "wasm alloc function not found");
-                return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError(format!("wasm alloc: {}", e)),
-                    retryable: false,
-                };
-            }
-        };
-
-        // Allocate guest memory for input data (with 1 byte extra for null terminator)
-        let input_offset = match alloc_fn.call(&mut store, (input_len + 1) as i32) {
-            Ok(offset) => offset,
-            Err(e) => {
-                tracing::error!(plugin = %self.name, error = %e, "wasm alloc failed");
-                return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError(format!("wasm alloc: {}", e)),
-                    retryable: true,
-                };
-            }
-        };
-
-        // Write input data to guest memory
-        if let Err(e) = memory.write(&mut store, input_offset as usize, input_bytes) {
-            tracing::error!(plugin = %self.name, error = %e, "wasm memory write failed");
-            return PluginOutcome::Failed {
-                error: ScannerError::PluginExecutionError(format!("memory write: {}", e)),
-                retryable: false,
-            };
-        }
-
-        // Call execute function
-        let execute_fn = match instance.get_typed_func::<(i32, i32), i32>(&mut store, "valayam_execute") {
-            Ok(f) => f,
-            Err(e) => {
-                tracing::error!(plugin = %self.name, error = %e, "wasm execute export not found");
-                return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError(format!("wasm execute: {}", e)),
-                    retryable: false,
-                };
-            }
-        };
-
-        let result_offset = match execute_fn.call(&mut store, (input_offset, input_len)) {
-            Ok(offset) => offset,
+        let output_bytes = match plugin.call::<&str, Vec<u8>>("execute_scan", &input_json) {
+            Ok(output) => output,
             Err(e) => {
                 tracing::error!(plugin = %self.name, error = %e, "wasm execute failed");
                 return PluginOutcome::Failed {
@@ -200,20 +114,7 @@ impl ScanPlugin for WasmPluginBridge {
             }
         };
 
-        // Read result string from guest memory (null-terminated)
-        let result_bytes = match read_null_terminated(&memory, &store, result_offset as usize) {
-            Some(b) => b,
-            None => {
-                tracing::error!(plugin = %self.name, "wasm execute returned invalid result offset");
-                return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError("invalid result offset".into()),
-                    retryable: false,
-                };
-            }
-        };
-
-        // Parse result JSON
-        let result_str = match std::str::from_utf8(&result_bytes) {
+        let result_str = match std::str::from_utf8(&output_bytes) {
             Ok(s) => s,
             Err(_) => return PluginOutcome::NoMatch,
         };
@@ -223,7 +124,6 @@ impl ScanPlugin for WasmPluginBridge {
                 if json.get("matched").and_then(|v| v.as_bool()).unwrap_or(false) {
                     let count = json.get("count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
-                    // Process individual findings if present
                     if let Some(findings) = json.get("findings").and_then(|v| v.as_array()) {
                         for finding_val in findings {
                             if let Ok(finding) = serde_json::from_value::<FindingOwned>(finding_val.clone()) {
@@ -243,17 +143,4 @@ impl ScanPlugin for WasmPluginBridge {
             }
         }
     }
-}
-
-/// Read a null-terminated byte sequence from wasm linear memory at the given offset.
-/// Returns `None` if the memory read fails or no null terminator is found within 64KB.
-fn read_null_terminated(
-    memory: &Memory,
-    store: impl AsContext,
-    offset: usize,
-) -> Option<Vec<u8>> {
-    let mut buf = vec![0u8; 65536];
-    memory.read(store, offset, &mut buf).ok()?;
-    let end = buf.iter().position(|&b| b == 0)?;
-    Some(buf[..end].to_vec())
 }

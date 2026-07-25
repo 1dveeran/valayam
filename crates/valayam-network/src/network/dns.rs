@@ -5,7 +5,8 @@
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 use reqwest::Client;
-use hickory_resolver::config::*;
+use hickory_resolver::AsyncResolver;
+use serde::{Deserialize, Serialize};
 use hickory_resolver::proto::rr::*;
 use tracing::debug;
 
@@ -274,11 +275,11 @@ pub struct SubdomainTakeoverInfo {
 }
 
 /// Resolve DNS records for a domain.
-pub async fn resolve(domain: &str, record_type: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub async fn resolve(domain: &str, record_type: &str) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
     // Create a resolver with system configuration
     let resolver = hickory_resolver::TokioAsyncResolver::tokio(
-        ResolverConfig::default(),
-        ResolverOpts::default(),
+        hickory_resolver::config::ResolverConfig::default(),
+        hickory_resolver::config::ResolverOpts::default(),
     );
 
     // Parse the record type

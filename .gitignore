@@ -18,6 +18,9 @@
 /*.py
 /err*.log
 /err.log
+/arch*.md
+/ref*.md
+/impl*.md
 
 # Graphify outputs
 graphify-out/

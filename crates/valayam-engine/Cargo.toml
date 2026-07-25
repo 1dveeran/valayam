@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
+extism = "1.0"
 wasmtime = { version = "18.0.4" }
 wasmtime-wasi = { version = "18.0.4" }
 rand = "0.8"
@@ -35,6 +36,7 @@ tracing-opentelemetry = "0.22"
 opentelemetry = "0.21"
 uuid = { version = "1.24.0", features = ["v4"] }
 serde_yaml = { workspace = true }
+hickory-resolver.workspace = true
 
 [build-dependencies]
 tonic-build = { workspace = true }

@@ -16,14 +16,8 @@ use valayam_engine::executor::ScanExecutor;
 use valayam_engine::traits::{FindingOwned, Reporter};
 use valayam_core::core::reporters::{console::ConsoleReporter, json::JsonReporter, composite::CompositeReporter};
 use valayam_core::core::plugins::*;
-use valayam_plugin_dependency_audit::DependencyAuditPlugin;
-use valayam_plugin_graphql_audit::GraphqlAuditPlugin;
-use valayam_plugin_iac_audit::IacAuditPlugin;
-use valayam_plugin_iot_audit::IotAuditPlugin;
-use valayam_plugin_oauth_audit::OauthAuditPlugin;
-use valayam_core::features::nuclei_compat::executor::NucleiExecutor;
-use valayam_models::templates::nuclei_compat::NucleiTemplate;
-use valayam_core::network::http::StealthHttpClient;
+// Extended plugins moved to Wasm
+// NucleiExecutor moved to Wasm
 use valayam_core::rpc::scanner_client::ScannerClient;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
@@ -180,10 +174,11 @@ pub async fn run_scan(
     template_files: Vec<PathBuf>,
     is_nuclei: bool,
     targets: Vec<String>,
-    http_client: Arc<StealthHttpClient>,
-    executor_nuclei: NucleiExecutor,
+    http_client: Arc<valayam_core::network::http::StealthHttpClient>,
     rate_limiter: Option<Arc<RateLimiter>>,
     grpc_client: Option<ScannerClient<tonic::transport::Channel>>,
+    state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::executor::ScanState>>,
+    cancel: CancellationToken,
 ) -> anyhow::Result<()> {
     let scan_start = Instant::now();
 
@@ -203,9 +198,7 @@ pub async fn run_scan(
     // ── 1. Create bounded MPSC channel ──
     let (finding_tx, mut finding_rx) = tokio::sync::mpsc::channel::<FindingOwned>(1000);
 
-    // ── 2. Create cancellation token (wired to Ctrl+C) ──
-    let cancel = CancellationToken::new();
-    let _cancel_clone = cancel.clone();
+    let state_rx_to_use = state_rx;
     let cancel_for_handler = cancel.clone();
     
     // We will still handle ctrl-c to save state
@@ -247,50 +240,22 @@ pub async fn run_scan(
         let reg = PluginRegistry::new();
         // Core protocols
         reg.register(HttpScanPlugin::new(http_client.clone()));
-        reg.register(NetworkScanPlugin::new());
-        reg.register(DnsAuditPlugin::new());
-        reg.register(TlsAuditPlugin::new());
-        reg.register(ScriptingPlugin::new());
-        reg.register(FuzzerPlugin::new(http_client.clone()));
-        // Cloud & Extended
-        reg.register(CloudSecPlugin::new(http_client.clone()));
-        reg.register(AuthLogicPlugin::new(http_client.clone()));
-        reg.register(DeepAnalysisPlugin::new(http_client.clone()));
-        reg.register(IacAuditPlugin::new());
-        reg.register(SbomAuditPlugin::new(http_client.clone()));
-        reg.register(GrpcAuditPlugin::new(http_client.clone()));
-        reg.register(GraphqlAuditPlugin::new(http_client.clone()));
-        reg.register(DriftDetectPlugin::new(http_client.clone()));
-        reg.register(CredMonitorPlugin::new(http_client.clone()));
-        reg.register(OauthAuditPlugin::new(http_client.clone()));
-        reg.register(IdpAuditPlugin::new(http_client.clone()));
-        reg.register(AwsEscalatePlugin::new(http_client.clone()));
-        reg.register(AzureGcpEscalatePlugin::new(http_client.clone()));
-        reg.register(BrowserAuditPlugin::new(http_client.clone()));
-        reg.register(IotAuditPlugin::new());
-        reg.register(ScadaAuditPlugin::new());
-        reg.register(AutoRedteamPlugin::new());
-        reg.register(ImplantDeployPlugin::new());
-        reg.register(ClientSecretAuditPlugin::new(http_client.clone()));
-        reg.register(DomRedirectAuditPlugin::new(http_client.clone()));
-        reg.register(CorsAuditPlugin::new(http_client.clone()));
-        reg.register(CspAuditPlugin::new(http_client.clone()));
-        reg.register(WafBypassVerifyPlugin::new(http_client.clone()));
-        reg.register(HeaderScorecardPlugin::new(http_client.clone()));
-        reg.register(ReputationAuditPlugin::new());
-        reg.register(CtLogAuditPlugin::new(http_client.clone()));
-        reg.register(RemediationGenPlugin::new());
-        reg.register(MitreMappingPlugin::new());
-        reg.register(ContainerAuditPlugin::new());
-        reg.register(K8sAuditPlugin::new());
-        reg.register(SastTaintPlugin::new());
-        reg.register(SastSecretsPlugin::new());
-        reg.register(SubdomainTakeoverPlugin::new());
-        reg.register(PortScanPlugin::new());
+    // Scripting and Fuzzer moved to Wasm
+        // Cloud & Extended moved to Wasm
+    // Batch 8 (Threat Audit) moved to Wasm
         reg.register(SchemaDriftPlugin::new(http_client.clone()));
-        reg.register(PiiLeakAuditPlugin::new(http_client.clone()));
-        reg.register(CicdAuditPlugin::new());
-        reg.register(DependencyAuditPlugin::new());
+        reg.register(DnsAuditPlugin);
+        reg.register(PortScanPlugin);
+        reg.register(ShellsPlugin);
+        
+        // Initialize ThreatIntelMatcher and register
+        let matcher = Arc::new(valayam_core::features::threat_intel::ioc_matcher::IocMatcher::new());
+        reg.register(ThreatIntelPlugin { matcher });
+
+        // Initialize OOB Server and register
+        let oob_server = Arc::new(valayam_core_net::features::oob::server::OobServer::new(valayam_core_net::features::oob::server::OobServerConfig::default()));
+        reg.register(OobPlugin { server: oob_server });
+        // DependencyAudit moved to Wasm
         
         let reg_arc = Arc::new(reg);
         
@@ -370,12 +335,15 @@ pub async fn run_scan(
     });
 
     // ── 7. Build Executor ──
-    let executor = ScanExecutor::new(
+    let mut executor = ScanExecutor::new(
         finding_tx.clone(),
         registry.clone(),
         rate_limiter.clone(),
         cancel.clone(),
     );
+    if let Some(rx) = state_rx_to_use {
+        executor = executor.with_state_rx(rx);
+    }
 
     let mut tasks = Vec::new();
     for target in &actual_targets {
@@ -389,24 +357,13 @@ pub async fn run_scan(
 
     let stream = futures::stream::iter(tasks).map(|(target_url, file_path_clone)| {
         let exec = executor.clone();
-        let exec_nuclei = executor_nuclei.clone();
         let grpc_client_clone = grpc_client_arc.clone();
         let finding_tx_clone = finding_tx.clone();
-
         async move {
             let path_str = file_path_clone.to_string_lossy().to_string();
 
             if is_nuclei {
-                let template = match NucleiTemplate::load(&file_path_clone) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        tracing::error!("Failed to load Nuclei template {}: {}", path_str, e);
-                        return;
-                    }
-                };
-                if let Some(finding) = exec_nuclei.execute_scan(&target_url, template).await {
-                    let _ = finding_tx_clone.send(finding).await;
-                }
+                tracing::warn!("Nuclei execution moved to Wasm plugin, skipping native execution for {}", path_str);
             } else {
                 if let Some(grpc_arc) = grpc_client_clone {
                     let mut client = (*grpc_arc).clone();

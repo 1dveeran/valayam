@@ -93,42 +93,190 @@ pub fn init_plugin(name: &str, lang: &str, runtime: &str) -> anyhow::Result<()> 
     std::fs::write(dir_path.join("plugin.yaml"), manifest)?;
     println!("- Created plugin.yaml");
 
-    if lang == "python" {
-        let py_content = format!(
-            "from valayam_sdk import PluginServer, ScannerPlugin, Finding\n\n\
-            class {}Scanner(ScannerPlugin):\n\
-                def execute(self, template, context):\n\
-                    target = context.get(\"target_url\", \"\")\n\
-                    return [\n\
-                        Finding(title=\"Sample Finding\", severity=\"INFO\", description=f\"Scanned {{target}}\")\n\
-                    ]\n\n\
-            if __name__ == \"__main__\":\n\
-                PluginServer({}Scanner()).serve()\n",
-            name.replace("-", "").capitalize_first_letter(),
-            name.replace("-", "").capitalize_first_letter()
-        );
-        std::fs::write(dir_path.join("plugin.py"), py_content)?;
-        println!("- Created plugin.py");
-        
-        let req_content = "valayam-sdk\n";
-        std::fs::write(dir_path.join("requirements.txt"), req_content)?;
-        println!("- Created requirements.txt");
-        
-        let bat_content = "@echo off\npython plugin.py\n";
-        std::fs::write(dir_path.join("run.bat"), bat_content)?;
-        println!("- Created run.bat");
-    } else {
-        println!("- Note: Boilerplate generation for language '{}' is currently minimal.", lang);
+    match lang {
+        "python" => {
+            std::fs::write(dir_path.join("plugin.py"), 
+r#"import json
+from extism_pdk import plugin_fn, Host
+
+@plugin_fn
+def run_scan():
+    input_data = Host.input_string()
+    ctx = json.loads(input_data)
+    
+    findings = [{
+        "title": "Sample Finding",
+        "severity": "INFO",
+        "description": f"Scanned target: {ctx.get('target', 'unknown')}"
+    }]
+    
+    Host.output_string(json.dumps(findings))
+"#)?;
+            println!("- Created plugin.py");
+            std::fs::write(dir_path.join("requirements.txt"), "extism-pdk\n")?;
+            println!("- Created requirements.txt");
+            std::fs::write(dir_path.join("build.sh"), "extism-py plugin.py -o plugin.wasm\n")?;
+            println!("- Created build.sh");
+        }
+        "rust" => {
+            std::fs::write(dir_path.join("Cargo.toml"), format!(
+r#"[package]
+name = "{}"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+extism-pdk = "1.0.0"
+serde = {{ version = "1.0", features = ["derive"] }}
+serde_json = "1.0"
+"#, name))?;
+            println!("- Created Cargo.toml");
+
+            std::fs::create_dir_all(dir_path.join("src"))?;
+            std::fs::write(dir_path.join("src/lib.rs"), 
+r#"use extism_pdk::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct ScanContext {
+    target: String,
+}
+
+#[derive(Serialize)]
+struct Finding {
+    title: String,
+    severity: String,
+    description: String,
+}
+
+#[plugin_fn]
+pub fn run_scan(input: String) -> FnResult<String> {
+    let ctx: ScanContext = serde_json::from_str(&input)?;
+    
+    let findings = vec![
+        Finding {
+            title: "Sample Finding".into(),
+            severity: "INFO".into(),
+            description: format!("Scanned target: {}", ctx.target),
+        }
+    ];
+
+    let output = serde_json::to_string(&findings)?;
+    Ok(output)
+}
+"#)?;
+            println!("- Created src/lib.rs");
+            std::fs::write(dir_path.join("build.sh"), "cargo build --target wasm32-wasi --release\ncp target/wasm32-wasi/release/*.wasm plugin.wasm\n")?;
+            println!("- Created build.sh");
+        }
+        "go" => {
+            std::fs::write(dir_path.join("go.mod"), format!(
+r#"module {}
+
+go 1.21
+
+require github.com/extism/go-pdk v1.0.0
+"#, name))?;
+            println!("- Created go.mod");
+
+            std::fs::write(dir_path.join("main.go"),
+r#"package main
+
+import (
+	"encoding/json"
+	"github.com/extism/go-pdk"
+)
+
+type ScanContext struct {
+	Target string `json:"target"`
+}
+
+type Finding struct {
+	Title       string `json:"title"`
+	Severity    string `json:"severity"`
+	Description string `json:"description"`
+}
+
+//export run_scan
+func run_scan() int32 {
+	input := pdk.Input()
+	var ctx ScanContext
+	json.Unmarshal(input, &ctx)
+
+	findings := []Finding{
+		{
+			Title:       "Sample Finding",
+			Severity:    "INFO",
+			Description: "Scanned target: " + ctx.Target,
+		},
+	}
+
+	output, _ := json.Marshal(findings)
+	pdk.Output(output)
+	return 0
+}
+
+func main() {}
+"#)?;
+            println!("- Created main.go");
+            std::fs::write(dir_path.join("build.sh"), "tinygo build -o plugin.wasm -target wasi main.go\n")?;
+            println!("- Created build.sh");
+        }
+        "ts" | "javascript" => {
+            std::fs::write(dir_path.join("package.json"), format!(
+r#"{{
+  "name": "{}",
+  "version": "1.0.0",
+  "dependencies": {{
+    "@extism/js-pdk": "^1.0.0"
+  }}
+}}
+"#, name))?;
+            println!("- Created package.json");
+            
+            std::fs::write(dir_path.join("index.js"),
+r#"const { Host } = require("@extism/js-pdk");
+
+function run_scan() {
+    let input = Host.inputString();
+    let ctx = JSON.parse(input);
+    
+    let findings = [
+        {
+            title: "Sample Finding",
+            severity: "INFO",
+            description: "Scanned target: " + ctx.target
+        }
+    ];
+    
+    Host.outputString(JSON.stringify(findings));
+}
+
+module.exports = { run_scan };
+"#)?;
+            println!("- Created index.js");
+            std::fs::write(dir_path.join("build.sh"), "npm install\nextism-js index.js -i index.d.ts -o plugin.wasm\n")?;
+            println!("- Created build.sh");
+        }
+        _ => {
+            println!("- Note: Boilerplate generation for language '{}' is currently minimal.", lang);
+        }
     }
 
     println!("\nRun `valayam plugin package {}` to package your plugin into {}.vpa!", name, name);
     Ok(())
 }
 
-trait Capitalize {
+
+
+pub trait CapitalizeExt {
     fn capitalize_first_letter(&self) -> String;
 }
-impl Capitalize for String {
+
+impl CapitalizeExt for str {
     fn capitalize_first_letter(&self) -> String {
         let mut c = self.chars();
         match c.next() {
@@ -231,5 +379,103 @@ pub fn generate_key(output_prefix: &str) -> anyhow::Result<()> {
     std::fs::write(&priv_path, priv_key)?;
     std::fs::write(&pub_path, pub_key)?;
     println!("Generated ED25519 keypair:\n- Private key (Keep Secret!): {}\n- Public key (Distribute!): {}", priv_path, pub_path);
+    Ok(())
+}
+
+pub async fn install_plugin(name: &str, url: &str, pubkey_hex: Option<&str>) -> anyhow::Result<()> {
+    use valayam_core::distribution::puller::PluginPuller;
+    
+
+    let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
+    
+    let pk_bytes = if let Some(hex_str) = pubkey_hex {
+        let decoded = hex::decode(hex_str).map_err(|e| anyhow::anyhow!("Invalid hex in pubkey: {}", e))?;
+        if decoded.len() != 32 {
+            anyhow::bail!("Public key must be exactly 32 bytes (64 hex characters)");
+        }
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&decoded);
+        Some(arr)
+    } else {
+        println!("Warning: No public key provided. Signature verification will be bypassed.");
+        None
+    };
+
+    println!("Installing plugin '{}' from {}...", name, url);
+    let puller = PluginPuller::new(cache_dir, pk_bytes.as_ref())?;
+    
+    let path = puller.pull(name, url).await?;
+    println!("Successfully installed plugin to {}", path.display());
+    Ok(())
+}
+
+pub async fn push_plugin(file: &str, repo: &str, tag: &str, signature: Option<&str>) -> anyhow::Result<()> {
+    use valayam_core::distribution::publisher::PluginPublisher;
+    
+    let file_path = Path::new(file);
+    if !file_path.exists() {
+        anyhow::bail!("Plugin file '{}' does not exist.", file);
+    }
+    
+    let registry = if let Some(idx) = repo.find('/') {
+        &repo[..idx]
+    } else {
+        anyhow::bail!("Repository format must be <registry>/<repo_name> (e.g. localhost:5000/my-plugin)");
+    };
+    
+    let repo_name = &repo[registry.len()+1..];
+    
+    let username = std::env::var("VALAYAM_REGISTRY_USER").ok();
+    let password = std::env::var("VALAYAM_REGISTRY_PASS").ok();
+    
+    println!("Pushing '{}' to registry '{}', repo '{}', tag '{}'", file, registry, repo_name, tag);
+    
+    let publisher = PluginPublisher::new(registry, username.as_deref(), password.as_deref())?;
+    publisher.push(repo_name, tag, file_path, signature).await?;
+    
+    println!("Successfully pushed OCI artifact to {}", repo);
+    Ok(())
+}
+
+pub fn uninstall_plugin(name: &str) -> anyhow::Result<()> {
+    let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
+    let plugin_path = cache_dir.join(format!("{}.wasm", name));
+    
+    if plugin_path.exists() {
+        std::fs::remove_file(&plugin_path)?;
+        println!("Successfully uninstalled plugin '{}'.", name);
+    } else {
+        println!("Plugin '{}' is not installed.", name);
+    }
+    Ok(())
+}
+
+pub fn list_plugins() -> anyhow::Result<()> {
+    let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
+    
+    if !cache_dir.exists() {
+        println!("No plugins installed.");
+        return Ok(());
+    }
+    
+    let entries = std::fs::read_dir(cache_dir)?;
+    let mut count = 0;
+    
+    println!("Installed plugins:");
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.is_file() && path.extension().map_or(false, |e| e == "wasm") {
+                if let Some(stem) = path.file_stem() {
+                    println!("- {}", stem.to_string_lossy());
+                    count += 1;
+                }
+            }
+        }
+    }
+    
+    if count == 0 {
+        println!("No plugins installed.");
+    }
     Ok(())
 }

@@ -4,6 +4,7 @@ pub mod features;
 pub use valayam_network::network;
 pub use valayam_network::stealth;
 pub mod template;
+pub mod distribution;
 
 pub mod rpc {
     tonic::include_proto!("valayam");

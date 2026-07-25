@@ -4,16 +4,34 @@ members = [
     "crates/valayam-cli",
     "crates/valayam-plugin-grpc-example",
     "crates/valayam-plugin-wasm-example",
-    "crates/valayam-ebpf-agent",
-    "crates/valayam-models",
-    "crates/valayam-network",
     "crates/valayam-engine",
-    "crates/valayam-plugin-dependency-audit",
-    "crates/valayam-plugin-graphql-audit",
-    "crates/valayam-plugin-iac-audit",
-    "crates/valayam-plugin-iot-audit",
-    "crates/valayam-plugin-mobile-audit",
-    "crates/valayam-plugin-oauth-audit"
+    "crates/valayam-models",
+    "crates/valayam-core-net",
+    "crates/valayam-network",
+    "crates/valayam-plugin-sdk",
+    "crates/valayam-ebpf-agent",
+    "plugins-wasm/cors-audit",
+    "plugins-wasm/pii-leak-audit",
+    "plugins-wasm/iac-audit",
+    "plugins-wasm/header-scorecard",
+    "plugins-wasm/browser-audit",
+    "plugins-wasm/csp-audit",
+    "plugins-wasm/dom-redirect-audit",
+    "plugins-wasm/cloud-audit",
+    "plugins-wasm/code-audit",
+    "plugins-wasm/recon-audit",
+    "plugins-wasm/api-audit",
+    "plugins-wasm/threat-audit",
+    "plugins-wasm/specialized-audit",
+    "plugins-wasm/dependency-audit",
+    "plugins-wasm/graphql-audit",
+    "plugins-wasm/iot-audit",
+    "plugins-wasm/mobile-audit",
+    "plugins-wasm/oauth-audit",
+    "plugins-wasm/test-runner"
+]
+exclude = [
+    "crates/valayam-ebpf-programs"
 ]
 resolver = "2"
 
