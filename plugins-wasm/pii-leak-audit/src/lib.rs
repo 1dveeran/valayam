@@ -34,6 +34,8 @@ impl WasmScanner for PiiLeakAuditScanner {
 
         let ssn_re = Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap();
         let cc_re = Regex::new(r"\b(?:\d[ -]*?){13,16}\b").unwrap();
+        let email_re = Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
+        let apikey_re = Regex::new(r"(?i)(api[_-]?key|token|secret)[=:\s]+[A-Za-z0-9_\-]{16,}\b").unwrap();
 
         let mut found_pii = Vec::new();
         if ssn_re.is_match(&body) {
@@ -41,6 +43,12 @@ impl WasmScanner for PiiLeakAuditScanner {
         }
         if cc_re.is_match(&body) {
             found_pii.push("Credit Card");
+        }
+        if email_re.is_match(&body) {
+            found_pii.push("Email");
+        }
+        if apikey_re.is_match(&body) {
+            found_pii.push("API Key/Secret");
         }
 
         if !found_pii.is_empty() {

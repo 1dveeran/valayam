@@ -1,6 +1,6 @@
 use serde_json::json;
 use std::collections::HashMap;
-use valayam_plugin_test_runner::*;
+use test_runner::*;
 
 fn ctx() -> HashMap<String, String> {
     HashMap::from([

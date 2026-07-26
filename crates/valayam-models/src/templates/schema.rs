@@ -171,6 +171,8 @@ pub struct VulnerabilityTemplate {
 pub use crate::template_info::TemplateInfo;
 pub use crate::template_info::TemplateMetadata;
 
+use crate::templates::section::TemplateSection;
+
 impl TemplateMetadata for VulnerabilityTemplate {
     fn template_name(&self) -> &str { &self.info.name }
     fn template_severity(&self) -> &str { &self.info.severity }
@@ -179,6 +181,137 @@ impl TemplateMetadata for VulnerabilityTemplate {
 }
 
 impl VulnerabilityTemplate {
+    pub fn empty() -> Self {
+        Self {
+            id: String::new(),
+            info: TemplateInfo {
+                name: String::new(),
+                severity: "info".into(),
+                description: None,
+                compliance: Default::default(),
+            },
+            auth: None,
+            requests: vec![],
+            network: vec![],
+            scripts: vec![],
+            dns: vec![],
+            tls: vec![],
+            fuzz: vec![],
+            cloud: vec![],
+            logic: vec![],
+            deep_analysis: vec![],
+            iac_audit: vec![],
+            sbom_audit: vec![],
+            grpc_audit: vec![],
+            graphql_audit: vec![],
+            drift_detect: vec![],
+            cred_monitor: vec![],
+            oauth_audit: vec![],
+            idp_audit: vec![],
+            aws_escalate: vec![],
+            azure_gcp_escalate: vec![],
+            browser_audit: vec![],
+            iot_audit: vec![],
+            scada_audit: vec![],
+            auto_redteam: vec![],
+            implant_deploy: vec![],
+            client_secret_audit: vec![],
+            dom_redirect_audit: vec![],
+            cors_audit: vec![],
+            csp_audit: vec![],
+            waf_bypass_verify: vec![],
+            header_scorecard: vec![],
+            reputation_audit: vec![],
+            ct_log_audit: vec![],
+            remediation_gen: vec![],
+            mitre_mapping: vec![],
+            container_audit: vec![],
+            k8s_audit: vec![],
+            sast_taint: vec![],
+            sast_secrets: vec![],
+            subdomain_takeover: vec![],
+            port_scan: vec![],
+            schema_drift: vec![],
+            pii_leak_audit: vec![],
+            cicd_audit: vec![],
+            dependency_audit: vec![],
+            easm: vec![],
+            web3_audit: vec![],
+            mobile_audit: vec![],
+            serverless_audit: vec![],
+            auto_exploit: vec![],
+            ui_proxy: vec![],
+            oob_interaction: false,
+        }
+    }
+
+    /// Iterate all non-empty template sections as trait objects.
+    ///
+    /// Enables trait-based plugin dispatch: plugins check applicability by
+    /// calling `template.has_section(plugin_section_name)` instead of matching
+    /// on individual fields.
+    pub fn sections(&self) -> Vec<&dyn TemplateSection> {
+        let mut s: Vec<&dyn TemplateSection> = Vec::new();
+        if let Some(ref a) = self.auth { s.push(a); }
+        for r in &self.requests { s.push(r as &dyn TemplateSection); }
+        for n in &self.network { s.push(n as &dyn TemplateSection); }
+        for r in &self.scripts { s.push(r as &dyn TemplateSection); }
+        for d in &self.dns { s.push(d as &dyn TemplateSection); }
+        for t in &self.tls { s.push(t as &dyn TemplateSection); }
+        for f in &self.fuzz { s.push(f as &dyn TemplateSection); }
+        for c in &self.cloud { s.push(c as &dyn TemplateSection); }
+        for l in &self.logic { s.push(l as &dyn TemplateSection); }
+        for d in &self.deep_analysis { s.push(d as &dyn TemplateSection); }
+        for i in &self.iac_audit { s.push(i as &dyn TemplateSection); }
+        for s_ in &self.sbom_audit { s.push(s_ as &dyn TemplateSection); }
+        for g in &self.grpc_audit { s.push(g as &dyn TemplateSection); }
+        for g in &self.graphql_audit { s.push(g as &dyn TemplateSection); }
+        for d in &self.drift_detect { s.push(d as &dyn TemplateSection); }
+        for c in &self.cred_monitor { s.push(c as &dyn TemplateSection); }
+        for o in &self.oauth_audit { s.push(o as &dyn TemplateSection); }
+        for i in &self.idp_audit { s.push(i as &dyn TemplateSection); }
+        for a in &self.aws_escalate { s.push(a as &dyn TemplateSection); }
+        for a in &self.azure_gcp_escalate { s.push(a as &dyn TemplateSection); }
+        for b in &self.browser_audit { s.push(b as &dyn TemplateSection); }
+        for i in &self.iot_audit { s.push(i as &dyn TemplateSection); }
+        for s_ in &self.scada_audit { s.push(s_ as &dyn TemplateSection); }
+        for a in &self.auto_redteam { s.push(a as &dyn TemplateSection); }
+        for i in &self.implant_deploy { s.push(i as &dyn TemplateSection); }
+        for c in &self.client_secret_audit { s.push(c as &dyn TemplateSection); }
+        for d in &self.dom_redirect_audit { s.push(d as &dyn TemplateSection); }
+        for c in &self.cors_audit { s.push(c as &dyn TemplateSection); }
+        for c in &self.csp_audit { s.push(c as &dyn TemplateSection); }
+        for w in &self.waf_bypass_verify { s.push(w as &dyn TemplateSection); }
+        for h in &self.header_scorecard { s.push(h as &dyn TemplateSection); }
+        for r in &self.reputation_audit { s.push(r as &dyn TemplateSection); }
+        for c in &self.ct_log_audit { s.push(c as &dyn TemplateSection); }
+        for r in &self.remediation_gen { s.push(r as &dyn TemplateSection); }
+        for m in &self.mitre_mapping { s.push(m as &dyn TemplateSection); }
+        for c in &self.container_audit { s.push(c as &dyn TemplateSection); }
+        for k in &self.k8s_audit { s.push(k as &dyn TemplateSection); }
+        for s_ in &self.sast_taint { s.push(s_ as &dyn TemplateSection); }
+        for s_ in &self.sast_secrets { s.push(s_ as &dyn TemplateSection); }
+        for s_ in &self.subdomain_takeover { s.push(s_ as &dyn TemplateSection); }
+        for p in &self.port_scan { s.push(p as &dyn TemplateSection); }
+        for s_ in &self.schema_drift { s.push(s_ as &dyn TemplateSection); }
+        for p in &self.pii_leak_audit { s.push(p as &dyn TemplateSection); }
+        for c in &self.cicd_audit { s.push(c as &dyn TemplateSection); }
+        for d in &self.dependency_audit { s.push(d as &dyn TemplateSection); }
+        for e in &self.easm { s.push(e as &dyn TemplateSection); }
+        for w in &self.web3_audit { s.push(w as &dyn TemplateSection); }
+        for m in &self.mobile_audit { s.push(m as &dyn TemplateSection); }
+        for s_ in &self.serverless_audit { s.push(s_ as &dyn TemplateSection); }
+        for a in &self.auto_exploit { s.push(a as &dyn TemplateSection); }
+        for u in &self.ui_proxy { s.push(u as &dyn TemplateSection); }
+        s
+    }
+
+    /// Check if this template has a section matching `name` (kebab-case, as
+    /// defined by the section's `TemplateSection::section_name()`).
+    pub fn has_section(&self, name: &str) -> bool {
+        self.sections().iter().any(|s| s.section_name() == name)
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, crate::error::ScannerError> {
         let content = std::fs::read_to_string(path)?;
         Self::load_from_str(&content)
@@ -187,7 +320,7 @@ impl VulnerabilityTemplate {
     pub fn load_from_str(content: &str) -> Result<Self, crate::error::ScannerError> {
         // Detect and convert OpenAPI/Swagger JSON specifications dynamically
         if content.trim().starts_with('{') && (content.contains("\"openapi\"") || content.contains("\"swagger\"")) {
-            
+
         }
 
         let template: VulnerabilityTemplate = serde_yaml::from_str(content)?;
@@ -221,25 +354,8 @@ impl VulnerabilityTemplate {
             ));
         }
 
-        // At least one request/network/dns/tls/script or feature-specific block must be defined
-        let has_any_definition = !self.requests.is_empty()
-            || !self.network.is_empty()
-            || !self.dns.is_empty()
-            || !self.tls.is_empty()
-            || !self.scripts.is_empty()
-            || !self.fuzz.is_empty()
-            || !self.cloud.is_empty()
-            || !self.logic.is_empty()
-            || !self.deep_analysis.is_empty()
-            || !self.iac_audit.is_empty()
-            || !self.drift_detect.is_empty()
-            || !self.easm.is_empty()
-            || !self.web3_audit.is_empty()
-            || !self.mobile_audit.is_empty()
-            || !self.serverless_audit.is_empty()
-            || !self.auto_exploit.is_empty()
-            || !self.ui_proxy.is_empty()
-            || !self.oob_interaction;
+        // At least one section must be defined (uses trait-based check)
+        let has_any_definition = !self.sections().is_empty() || self.oob_interaction;
 
         if !has_any_definition {
             return Err(ScannerError::TemplateValidationError(

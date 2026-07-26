@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
-use valayam_plugin_test_runner::*;
+use test_runner::*;
 
 fn start_dummy_server() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

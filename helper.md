@@ -72,7 +72,7 @@ We provide a specialized `valayam-plugin-test-runner` crate to allow developers 
 
 ```rust
 // Inside your plugin's tests (e.g. `tests/my_plugin_tests.rs`)
-use valayam_plugin_test_runner::*;
+use test_runner::*;
 use serde_json::json;
 use std::collections::HashMap;
 

@@ -1,5 +1,5 @@
 [package]
-name = "valayam-plugin-mobile-audit"
+name = "mobile-audit"
 version = "0.1.0"
 edition = "2021"
 

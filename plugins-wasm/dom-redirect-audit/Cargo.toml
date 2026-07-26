@@ -1,5 +1,5 @@
 [package]
-name = "valayam-plugin-dom-redirect-audit"
+name = "dom-redirect-audit"
 version = "0.1.0"
 edition = "2021"
 

@@ -253,7 +253,7 @@ pub async fn run_scan(
         
         let plugin_dirs = vec![
             std::path::Path::new("plugins"),
-            std::path::Path::new("plugins-wasm"),
+            std::path::Path::new("plugins-wasm/bin"),
         ];
         
         for dir in plugin_dirs {

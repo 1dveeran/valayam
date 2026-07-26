@@ -1,5 +1,5 @@
 [package]
-name = "valayam-plugin-code-audit"
+name = "code-audit"
 version = "0.1.0"
 edition = "2021"
 

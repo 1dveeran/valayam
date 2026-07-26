@@ -25,7 +25,7 @@ impl ScanPlugin for HttpScanPlugin {
     }
 
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
-        !template.requests.is_empty()
+        template.has_section("http-request")
     }
 
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
@@ -69,7 +69,7 @@ impl ScanPlugin for SchemaDriftPlugin {
     }
 
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
-        !template.schema_drift.is_empty()
+        template.has_section("schema-drift")
     }
 
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
@@ -96,7 +96,7 @@ impl ScanPlugin for DnsAuditPlugin {
         "dns_audit"
     }
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
-        !template.dns.is_empty()
+        template.has_section("dns")
     }
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
         let vars = ctx.snapshot_variables().await;
@@ -126,7 +126,7 @@ impl ScanPlugin for PortScanPlugin {
         "port_scan"
     }
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
-        !template.port_scan.is_empty()
+        template.has_section("port-scan")
     }
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
         if let Some(finding) = valayam_core_net::features::port_scan::executor::execute(
@@ -198,69 +198,18 @@ impl ScanPlugin for ShellsPlugin {
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
+    use valayam_models::templates::schema::VulnerabilityTemplate;
 
     fn empty_template() -> VulnerabilityTemplate {
         VulnerabilityTemplate {
             id: "test".to_string(),
-            info: TemplateInfo {
+            info: valayam_models::templates::schema::TemplateInfo {
                 name: "Test".to_string(),
                 severity: "Info".to_string(),
                 description: None,
                 compliance: Default::default(),
             },
-            auth: None,
-            requests: vec![],
-            network: vec![],
-            scripts: vec![],
-            dns: vec![],
-            tls: vec![],
-            fuzz: vec![],
-            cloud: vec![],
-            logic: vec![],
-            deep_analysis: vec![],
-            iac_audit: vec![],
-            sbom_audit: vec![],
-            grpc_audit: vec![],
-            graphql_audit: vec![],
-            drift_detect: vec![],
-            cred_monitor: vec![],
-            oauth_audit: vec![],
-            idp_audit: vec![],
-            aws_escalate: vec![],
-            azure_gcp_escalate: vec![],
-            browser_audit: vec![],
-            iot_audit: vec![],
-            scada_audit: vec![],
-            auto_redteam: vec![],
-            implant_deploy: vec![],
-            client_secret_audit: vec![],
-            dom_redirect_audit: vec![],
-            cors_audit: vec![],
-            csp_audit: vec![],
-            waf_bypass_verify: vec![],
-            header_scorecard: vec![],
-            reputation_audit: vec![],
-            ct_log_audit: vec![],
-            remediation_gen: vec![],
-            mitre_mapping: vec![],
-            container_audit: vec![],
-            k8s_audit: vec![],
-            sast_taint: vec![],
-            sast_secrets: vec![],
-            subdomain_takeover: vec![],
-            port_scan: vec![],
-            schema_drift: vec![],
-            pii_leak_audit: vec![],
-            cicd_audit: vec![],
-            dependency_audit: vec![],
-            easm: vec![],
-            web3_audit: vec![],
-            mobile_audit: vec![],
-            serverless_audit: vec![],
-            auto_exploit: vec![],
-            ui_proxy: vec![],
-            oob_interaction: false,
+            ..VulnerabilityTemplate::empty()
         }
     }
 
