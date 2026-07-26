@@ -12,8 +12,7 @@ pub mod vpa;
 pub mod crypto;
 pub mod telemetry_server;
 
-pub mod plugin_rpc {
-    tonic::include_proto!("valayam.plugin");
-    tonic::include_proto!("valayam");
-}
+// Re-exported from valayam-proto (single source of truth)
+pub use valayam_proto::plugin as plugin_rpc;
+pub use valayam_proto::valayam as rpc;
 pub mod host_functions;

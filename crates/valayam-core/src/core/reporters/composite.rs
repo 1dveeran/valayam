@@ -1,4 +1,4 @@
-use valayam_engine::traits::{Reporter, FindingOwned};
+use valayam_engine::traits::{FindingOwned, Reporter};
 
 /// Fans out findings to multiple reporters (e.g., Console + JSONL simultaneously).
 pub struct CompositeReporter {
@@ -71,7 +71,10 @@ mod tests {
     #[tokio::test]
     async fn test_composite_reporter_delegates_to_inner() {
         let called = Arc::new(AtomicBool::new(false));
-        let reporter = MockReporter { called: called.clone(), fail: false };
+        let reporter = MockReporter {
+            called: called.clone(),
+            fail: false,
+        };
         let composite = CompositeReporter::new(vec![Box::new(reporter)]);
         let result = composite.process_finding(&sample_finding()).await;
         assert!(result.is_ok());
@@ -82,8 +85,14 @@ mod tests {
     async fn test_composite_reporter_multiple_reporters() {
         let called1 = Arc::new(AtomicBool::new(false));
         let called2 = Arc::new(AtomicBool::new(false));
-        let r1 = MockReporter { called: called1.clone(), fail: false };
-        let r2 = MockReporter { called: called2.clone(), fail: false };
+        let r1 = MockReporter {
+            called: called1.clone(),
+            fail: false,
+        };
+        let r2 = MockReporter {
+            called: called2.clone(),
+            fail: false,
+        };
         let composite = CompositeReporter::new(vec![Box::new(r1), Box::new(r2)]);
         let result = composite.process_finding(&sample_finding()).await;
         assert!(result.is_ok());
@@ -94,8 +103,14 @@ mod tests {
     #[tokio::test]
     async fn test_composite_reporter_one_fails_others_still_called() {
         let called2 = Arc::new(AtomicBool::new(false));
-        let r1 = MockReporter { called: Arc::new(AtomicBool::new(true)), fail: true };
-        let r2 = MockReporter { called: called2.clone(), fail: false };
+        let r1 = MockReporter {
+            called: Arc::new(AtomicBool::new(true)),
+            fail: true,
+        };
+        let r2 = MockReporter {
+            called: called2.clone(),
+            fail: false,
+        };
         let composite = CompositeReporter::new(vec![Box::new(r1), Box::new(r2)]);
         // Composite should still return Ok(()) even if one reporter fails
         let result = composite.process_finding(&sample_finding()).await;
@@ -106,7 +121,10 @@ mod tests {
     #[tokio::test]
     async fn test_composite_reporter_flush() {
         let called = Arc::new(AtomicBool::new(false));
-        let reporter = MockReporter { called: called.clone(), fail: false };
+        let reporter = MockReporter {
+            called: called.clone(),
+            fail: false,
+        };
         let composite = CompositeReporter::new(vec![Box::new(reporter)]);
         let result = composite.flush().await;
         assert!(result.is_ok());

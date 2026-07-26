@@ -5,6 +5,7 @@ use crate::templates::dns_audit::DnsRequestTemplate;
 use crate::templates::http_scan::HttpRequestTemplate;
 use crate::templates::network_scan::NetworkRequestTemplate;
 use crate::templates::scripting::ScriptTemplate;
+use serde::{Deserialize, Serialize};
 use crate::templates::tls_audit::TlsAuditTemplate;
 use crate::templates::fuzzer::FuzzTemplate;
 use crate::templates::auth_logic::{AuthTemplate, LogicTemplate};
@@ -51,7 +52,7 @@ use crate::templates::easm::EasmTemplate;
 use crate::templates::mobile_audit::MobileAuditTemplate;
 use crate::templates::serverless_audit::ServerlessAuditTemplate;
 use crate::templates::web3_audit::Web3AuditTemplate;
-use serde::{Deserialize, Serialize};
+use crate::templates::section::TemplateSection;
 use std::path::Path;
 
 /// Top-level template structure that composes types from all feature slices.

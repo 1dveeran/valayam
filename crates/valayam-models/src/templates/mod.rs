@@ -1,5 +1,6 @@
 pub mod matcher;
 pub mod functions;
+pub mod section;
 pub mod schema;
 pub mod auth_logic;
 pub mod auto_exploit;

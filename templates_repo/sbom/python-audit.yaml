@@ -5,4 +5,4 @@ info:
   description: "Audits Python requirements.txt dependencies for known vulnerabilities via SBOM analysis."
 sbom_audit:
   - target: "{{Hostname}}"
-    r#type: "requirements.txt"
+    type: "requirements.txt"

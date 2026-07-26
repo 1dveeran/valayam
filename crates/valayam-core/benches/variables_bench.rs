@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::collections::HashMap;
 use valayam_engine::variables::{
     build_initial_context, extract_placeholder_names, resolve_variables, resolve_variables_advanced,
@@ -40,7 +40,10 @@ fn bench_resolve_variables_no_match(c: &mut Criterion) {
     let ctx = HashMap::new();
     c.bench_function("variables_resolve_no_placeholders", |b| {
         b.iter(|| {
-            black_box(resolve_variables(black_box("plain string without variables"), black_box(&ctx)));
+            black_box(resolve_variables(
+                black_box("plain string without variables"),
+                black_box(&ctx),
+            ));
         });
     });
 }
@@ -101,7 +104,8 @@ fn bench_build_initial_context(c: &mut Criterion) {
 }
 
 fn bench_extract_placeholder_names(c: &mut Criterion) {
-    let input = "Bearer {{auth_token}} on {{BaseURL}} with {{timeout|default:\"30s\"}} and {{retries}}";
+    let input =
+        "Bearer {{auth_token}} on {{BaseURL}} with {{timeout|default:\"30s\"}} and {{retries}}";
 
     c.bench_function("variables_extract_placeholder_names", |b| {
         b.iter(|| {

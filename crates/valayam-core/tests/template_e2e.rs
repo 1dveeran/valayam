@@ -3,10 +3,10 @@ mod common;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use valayam_engine::executor::ScanExecutor;
 use valayam_core::core::plugins::HttpScanPlugin;
-use valayam_engine::registry::PluginRegistry;
 use valayam_core::template::schema::VulnerabilityTemplate;
+use valayam_engine::executor::ScanExecutor;
+use valayam_engine::registry::PluginRegistry;
 
 #[test]
 fn test_template_load_and_validate() {
@@ -33,7 +33,9 @@ fn test_template_with_executor_wiring() {
             Arc::new(reg)
         };
         let executor = ScanExecutor::new(tx, registry, None, CancellationToken::new());
-        let _metrics = executor.execute("https://nonexistent.local", Arc::new(template)).await;
+        let _metrics = executor
+            .execute("https://nonexistent.local", Arc::new(template))
+            .await;
         drop(executor);
 
         let mut findings = Vec::new();
@@ -43,7 +45,10 @@ fn test_template_with_executor_wiring() {
 
         // No findings expected against nonexistent target — just verify the
         // executor wires template → plugin → finding channel correctly.
-        assert!(findings.is_empty(), "No findings against nonexistent target");
+        assert!(
+            findings.is_empty(),
+            "No findings against nonexistent target"
+        );
     });
 }
 
@@ -67,7 +72,9 @@ fn test_executor_channel_and_cancellation() {
         cancel.cancel();
 
         let executor = ScanExecutor::new(tx, registry, None, cancel);
-        let metrics = executor.execute("https://nonexistent.local", Arc::new(template)).await;
+        let metrics = executor
+            .execute("https://nonexistent.local", Arc::new(template))
+            .await;
         drop(executor);
 
         let mut findings = Vec::new();

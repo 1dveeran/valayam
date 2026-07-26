@@ -9,21 +9,23 @@ pub fn extract_js_endpoints(js_content: &str) -> HashSet<String> {
 
     // Regex to match relative endpoints like /api/v1/... or /users/...
     // Also matches websocket schemas
-    let path_regex = Regex::new(
-        r#"(?:"|')((?:/[a-zA-Z0-9_\-\.\?\,\'\/\+&\$#\=~\|\!]*){2,})(?:"|')"#
-    ).unwrap();
+    let path_regex =
+        Regex::new(r#"(?:"|')((?:/[a-zA-Z0-9_\-\.\?\,\'\/\+&\$#\=~\|\!]*){2,})(?:"|')"#).unwrap();
 
     // Regex to match full URL patterns including ws/wss
-    let url_regex = Regex::new(
-        r#"(https?|wss?|grpc)://[a-zA-Z0-9_\-\.:/\?&\$#\=~\|]+"#
-    ).unwrap();
+    let url_regex = Regex::new(r#"(https?|wss?|grpc)://[a-zA-Z0-9_\-\.:/\?&\$#\=~\|]+"#).unwrap();
 
     // Extract relative paths
     for cap in path_regex.captures_iter(js_content) {
         if let Some(matched) = cap.get(1) {
             let val = matched.as_str();
             // Filter out common false positives (e.g. file extensions, double slashes, formatting)
-            if !val.contains("//") && !val.ends_with(".js") && !val.ends_with(".css") && !val.ends_with(".png") && val.len() > 2 {
+            if !val.contains("//")
+                && !val.ends_with(".js")
+                && !val.ends_with(".css")
+                && !val.ends_with(".png")
+                && val.len() > 2
+            {
                 endpoints.insert(val.to_string());
             }
         }
@@ -60,7 +62,24 @@ pub fn extract_js_parameters(js_content: &str) -> HashSet<String> {
     }
 
     // Filter out common javascript builtins/keywords to keep parameters clean
-    let ignore_words = ["default", "name", "type", "id", "true", "false", "null", "undefined", "const", "let", "var", "function", "return", "class", "import", "export"];
+    let ignore_words = [
+        "default",
+        "name",
+        "type",
+        "id",
+        "true",
+        "false",
+        "null",
+        "undefined",
+        "const",
+        "let",
+        "var",
+        "function",
+        "return",
+        "class",
+        "import",
+        "export",
+    ];
     params.retain(|p| !ignore_words.contains(&p.as_str()) && !p.is_empty());
 
     params

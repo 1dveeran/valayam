@@ -1,11 +1,11 @@
-use rcgen::{Certificate, CertificateParams, KeyPair, BasicConstraints, IsCa};
-use rustls::ServerConfig;
+use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::ServerConfig;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+use time::{Duration, OffsetDateTime};
 use tokio_rustls::TlsAcceptor;
-use time::{OffsetDateTime, Duration};
 
 pub struct CertificateAuthority {
     ca_cert: Certificate,
@@ -15,7 +15,7 @@ impl CertificateAuthority {
     pub fn new() -> Result<Self, anyhow::Error> {
         let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         let valayam_dir = home_dir.join(".valayam");
-        
+
         if !valayam_dir.exists() {
             fs::create_dir_all(&valayam_dir)?;
         }
@@ -26,13 +26,17 @@ impl CertificateAuthority {
         println!("[*] Generating new Dynamic Root CA for TLS Interception...");
         let mut params = CertificateParams::default();
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-        params.distinguished_name.push(rcgen::DnType::CommonName, "Valayam MITM Root CA");
-        params.distinguished_name.push(rcgen::DnType::OrganizationName, "Valayam Security");
-        
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, "Valayam MITM Root CA");
+        params
+            .distinguished_name
+            .push(rcgen::DnType::OrganizationName, "Valayam Security");
+
         // Valid for 1 year
         params.not_before = OffsetDateTime::now_utc();
         params.not_after = OffsetDateTime::now_utc() + Duration::days(365);
-        
+
         let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let ca_cert = Certificate::from_params(params)?;
 
@@ -45,22 +49,22 @@ impl CertificateAuthority {
         println!("[+] Root CA saved to: {}", cert_path.display());
         println!("[!] IMPORTANT: To intercept HTTPS traffic without browser warnings, install this CA in your OS/Browser trust store.");
 
-        Ok(Self {
-            ca_cert,
-        })
+        Ok(Self { ca_cert })
     }
 
     pub fn gen_acceptor_for_domain(&self, domain: &str) -> Result<TlsAcceptor, anyhow::Error> {
         let mut params = CertificateParams::default();
-        params.distinguished_name.push(rcgen::DnType::CommonName, domain);
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, domain);
         params.subject_alt_names = vec![rcgen::SanType::DnsName(domain.to_string())];
-        
+
         // Valid for 7 days
         params.not_before = OffsetDateTime::now_utc() - Duration::days(1);
         params.not_after = OffsetDateTime::now_utc() + Duration::days(7);
 
         let cert = Certificate::from_params(params)?;
-        
+
         let cert_pem = cert.serialize_pem_with_signer(&self.ca_cert)?;
         let key_pem = cert.serialize_private_key_pem();
 
@@ -69,12 +73,13 @@ impl CertificateAuthority {
             .next()
             .unwrap()
             .into_owned();
-            
-        let rustls_key: PrivateKeyDer<'static> = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_bytes())
-            .filter_map(Result::ok)
-            .next()
-            .unwrap()
-            .into();
+
+        let rustls_key: PrivateKeyDer<'static> =
+            rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_bytes())
+                .filter_map(Result::ok)
+                .next()
+                .unwrap()
+                .into();
 
         let server_config = ServerConfig::builder()
             .with_no_client_auth()
@@ -92,7 +97,9 @@ mod tests {
     fn test_cert_params_creation() {
         let mut params = CertificateParams::default();
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-        params.distinguished_name.push(rcgen::DnType::CommonName, "Test CA");
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, "Test CA");
         let cert = Certificate::from_params(params);
         assert!(cert.is_ok());
 

@@ -25,11 +25,24 @@ fn sample_findings() -> Vec<FindingOwned> {
     vec![f1, f2, f3]
 }
 
+fn create_json_reporter(path: String) -> JsonReporter {
+    JsonReporter::new(
+        path,
+        "test-scan-id".into(),
+        "2026-07-26T12:00:00Z".into(),
+        vec!["plugin1".into()],
+        vec!["template1.yaml".into()],
+        vec!["https://example.com".into()],
+        "1.0.0".into(),
+    )
+    .unwrap()
+}
+
 #[tokio::test]
 async fn test_json_reporter_output() {
     let tmp = NamedTempFile::new().unwrap();
     let path = tmp.path().to_str().unwrap().to_string();
-    let reporter = JsonReporter::new(&path).unwrap();
+    let reporter = create_json_reporter(path.clone());
     let findings = sample_findings();
 
     for f in &findings {
@@ -39,18 +52,17 @@ async fn test_json_reporter_output() {
 
     // Read back and verify
     let content = std::fs::read_to_string(&path).unwrap();
-    let lines: Vec<&str> = content.lines().collect();
-    assert_eq!(lines.len(), 3, "Expected 3 JSON lines");
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
 
-    for (i, line) in lines.iter().enumerate() {
-        let parsed: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert_eq!(
-            parsed["template_id"],
-            format!("report-test-{:03}", i + 1)
-        );
-        assert!(parsed["severity"].is_string());
-        assert!(parsed["target"].is_string());
-        assert!(parsed["matched_at"].is_string());
+    assert_eq!(parsed["scan_metadata"]["scan_id"], "test-scan-id");
+    let findings_arr = parsed["findings"].as_array().unwrap();
+    assert_eq!(findings_arr.len(), 3, "Expected 3 findings");
+
+    for (i, parsed_f) in findings_arr.iter().enumerate() {
+        assert_eq!(parsed_f["template_id"], format!("report-test-{:03}", i + 1));
+        assert!(parsed_f["severity"].is_string());
+        assert!(parsed_f["target"].is_string());
+        assert!(parsed_f["matched_at"].is_string());
     }
 }
 
@@ -58,11 +70,12 @@ async fn test_json_reporter_output() {
 async fn test_json_reporter_empty_findings() {
     let tmp = NamedTempFile::new().unwrap();
     let path = tmp.path().to_str().unwrap().to_string();
-    let reporter = JsonReporter::new(&path).unwrap();
+    let reporter = create_json_reporter(path.clone());
     reporter.flush().await.unwrap();
 
     let content = std::fs::read_to_string(&path).unwrap();
-    assert_eq!(content.trim().len(), 0, "Expected empty file for no findings");
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed["findings"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -82,12 +95,10 @@ async fn test_console_reporter_processes_multiple() {
 async fn test_composite_reporter() {
     let tmp = NamedTempFile::new().unwrap();
     let path = tmp.path().to_str().unwrap().to_string();
-    let json_reporter = JsonReporter::new(&path).unwrap();
+    let json_reporter = create_json_reporter(path.clone());
     let console_reporter = ConsoleReporter::default();
-    let composite = CompositeReporter::new(vec![
-        Box::new(json_reporter),
-        Box::new(console_reporter),
-    ]);
+    let composite =
+        CompositeReporter::new(vec![Box::new(json_reporter), Box::new(console_reporter)]);
 
     let findings = sample_findings();
     for f in &findings {
@@ -97,12 +108,10 @@ async fn test_composite_reporter() {
 
     // Verify JSON file was written through composite
     let content = std::fs::read_to_string(&path).unwrap();
-    let lines: Vec<&str> = content.lines().collect();
-    assert_eq!(lines.len(), 3, "Composite should delegate to JSON reporter");
-
-    // Verify JSON is valid
-    for line in &lines {
-        let parsed: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert!(parsed["template_id"].is_string());
-    }
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(
+        parsed["findings"].as_array().unwrap().len(),
+        3,
+        "Composite should delegate to JSON reporter"
+    );
 }

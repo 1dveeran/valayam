@@ -10,11 +10,26 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  proto_lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: bufbuild/buf-setup-action@v1
+    - name: Lint proto files
+      uses: bufbuild/buf-lint-action@v1
+      with:
+        input: crates/valayam-proto/proto
+    - name: Check backward compatibility (against main)
+      uses: bufbuild/buf-breaking-action@v1
+      with:
+        input: crates/valayam-proto/proto
+        against: https://github.com/${{ github.repository }}.git#branch=main,ref=HEAD~1,subdir=crates/valayam-proto/proto
+
   build_and_test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Cache cargo registry
       uses: actions/cache@v3
       with:
@@ -32,6 +47,9 @@ jobs:
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install WASM Target
+      run: rustup target add wasm32-unknown-unknown
 
     - name: Format Check
       run: cargo fmt -- --check

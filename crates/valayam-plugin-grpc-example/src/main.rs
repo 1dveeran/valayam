@@ -1,9 +1,5 @@
-pub mod plugin_rpc {
-    tonic::include_proto!("valayam.plugin");
-}
-
-use plugin_rpc::plugin_service_server::{PluginService, PluginServiceServer};
-use plugin_rpc::{ExecuteRequest, ExecuteResponse, InitRequest, InitResponse, ShutdownRequest, ShutdownResponse, ValidateConfigRequest, ValidateConfigResponse};
+use valayam_proto::plugin::plugin_service_server::{PluginService, PluginServiceServer};
+use valayam_proto::plugin::{ExecuteRequest, ExecuteResponse, InitRequest, InitResponse, ShutdownRequest, ShutdownResponse, ValidateConfigRequest, ValidateConfigResponse};
 use std::net::SocketAddr;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};

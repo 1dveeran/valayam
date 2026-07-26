@@ -248,6 +248,33 @@ pub async fn run_scan(
         reg.register(PortScanPlugin);
         reg.register(ShellsPlugin);
         
+        // Dynamically load WebAssembly and gRPC plugins from disk
+        let mut loaded_externals = 0;
+        
+        let plugin_dirs = vec![
+            std::path::Path::new("plugins"),
+            std::path::Path::new("plugins-wasm"),
+        ];
+        
+        for dir in plugin_dirs {
+            if dir.exists() {
+                if let Err(e) = reg.load_external_plugins(dir) {
+                    tracing::warn!("Failed to load plugins from {}: {}", dir.display(), e);
+                } else {
+                    loaded_externals += 1;
+                }
+            }
+        }
+        
+        if loaded_externals > 0 {
+            spinner.suspend(|| {
+                println!(
+                    "{} Dynamically loaded external plugins into the engine.",
+                    "[+]".green().bold()
+                );
+            });
+        }
+        
         // Initialize ThreatIntelMatcher and register
         let matcher = Arc::new(valayam_core::features::threat_intel::ioc_matcher::IocMatcher::new());
         reg.register(ThreatIntelPlugin { matcher });
@@ -283,8 +310,21 @@ pub async fn run_scan(
     // ── 5. Build reporters ──
     let mut reporters: Vec<Box<dyn Reporter>> = vec![Box::new(ConsoleReporter::default())];
     if let Some(ref path) = args.output {
-        // Assume jsonl for now. In a real app we might pick reporter based on args.format
-        reporters.push(Box::new(JsonReporter::new(path)?));
+        let plugins = registry.list_plugins();
+        let templates = template_files.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        let scan_id = uuid::Uuid::new_v4().to_string();
+        let start_time = chrono::Utc::now().to_rfc3339();
+        let targets: Vec<String> = actual_targets.iter().cloned().collect();
+        let scanner_version = env!("CARGO_PKG_VERSION").to_string();
+        reporters.push(Box::new(JsonReporter::new(
+            path.to_string(), 
+            scan_id, 
+            start_time, 
+            plugins, 
+            templates, 
+            targets, 
+            scanner_version
+        )?));
     }
     let composite = CompositeReporter::new(reporters);
 

@@ -7,7 +7,7 @@ info:
     cwe: "CWE-1104"
 iac_audit:
   - target: "{{Hostname}}"
-    r#type: "terraform"
+    type: "terraform"
     matchers:
       - type: word
         part: body

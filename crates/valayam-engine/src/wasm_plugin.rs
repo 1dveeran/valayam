@@ -30,8 +30,48 @@ impl ScanPlugin for WasmPluginBridge {
         &self.name
     }
 
-    fn is_applicable(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
-        true
+    /// A WASM plugin is only applicable to a template if the template explicitly declares
+    /// the plugin's corresponding section. This prevents plugins like `cors-audit` from
+    /// running against every template and producing false/duplicate findings.
+    ///
+    /// The match is done by normalising the plugin name (strip `.wasm`, replace `-` with `_`)
+    /// and checking if the template has a non-empty matching section via a well-known lookup table.
+    fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
+        // Normalise: "cors-audit.wasm" → "cors_audit"
+        let normalised = self.name
+            .trim_end_matches(".wasm")
+            .replace('-', "_")
+            .to_lowercase();
+
+        match normalised.as_str() {
+            "cors_audit"         => !template.cors_audit.is_empty(),
+            "csp_audit"          => !template.csp_audit.is_empty(),
+            "header_scorecard"   => !template.header_scorecard.is_empty(),
+            "waf_bypass_verify"  => !template.waf_bypass_verify.is_empty(),
+            "graphql_audit"      => !template.graphql_audit.is_empty(),
+            "iac_audit"          => !template.iac_audit.is_empty(),
+            "pii_leak_audit"     => !template.pii_leak_audit.is_empty(),
+            "sbom_audit"         => !template.sbom_audit.is_empty(),
+            "reputation_audit"   => !template.reputation_audit.is_empty(),
+            "ct_log_audit"       => !template.ct_log_audit.is_empty(),
+            "grpc_audit"         => !template.grpc_audit.is_empty(),
+            "sast_taint"         => !template.sast_taint.is_empty(),
+            "sast_secrets"       => !template.sast_secrets.is_empty(),
+            "subdomain_takeover" => !template.subdomain_takeover.is_empty(),
+            "web3_audit"         => !template.web3_audit.is_empty(),
+            "mobile_audit"       => !template.mobile_audit.is_empty(),
+            "serverless_audit"   => !template.serverless_audit.is_empty(),
+            "specialized_audit"  => !template.deep_analysis.is_empty(),
+            // Unknown WASM plugin: opt-in by default (backwards compatible for custom plugins)
+            _ => {
+                tracing::debug!(
+                    plugin = %self.name,
+                    "Unknown WASM plugin '{}'; running against all templates (add a match arm to restrict)",
+                    self.name
+                );
+                true
+            }
+        }
     }
 
     async fn init(&self) -> Result<(), ScannerError> {
@@ -41,6 +81,7 @@ impl ScanPlugin for WasmPluginBridge {
             "/".to_string(),
             PathBuf::from("/"),
         )]));
+        manifest.allowed_hosts = Some(vec!["*".to_string()]);
         if let Err(e) = Plugin::new(&manifest, [], true) {
             return Err(ScannerError::PluginInitializationError(
                 format!("Failed to load Wasm via Extism '{}': {}", self.wasm_path.display(), e)
@@ -68,6 +109,7 @@ impl ScanPlugin for WasmPluginBridge {
             "/".to_string(),
             PathBuf::from("/"),
         )]));
+        manifest.allowed_hosts = Some(vec!["*".to_string()]);
         let mut plugin = match extism::PluginBuilder::new(manifest)
             .with_wasi(true)
             .with_function(
@@ -121,15 +163,25 @@ impl ScanPlugin for WasmPluginBridge {
 
         match serde_json::from_str::<serde_json::Value>(result_str) {
             Ok(json) => {
+                tracing::debug!("WASM OUTPUT JSON: {}", result_str);
                 if json.get("matched").and_then(|v| v.as_bool()).unwrap_or(false) {
                     let count = json.get("count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
                     if let Some(findings) = json.get("findings").and_then(|v| v.as_array()) {
                         for finding_val in findings {
-                            if let Ok(finding) = serde_json::from_value::<FindingOwned>(finding_val.clone()) {
-                                let _ = ctx.finding_tx.send(finding).await;
+                                match serde_json::from_value::<FindingOwned>(finding_val.clone()) {
+                                    Ok(mut finding) => {
+                                        finding.template_id = ctx.template.id.clone();
+                                        finding.template_name = ctx.template.info.name.clone();
+                                        let _ = ctx.finding_tx.send(finding).await;
+                                    }
+                                Err(e) => {
+                                    tracing::error!("Failed to deserialize finding {}: {:?}", e, finding_val);
+                                }
                             }
                         }
+                    } else {
+                        tracing::error!("findings missing or not array in WasmOutput");
                     }
 
                     PluginOutcome::Matched { count }

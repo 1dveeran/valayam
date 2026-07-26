@@ -16,25 +16,6 @@ const CACHE_FILE: &str = ".template_cache";
 const OUTPUT_FILE: &str = "src/generated/template_index.rs";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // --- Protobuf compilation ---
-    if Path::new("proto/valayam.proto").exists() {
-        println!("cargo:warning=FOUND PROTO DIR");
-        println!("cargo:rerun-if-changed=proto/valayam.proto");
-        println!("cargo:rerun-if-changed=proto/plugin.proto");
-        println!("cargo:rerun-if-changed=proto");
-        let out_dir = std::env::var("OUT_DIR").unwrap();
-        println!("cargo:warning=OUT_DIR is {}", out_dir);
-        if let Err(e) = tonic_build::configure()
-            .build_server(true)
-            .build_client(true)
-            .compile(&["proto/valayam.proto", "proto/plugin.proto"], &["proto"]) {
-                println!("cargo:warning=TONIC BUILD ERROR: {}", e);
-            }
-        println!("cargo:warning=TONIC BUILD COMPLETED");
-    } else {
-        println!("cargo:warning=DID NOT FIND PROTO DIR");
-    }
-
     // --- Template indexing ---
     let templates_dir = Path::new(TEMPLATES_DIR);
 

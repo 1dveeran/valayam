@@ -1,6 +1,6 @@
 //! Shared test infrastructure for all wasm plugin tests.
 
-use extism::{Manifest, Plugin, Wasm};
+use extism::{Function, Manifest, Plugin, ValType, Wasm};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -37,26 +37,46 @@ pub struct Finding {
 
 pub fn wasm_target_dir() -> PathBuf {
     // CARGO_MANIFEST_DIR is plugins-wasm/test-runner
-    // We want plugins-wasm/target/wasm32-unknown-unknown/release
+    // We want target/wasm32-unknown-unknown/release from the workspace root
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest.parent().unwrap().join("target").join("wasm32-unknown-unknown").join("release")
+    manifest.parent().unwrap().parent().unwrap().join("target").join("wasm32-unknown-unknown").join("release")
 }
 
 pub fn build_wasm(package_name: &str) -> PathBuf {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap().to_path_buf();
     let status = std::process::Command::new("cargo")
-        .args(["build", "--target", "wasm32-unknown-unknown", "--release", "-p", package_name])
+        .args(["build", "--target", "wasm32-unknown-unknown", "-p", package_name])
         .current_dir(&root)
         .status()
         .unwrap_or_else(|e| panic!("cargo build failed for {package_name}: {e}"));
     assert!(status.success(), "cargo build failed for {package_name}");
-    wasm_target_dir().join(&format!("{}.wasm", package_name.replace('-', "_")))
+    // We want target/wasm32-unknown-unknown/debug from the workspace root
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest.parent().unwrap().parent().unwrap().join("target").join("wasm32-unknown-unknown").join("debug").join(&format!("{}.wasm", package_name.replace('-', "_")))
 }
+
+extism::host_fn!(dns_resolve(input: String) -> String {
+    Ok("[]".to_string())
+});
+
+extism::host_fn!(kv_get(input: String) -> String {
+    Ok("".to_string())
+});
+
+extism::host_fn!(kv_set(input: String) -> String {
+    Ok("ok".to_string())
+});
 
 pub fn run_plugin(wasm_path: &PathBuf, input: &WasmInput) -> WasmOutput {
     let wasm = Wasm::file(wasm_path);
-    let manifest = Manifest::new([wasm]);
-    let mut plugin = Plugin::new(&manifest, [], true)
+    let mut manifest = Manifest::new([wasm]);
+    manifest = manifest.with_allowed_host("*");
+    
+    let f1 = Function::new("dns_resolve", [ValType::I64], [ValType::I64], extism::UserData::default(), dns_resolve);
+    let f2 = Function::new("kv_get", [ValType::I64], [ValType::I64], extism::UserData::default(), kv_get);
+    let f3 = Function::new("kv_set", [ValType::I64], [ValType::I64], extism::UserData::default(), kv_set);
+
+    let mut plugin = Plugin::new(&manifest, [f1, f2, f3], true)
         .unwrap_or_else(|e| panic!("Failed to create plugin for {:?}: {e}", wasm_path));
 
     let input_json = serde_json::to_string(input).unwrap();

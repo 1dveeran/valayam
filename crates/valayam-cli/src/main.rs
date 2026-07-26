@@ -57,22 +57,32 @@ async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
     print_banner();
     
-    // Parse log level from string. Default to WARN to keep CLI output clean,
-    // unless the user explicitly requested debug or trace.
-    let level_str = if args.log_level.eq_ignore_ascii_case("info") {
-        "warn"
-    } else {
-        &args.log_level
-    };
-    let level = level_str.parse::<tracing::Level>().unwrap_or(tracing::Level::WARN);
-    let level_filter = tracing_subscriber::filter::LevelFilter::from_level(level);
-
+    // --- Enterprise Logging Setup ---
+    // Console (stderr): shows ERROR+ only by default — never clutters scan output.
+    // File log:         always DEBUG-level structured JSON for diagnostics/SIEM.
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-    // Console layer (text format)
+    // 1. Determine console log level (env var takes priority over flag)
+    let console_level_str = std::env::var("VALAYAM_LOG")
+        .unwrap_or_else(|_| {
+            // If user explicitly set --log-level to something other than the default "info",
+            // respect it. Otherwise default to error to keep console clean.
+            if args.log_level.eq_ignore_ascii_case("info") {
+                "error".to_string()
+            } else {
+                args.log_level.clone()
+            }
+        });
+    let console_level = console_level_str
+        .parse::<tracing::Level>()
+        .unwrap_or(tracing::Level::ERROR);
+    let console_filter = tracing_subscriber::filter::LevelFilter::from_level(console_level);
+
+    // 2. Console layer: human-readable, stderr, ERROR+ only by default
     let console_layer = tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stderr)
         .with_target(false)
-        .with_filter(level_filter);
+        .with_filter(console_filter);
 
     // OpenTelemetry pipeline setup
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -88,24 +98,23 @@ async fn main() -> anyhow::Result<()> {
         .install_batch(opentelemetry_sdk::runtime::Tokio)
         .expect("Failed to initialize OTLP pipeline");
 
-    // We remove the telemetry layer setup since tracing-subscriber trait bound resolution with tracing-opentelemetry is complex and broken in this setup.
-    // An enterprise setup usually puts otel tracer as the global default or carefully types the Registry.
-
-    // Optional File layer (JSON format)
+    // 3. File layer: always DEBUG, structured JSON — independent of console level
     if let Some(log_path) = &args.log_file {
         let file = std::fs::File::create(log_path).expect("Failed to create log file");
         let (non_blocking, _guard) = tracing_appender::non_blocking(file);
-        
+
+        // File always captures DEBUG+ for full diagnostics
+        let file_filter = tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::DEBUG);
         let file_layer = tracing_subscriber::fmt::layer()
             .json()
             .with_writer(non_blocking)
-            .with_filter(level_filter);
+            .with_filter(file_filter);
 
         tracing_subscriber::registry()
             .with(console_layer)
             .with(file_layer)
             .init();
-            
+
         std::mem::forget(_guard);
     } else {
         tracing_subscriber::registry()
@@ -175,8 +184,8 @@ async fn main() -> anyhow::Result<()> {
         }
         return Ok(());
     } else if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
-        use valayam_engine::plugin_rpc::scanner_client::ScannerClient;
-        use valayam_engine::plugin_rpc::ControlRequest;
+        use valayam_engine::rpc::scanner_client::ScannerClient;
+        use valayam_engine::rpc::ControlRequest;
         
         let url = format!("http://127.0.0.1:{}", port);
         let mut client = match ScannerClient::connect(url.clone()).await {

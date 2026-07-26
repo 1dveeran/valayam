@@ -5931,19 +5931,6 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d021fc044c18582b9a2408cd0dd05b1596e3ecdb5c4df822bb0183545683889"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "prost-build",
- "quote",
- "syn 2.0.118",
-]
-
-[[package]]
-name = "tonic-build"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4ef6dd70a610078cb4e338a0f79d06bc759ff1b22d2120c2ff02ae264ba9c2"
@@ -6297,6 +6284,7 @@ dependencies = [
  "tracing-appender",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "uuid",
  "valayam-core",
  "valayam-core-net",
  "valayam-engine",
@@ -6357,7 +6345,6 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "tonic 0.11.0",
- "tonic-build 0.11.0",
  "tracing",
  "tracing-opentelemetry",
  "url",
@@ -6367,6 +6354,7 @@ dependencies = [
  "valayam-engine",
  "valayam-models",
  "valayam-network",
+ "valayam-proto",
  "wasmparser 0.201.0",
  "wasmtime 18.0.4",
  "wasmtime-wasi",
@@ -6411,8 +6399,8 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.10.2",
- "tonic-build 0.10.2",
  "valayam-engine",
+ "valayam-proto",
 ]
 
 [[package]]
@@ -6443,13 +6431,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic 0.11.0",
- "tonic-build 0.11.0",
  "tracing",
  "tracing-opentelemetry",
  "url",
  "uuid",
  "valayam-models",
  "valayam-network",
+ "valayam-proto",
  "wasmtime 18.0.4",
  "wasmtime-wasi",
  "zip",
@@ -6587,7 +6575,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.11.0",
- "tonic-build 0.11.0",
+ "valayam-proto",
 ]
 
 [[package]]
@@ -6703,6 +6691,15 @@ dependencies = [
 [[package]]
 name = "valayam-plugin-wasm-example"
 version = "0.1.0"
+
+[[package]]
+name = "valayam-proto"
+version = "0.1.0"
+dependencies = [
+ "prost 0.12.6",
+ "tonic 0.11.0",
+ "tonic-build",
+]
 
 [[package]]
 name = "valuable"

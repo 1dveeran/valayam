@@ -5,10 +5,10 @@
 // - Phase 5+: crawler, cloud_sec, iac_audit, etc.
 // - Maintain strict downward dependency on core/ and network/ only.
 
+pub mod crawler;
 pub mod extractors;
 pub mod helpers;
 pub mod http_scan;
-pub mod crawler;
 pub mod schema_drift;
 pub mod threat_intel;
 pub mod ui_proxy;

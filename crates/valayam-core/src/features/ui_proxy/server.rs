@@ -1,12 +1,12 @@
+use crate::features::ui_proxy::state::{ProxyRequestData, ProxyState};
 use axum::{
-    routing::{get, post},
-    Router, Json,
-    response::Html,
     extract::State,
+    response::Html,
+    routing::{get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use crate::features::ui_proxy::state::{ProxyState, ProxyRequestData};
 
 #[derive(Serialize)]
 pub struct StatusResponse {
@@ -33,9 +33,11 @@ impl UiProxyServer {
             .with_state(state);
 
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        
-        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| e.to_string())?;
-        
+
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .map_err(|e| e.to_string())?;
+
         // Spawn the server in the background
         tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app).await {
@@ -56,7 +58,7 @@ impl UiProxyServer {
             active_proxies: state.pending_requests.len(),
         })
     }
-    
+
     async fn pending_handler(State(state): State<ProxyState>) -> Json<Vec<ProxyRequestData>> {
         let mut pending = Vec::new();
         for entry in state.pending_requests.iter() {

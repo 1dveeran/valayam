@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use ed25519_dalek::{Signature, VerifyingKey};
 use reqwest::Client;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 /// A puller that fetches signed Wasm plugins via HTTP and caches them locally.
 pub struct PluginPuller {
@@ -17,7 +17,7 @@ impl PluginPuller {
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir)?;
         }
-        
+
         let public_key = match public_key_bytes {
             Some(bytes) => Some(VerifyingKey::from_bytes(bytes)?),
             None => None,
@@ -32,7 +32,7 @@ impl PluginPuller {
         })
     }
 
-    /// Pull a plugin from a remote URL. 
+    /// Pull a plugin from a remote URL.
     /// If the URL starts with `oci://`, it acts as an OCI client.
     /// If `public_key` is set on the puller, it verifies the Ed25519 signature.
     pub async fn pull(&self, plugin_name: &str, url: &str) -> Result<PathBuf> {
@@ -48,9 +48,9 @@ impl PluginPuller {
             }
             let registry = parts[0];
             let repo_and_tag = parts[1];
-            
+
             let (repo, tag) = if let Some(idx) = repo_and_tag.find(':') {
-                (&repo_and_tag[..idx], &repo_and_tag[idx+1..])
+                (&repo_and_tag[..idx], &repo_and_tag[idx + 1..])
             } else {
                 (repo_and_tag, "latest")
             };
@@ -58,15 +58,19 @@ impl PluginPuller {
             let username = std::env::var("VALAYAM_REGISTRY_USER").ok();
             let password = std::env::var("VALAYAM_REGISTRY_PASS").ok();
 
-            let oci_client = super::oci_client::OciClient::new(registry, username.as_deref(), password.as_deref())?;
+            let oci_client = super::oci_client::OciClient::new(
+                registry,
+                username.as_deref(),
+                password.as_deref(),
+            )?;
             let manifest = oci_client.get_manifest(repo, tag).await?;
-            
+
             // Assume the first layer is the plugin
             if manifest.layers.is_empty() {
                 anyhow::bail!("OCI artifact has no layers");
             }
             let layer = &manifest.layers[0];
-            
+
             // Extract signature from annotations if present
             let mut signature_header = None;
             if let Some(ann) = &layer.annotations {
@@ -80,7 +84,10 @@ impl PluginPuller {
         } else {
             tracing::info!(url = %url, plugin = %plugin_name, "Downloading plugin via HTTP");
             let response = self.client.get(url).send().await?.error_for_status()?;
-            let signature_header = response.headers().get("x-plugin-signature").map(|v| v.clone());
+            let signature_header = response
+                .headers()
+                .get("x-plugin-signature")
+                .map(|v| v.clone());
             let bytes = response.bytes().await?;
             (bytes.to_vec(), signature_header)
         };
@@ -88,11 +95,16 @@ impl PluginPuller {
         // Verify signature if a public key is configured
         if let Some(pub_key) = &self.public_key {
             let sig_val = bytes.1.context("Missing signature from remote")?;
-            let sig_hex = sig_val.to_str().context("Invalid characters in signature header")?;
+            let sig_hex = sig_val
+                .to_str()
+                .context("Invalid characters in signature header")?;
             let sig_bytes = hex::decode(sig_hex).context("Failed to decode hex signature")?;
-            let signature = Signature::from_slice(&sig_bytes).context("Invalid signature format length")?;
+            let signature =
+                Signature::from_slice(&sig_bytes).context("Invalid signature format length")?;
 
-            pub_key.verify_strict(&bytes.0, &signature).context("Plugin signature verification failed!")?;
+            pub_key
+                .verify_strict(&bytes.0, &signature)
+                .context("Plugin signature verification failed!")?;
             tracing::info!(plugin = %plugin_name, "Signature verified successfully");
         } else {
             tracing::warn!("No public key configured. Bypassing signature verification.");
@@ -100,7 +112,7 @@ impl PluginPuller {
 
         fs::write(&dest_path, &bytes.0)?;
         tracing::info!(plugin = %plugin_name, path = %dest_path.display(), "Plugin cached successfully");
-        
+
         Ok(dest_path)
     }
 }

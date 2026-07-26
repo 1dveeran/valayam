@@ -8,4 +8,14 @@ info:
     cwe: "CWE-601"
 dom_redirect_audit:
   - target: "https://{{Hostname}}"
+    parameters:
+      - "url"
+      - "redirect"
+      - "next"
+      - "return"
+      - "goto"
   - target: "https://{{Hostname}}/app"
+    parameters:
+      - "url"
+      - "redirect"
+      - "next"

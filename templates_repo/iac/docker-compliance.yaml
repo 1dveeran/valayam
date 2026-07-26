@@ -5,7 +5,7 @@ info:
   description: "Audits Dockerfiles for security best practices including root user, exposed secrets, and base image vulnerabilities."
 iac_audit:
   - target: "Dockerfile"
-    r#type: "docker"
+    type: "docker"
     matchers:
       - type: word
         part: body

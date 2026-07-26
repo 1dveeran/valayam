@@ -12,27 +12,33 @@ impl WasmScanner for WasmScannerImpl {
         
         let mut all_findings = Vec::new();
         
-        // Dummy audit logic
-        let mut metadata = HashMap::new();
-        metadata.insert("template_id".to_string(), template_id.clone());
-        
-        let w_url = format!("{}?audit=1", target_url);
+        // Audit package.json exposure
+        let w_url = format!("{}/package.json", target_url.trim_end_matches('/'));
         let mut req = HttpRequest::new(&w_url);
         req.method = Some("GET".to_string());
         
         if let Ok(res) = extism_pdk::http::request::<()>(&req, None) {
             if res.status_code() == 200 {
-                all_findings.push(Finding {
-                    template_id,
-                    template_name: format!("{} (Audit Match)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown")),
-                    severity: "Info".to_string(),
-                    target: target_url.to_string(),
-                    matched_at: target_url.to_string(),
-                    description: Some("Audit completed successfully via Wasm.".to_string()),
-                    solution: None,
-                    extracted_data: None,
-                    metadata,
-                });
+                let body = res.body();
+                let body_str = String::from_utf8_lossy(&body);
+                
+                // If it looks like a valid package.json, flag it!
+                if body_str.contains("\"dependencies\"") || body_str.contains("\"devDependencies\"") {
+                    let mut metadata = HashMap::new();
+                    metadata.insert("template_id".to_string(), template_id.clone());
+                    
+                    all_findings.push(Finding {
+                        template_id,
+                        template_name: format!("{} (Dependency Exposure)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("Dependency Audit")),
+                        severity: "High".to_string(),
+                        target: target_url.to_string(),
+                        matched_at: w_url.clone(),
+                        description: Some("Exposed package.json file found. This leaks the internal dependency tree.".to_string()),
+                        solution: Some("Restrict public access to package.json.".to_string()),
+                        extracted_data: None,
+                        metadata,
+                    });
+                }
             }
         }
 

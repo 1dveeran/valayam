@@ -5,4 +5,4 @@ info:
   description: "Audits Node.js package.json dependencies for known vulnerabilities via SBOM analysis."
 sbom_audit:
   - target: "{{Hostname}}"
-    r#type: "package.json"
+    type: "package.json"

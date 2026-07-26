@@ -36,4 +36,4 @@ dns:
         regex:
           - "dns\\.acomhal\\.net"
           - "expired\\."
-          - "\.unclaimed\\."
+          - "\\.unclaimed\\."

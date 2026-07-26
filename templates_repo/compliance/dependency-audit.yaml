@@ -7,3 +7,4 @@ info:
     cwe: "CWE-1104"
 dependency_audit:
   - target: "{{Hostname}}"
+    target_repo: "."

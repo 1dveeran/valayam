@@ -1,14 +1,14 @@
 // TODO: Optimize Template Orchestration Pipeline.
 // - Ensure `{{variable}}` context flows thread-safely between phases.
 // - Add telemetry spans for performance monitoring of each execution slice.
-use valayam_engine::rate_limiter::RateLimiter;
-use valayam_models::finding::FindingOwned;
-use valayam_models::TemplateMetadata;
-use valayam_engine::variables::build_initial_context;
+use super::schema::VulnerabilityTemplate;
 use crate::features::http_scan;
 use crate::network::http::StealthHttpClient;
-use super::schema::VulnerabilityTemplate;
 use url::Url;
+use valayam_engine::rate_limiter::RateLimiter;
+use valayam_engine::variables::build_initial_context;
+use valayam_models::finding::FindingOwned;
+use valayam_models::TemplateMetadata;
 
 /// Orchestrates the execution of a single template against a target.
 ///
@@ -59,9 +59,6 @@ pub async fn execute_template_inner(
         }
     }
 
-
-
-
     // Phase 5: Script Execution & Fuzzing (Moved to Wasm plugin)
 
     // Phase 6: Cloud Probing
@@ -92,8 +89,7 @@ pub async fn execute_template_inner(
     // Phase 21: Client-Side Security Auditing
 
     // Phase 14: Browser Exploitation
-    if !template.browser_audit.is_empty() {
-    }
+    if !template.browser_audit.is_empty() {}
 
     // Phase 15: Hardware & IoT Protocol Security (Moved to Wasm plugin)
 
@@ -102,17 +98,14 @@ pub async fn execute_template_inner(
 
     // Phase 21: Client-Side Security Auditing
     // Moved to Wasm plugin
-    if !template.dom_redirect_audit.is_empty() {
-    }
+    if !template.dom_redirect_audit.is_empty() {}
 
     // Phase 22: Content Security Policy & CORS
-    if !template.csp_audit.is_empty() {
-    }
+    if !template.csp_audit.is_empty() {}
 
     // Phase 23: WAF Rule Validation
     // Moved to Wasm plugin
-    if !template.header_scorecard.is_empty() {
-    }
+    if !template.header_scorecard.is_empty() {}
 
     // Phase 24: Threat Intelligence & IP Reputation
     // Moved to Wasm plugin
@@ -129,10 +122,9 @@ pub async fn execute_template_inner(
     // Phase 28: Network & Port Security
     // Moved to Wasm plugin
 
-
     // Phase 30: CI/CD Pipeline & Supply Chain Security
     // Moved to Wasm plugin
-    
+
     // Phase 31: Schema Drift / Shadow API detection
     if !template.schema_drift.is_empty() {
         if let Some(result) = crate::features::schema_drift::executor::execute(
@@ -151,7 +143,9 @@ pub async fn execute_template_inner(
     None
 }
 
-#[deprecated(note = "Use ScanExecutor with PluginRegistry instead. This is maintained for valayam-platform backward compatibility.")]
+#[deprecated(
+    note = "Use ScanExecutor with PluginRegistry instead. This is maintained for valayam-platform backward compatibility."
+)]
 pub async fn execute_template(
     client: &StealthHttpClient,
     target_url: &str,
@@ -164,6 +158,6 @@ pub async fn execute_template(
         // Mitre mapping and remediation gen moved to Wasm
         return Some(res);
     }
-    
+
     None
 }

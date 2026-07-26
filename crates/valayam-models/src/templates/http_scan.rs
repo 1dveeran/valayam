@@ -21,6 +21,12 @@ pub struct HttpRequestTemplate {
     #[serde(default)]
     pub extractors: Vec<Extractor>,
     #[serde(default)]
+    pub attack: Option<String>,
+    #[serde(default)]
+    pub payloads: Option<Vec<String>>,
+    #[serde(default)]
+    pub inject_in: Option<String>,
+    #[serde(default)]
     pub follow_redirects: Option<bool>,
 }
 
@@ -71,6 +77,9 @@ mod tests {
             matchers: vec![],
             matcher_condition: "and".into(),
             extractors: vec![],
+            attack: None,
+            payloads: None,
+            inject_in: None,
             follow_redirects: None,
         };
         let json = serde_json::to_string(&tmpl).unwrap();

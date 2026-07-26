@@ -7,6 +7,7 @@ edition.workspace = true
 valayam-models = { workspace = true }
 valayam-network = { workspace = true }
 valayam-engine = { workspace = true }
+valayam-proto = { workspace = true }
 valayam-core-net = { path = "../valayam-core-net" }
 tokio = { workspace = true, features = ["full"] }
 async-trait = { workspace = true }
@@ -25,7 +26,7 @@ sha2 = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 governor = { workspace = true }
-url = { workspace = true }
+url.workspace = true
 hickory-resolver = { workspace = true }
 x509-parser = { workspace = true }
 rustls-pemfile = { workspace = true }
@@ -66,7 +67,6 @@ time = "0.3.54"
 sarif = []
 
 [build-dependencies]
-tonic-build = { workspace = true }
 
 [[bench]]
 name = "crawler_bench"

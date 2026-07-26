@@ -1,17 +1,17 @@
+use crate::features::ui_proxy::cert_auth::CertificateAuthority;
+use crate::features::ui_proxy::state::{InterceptedRequest, ProxyRequestData, ProxyState};
+use crate::network::http::StealthHttpClient;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server};
+use reqwest::Method as ReqwestMethod;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::fs;
-use crate::network::http::StealthHttpClient;
-use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
-use valayam_models::templates::http_scan::HttpRequestTemplate;
-use reqwest::Method as ReqwestMethod;
-use std::str::FromStr;
-use crate::features::ui_proxy::cert_auth::CertificateAuthority;
-use crate::features::ui_proxy::state::{ProxyState, ProxyRequestData, InterceptedRequest};
 use tokio::sync::oneshot;
+use valayam_models::templates::http_scan::HttpRequestTemplate;
+use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
 
 async fn handle_request(
     req: Request<Body>,
@@ -21,11 +21,11 @@ async fn handle_request(
 ) -> Result<Response<Body>, hyper::Error> {
     let uri = req.uri().to_string();
     let method = req.method().clone();
-    
+
     if method == hyper::Method::CONNECT {
         println!("[MITM] Intercepting TLS CONNECT: {}", uri);
         let uri_str = uri.clone();
-        
+
         tokio::task::spawn(async move {
             match hyper::upgrade::on(req).await {
                 Ok(upgraded) => {
@@ -34,12 +34,17 @@ async fn handle_request(
                         if let Ok(tls_stream) = acceptor.accept(upgraded).await {
                             let p_state = proxy_state.clone();
                             let service = service_fn(move |tls_req| {
-                                handle_tls_request(tls_req, Arc::clone(&stealth_client), domain.clone(), p_state.clone())
+                                handle_tls_request(
+                                    tls_req,
+                                    Arc::clone(&stealth_client),
+                                    domain.clone(),
+                                    p_state.clone(),
+                                )
                             });
-                            
+
                             if let Err(e) = hyper::server::conn::Http::new()
                                 .serve_connection(tls_stream, service)
-                                .await 
+                                .await
                             {
                                 eprintln!("[MITM] TLS connection error: {}", e);
                             }
@@ -86,7 +91,10 @@ async fn process_http_request(
     let req_id = uuid::Uuid::new_v4().to_string();
     let mut headers = Vec::new();
     for (k, v) in req.headers() {
-        headers.push((k.as_str().to_string(), String::from_utf8_lossy(v.as_bytes()).to_string()));
+        headers.push((
+            k.as_str().to_string(),
+            String::from_utf8_lossy(v.as_bytes()).to_string(),
+        ));
     }
 
     let p_req = ProxyRequestData {
@@ -114,8 +122,11 @@ async fn process_http_request(
         }
     };
 
-    let reqwest_method = ReqwestMethod::from_str(final_req_data.method.as_str()).unwrap_or(ReqwestMethod::GET);
-    let mut req_builder = stealth_client.client().request(reqwest_method, &final_req_data.uri);
+    let reqwest_method =
+        ReqwestMethod::from_str(final_req_data.method.as_str()).unwrap_or(ReqwestMethod::GET);
+    let mut req_builder = stealth_client
+        .client()
+        .request(reqwest_method, &final_req_data.uri);
 
     for (k, v) in final_req_data.headers {
         if let Ok(k_name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
@@ -133,7 +144,12 @@ async fn process_http_request(
 
     match req_builder.send().await {
         Ok(res) => {
-            let _ = generate_template(&final_req_data.uri, &final_req_data.method, &final_req_data.body).await;
+            let _ = generate_template(
+                &final_req_data.uri,
+                &final_req_data.method,
+                &final_req_data.body,
+            )
+            .await;
 
             let mut builder = Response::builder().status(res.status().as_u16());
             for (k, v) in res.headers() {
@@ -143,10 +159,12 @@ async fn process_http_request(
                     }
                 }
             }
-            
+
             let body_bytes = res.bytes().await.unwrap_or_default();
             let body = Body::from(body_bytes);
-            Ok(builder.body(body).unwrap_or_else(|_| Response::new(Body::empty())))
+            Ok(builder
+                .body(body)
+                .unwrap_or_else(|_| Response::new(Body::empty())))
         }
         Err(e) => {
             eprintln!("[MITM] Error forwarding request: {}", e);
@@ -166,7 +184,7 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
     let domain = parsed_uri.host_str().unwrap_or("unknown");
     let path = parsed_uri.path();
     let safe_path = path.replace(['/', '.'], "_");
-    
+
     let template_id = format!("mitm-{}-{}-{}", domain, method.to_lowercase(), safe_path);
     let filename = format!("./intercepted_templates/{}.yaml", template_id);
 
@@ -175,11 +193,18 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
     let http_req = HttpRequestTemplate {
         method: method.to_string(),
         path: path.to_string(),
+        body: if body.is_empty() {
+            None
+        } else {
+            Some(body.to_string())
+        },
         headers: None,
-        body: if body.is_empty() { None } else { Some(body.to_string()) },
         matchers: vec![],
         matcher_condition: "and".to_string(),
         extractors: vec![],
+        attack: None,
+        payloads: None,
+        inject_in: None,
         follow_redirects: None,
     };
 
@@ -266,14 +291,24 @@ pub async fn start_proxy(port: u16, stealth_client: Arc<StealthHttpClient>) {
         let proxy_state = state_clone.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                handle_request(req, Arc::clone(&client), Arc::clone(&ca), proxy_state.clone())
+                handle_request(
+                    req,
+                    Arc::clone(&client),
+                    Arc::clone(&ca),
+                    proxy_state.clone(),
+                )
             }))
         }
     });
 
     let server = Server::bind(&addr).serve(make_svc);
-    println!("\x1b[1;32m[+] Valayam MITM Proxy running on http://{}\x1b[0m", addr);
-    println!("Configure your browser to use this proxy to automatically generate Valayam templates.");
+    println!(
+        "\x1b[1;32m[+] Valayam MITM Proxy running on http://{}\x1b[0m",
+        addr
+    );
+    println!(
+        "Configure your browser to use this proxy to automatically generate Valayam templates."
+    );
 
     if let Err(e) = server.await {
         eprintln!("[!] MITM Proxy error: {}", e);

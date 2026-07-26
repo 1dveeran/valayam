@@ -70,10 +70,12 @@ fn bench_rate_limiter_update_config(c: &mut Criterion) {
     c.bench_function("rate_limiter_update_config", |b| {
         let limiter = RateLimiter::new_simple(100);
         b.to_async(&rt).iter(|| async {
-            limiter.update_config(RateLimiterConfig {
-                base_rps: black_box(200),
-                ..Default::default()
-            }).await;
+            limiter
+                .update_config(RateLimiterConfig {
+                    base_rps: black_box(200),
+                    ..Default::default()
+                })
+                .await;
         });
     });
 }

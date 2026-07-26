@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use valayam_core::stealth::proxy::ProxyRotator;
 
 fn bench_proxy_new_empty(c: &mut Criterion) {

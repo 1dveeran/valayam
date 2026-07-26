@@ -1,0 +1,55 @@
+name: Release WASM Plugins
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build_wasm_plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build WASM Plugins
+        run: |
+          mkdir -p dist/plugins-wasm
+          for plugin in plugins-wasm/*; do
+            if [ -d "$plugin" ] && [ "$plugin" != "plugins-wasm/test-runner" ]; then
+              echo "Building $plugin..."
+              cargo build --manifest-path "$plugin/Cargo.toml" --target wasm32-unknown-unknown --release
+              PLUGIN_NAME=$(basename "$plugin")
+              cp target/wasm32-unknown-unknown/release/valayam_plugin_${PLUGIN_NAME//-/_}.wasm dist/plugins-wasm/ || true
+            fi
+          done
+
+      - name: Zip Plugins
+        run: |
+          cd dist
+          zip -r valayam-plugins.zip plugins-wasm/
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/valayam-plugins.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

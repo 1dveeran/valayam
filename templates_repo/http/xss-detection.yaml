@@ -8,7 +8,12 @@ info:
     cwe: "CWE-79"
 requests:
   - method: GET
-    path: "/search?q=<script>alert('xss')</script>"
+    path: "/"
+    attack: inject
+    inject_in: query
+    payloads:
+      - "<script>alert('xss')</script>"
+      - "\"><img src=x onerror=alert(1)>"
     headers:
       User-Agent: "Valayam-Scanner/1.0"
     matchers:
@@ -16,21 +21,20 @@ requests:
         part: body
         words:
           - "<script>alert('xss')</script>"
+          - "\"><img src=x onerror=alert(1)>"
       - type: status
         part: status
         status:
           - 200
     matcher_condition: and
-    extractors:
-      - type: regex
-        name: reflected_param
-        part: body
-        regex: "<script>alert\\('xss'\\)</script>"
-        group: 0
 
   - method: POST
-    path: "/search"
-    body: "q=<script>alert(1)</script>&submit=go"
+    path: "/"
+    attack: inject
+    inject_in: body
+    payloads:
+      - "<script>alert(1)</script>"
+    body: "INJECT_HERE"
     headers:
       Content-Type: "application/x-www-form-urlencoded"
     matchers:

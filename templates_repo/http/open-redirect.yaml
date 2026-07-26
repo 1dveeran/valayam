@@ -8,29 +8,17 @@ info:
     cwe: "CWE-601"
 requests:
   - method: GET
-    path: "/redirect?url=https://evil.com"
+    path: "/"
+    attack: inject
+    inject_in: query
+    payloads:
+      - "https://evil.com"
+      - "//evil.com"
+      - "https://evil.com@valid.com"
     matchers:
       - type: regex
         part: header
         regex:
-          - "Location:\\s*https?://evil\\.com"
-    follow_redirects: false
-
-  - method: GET
-    path: "/goto?next=//evil.com"
-    matchers:
-      - type: regex
-        part: header
-        regex:
-          - "Location:\\s*https?://evil\\.com"
-          - "Location:\\s*//evil\\.com"
-    follow_redirects: false
-
-  - method: GET
-    path: "/out?url=https://evil.com@valid.com"
-    matchers:
-      - type: regex
-        part: header
-        regex:
-          - "Location:\\s*https?://evil\\.com"
+          - "(?i)Location:\\s*https?://evil\\.com"
+          - "(?i)Location:\\s*//evil\\.com"
     follow_redirects: false

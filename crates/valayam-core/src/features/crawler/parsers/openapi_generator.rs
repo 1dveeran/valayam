@@ -1,18 +1,22 @@
 use serde_json::Value;
-use valayam_models::templates::schema::{VulnerabilityTemplate, TemplateInfo};
 use valayam_models::templates::http_scan::HttpRequestTemplate;
 use valayam_models::templates::matcher::ResponseMatcher;
+use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
 
 /// Compiles an OpenAPI/Swagger spec string into a single native VulnerabilityTemplate.
-pub fn generate_template_from_openapi(openapi_content: &str) -> Result<VulnerabilityTemplate, String> {
+pub fn generate_template_from_openapi(
+    openapi_content: &str,
+) -> Result<VulnerabilityTemplate, String> {
     let spec: Value = serde_json::from_str(openapi_content).map_err(|e| e.to_string())?;
-    
-    let title = spec.get("info")
+
+    let title = spec
+        .get("info")
         .and_then(|i| i.get("title"))
         .and_then(|t| t.as_str())
         .unwrap_or("Generated OpenAPI Scan");
 
-    let description = spec.get("info")
+    let description = spec
+        .get("info")
         .and_then(|i| i.get("description"))
         .and_then(|d| d.as_str())
         .map(|s| s.to_string());
@@ -25,13 +29,16 @@ pub fn generate_template_from_openapi(openapi_content: &str) -> Result<Vulnerabi
                 for (method, _op_val) in ops {
                     // Match standard HTTP methods
                     let method_upper = method.to_uppercase();
-                    if ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].contains(&method_upper.as_str()) {
+                    if ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+                        .contains(&method_upper.as_str())
+                    {
                         // Replace OpenAPI style placeholders {id} with Valayam variables {{id}}
                         let valayam_path = path.replace('{', "{{").replace('}', "}}");
 
                         let mut headers = std::collections::HashMap::new();
                         if ["POST", "PUT", "PATCH"].contains(&method_upper.as_str()) {
-                            headers.insert("Content-Type".to_string(), "application/json".to_string());
+                            headers
+                                .insert("Content-Type".to_string(), "application/json".to_string());
                         }
 
                         requests.push(HttpRequestTemplate {
@@ -50,6 +57,9 @@ pub fn generate_template_from_openapi(openapi_content: &str) -> Result<Vulnerabi
                             }],
                             matcher_condition: "and".to_string(),
                             extractors: vec![],
+                            attack: None,
+                            payloads: None,
+                            inject_in: None,
                             follow_redirects: None,
                         });
                     }
@@ -96,8 +106,15 @@ mod tests {
         assert_eq!(template.info.description.unwrap(), "API description");
         assert_eq!(template.requests.len(), 2);
 
-        let get_req = template.requests.iter().find(|r| r.method == "GET").unwrap();
+        let get_req = template
+            .requests
+            .iter()
+            .find(|r| r.method == "GET")
+            .unwrap();
         assert_eq!(get_req.path, "/users/{{id}}");
-        assert_eq!(get_req.matchers[0].status.as_ref().unwrap(), &vec![200, 201, 204, 302, 401, 403]);
+        assert_eq!(
+            get_req.matchers[0].status.as_ref().unwrap(),
+            &vec![200, 201, 204, 302, 401, 403]
+        );
     }
 }

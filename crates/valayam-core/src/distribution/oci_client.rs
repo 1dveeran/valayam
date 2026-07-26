@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use reqwest::{Client, header};
+use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -81,20 +81,30 @@ impl OciClient {
     /// Fetch a manifest for a given repository and reference (tag or digest)
     pub async fn get_manifest(&self, repo: &str, reference: &str) -> Result<OciManifest> {
         let url = format!("{}/v2/{}/manifests/{}", self.registry, repo, reference);
-        let res = self.apply_auth(self.client.get(&url))
+        let res = self
+            .apply_auth(self.client.get(&url))
             .send()
             .await?
             .error_for_status()?;
-        
+
         let manifest = res.json::<OciManifest>().await?;
         Ok(manifest)
     }
 
     /// Push a manifest to the registry
-    pub async fn push_manifest(&self, repo: &str, reference: &str, manifest: &OciManifest) -> Result<()> {
+    pub async fn push_manifest(
+        &self,
+        repo: &str,
+        reference: &str,
+        manifest: &OciManifest,
+    ) -> Result<()> {
         let url = format!("{}/v2/{}/manifests/{}", self.registry, repo, reference);
-        let res = self.apply_auth(self.client.put(&url))
-            .header(header::CONTENT_TYPE, "application/vnd.oci.image.manifest.v1+json")
+        let res = self
+            .apply_auth(self.client.put(&url))
+            .header(
+                header::CONTENT_TYPE,
+                "application/vnd.oci.image.manifest.v1+json",
+            )
             .json(manifest)
             .send()
             .await?;
@@ -110,11 +120,12 @@ impl OciClient {
     /// Download a blob to a vector of bytes
     pub async fn get_blob(&self, repo: &str, digest: &str) -> Result<Vec<u8>> {
         let url = format!("{}/v2/{}/blobs/{}", self.registry, repo, digest);
-        let res = self.apply_auth(self.client.get(&url))
+        let res = self
+            .apply_auth(self.client.get(&url))
             .send()
             .await?
             .error_for_status()?;
-            
+
         let bytes = res.bytes().await?;
         Ok(bytes.to_vec())
     }
@@ -123,15 +134,14 @@ impl OciClient {
     pub async fn push_blob(&self, repo: &str, data: &[u8], digest_str: &str) -> Result<()> {
         // Step 1: Initiate upload
         let init_url = format!("{}/v2/{}/blobs/uploads/", self.registry, repo);
-        let res = self.apply_auth(self.client.post(&init_url))
-            .send()
-            .await?;
-            
+        let res = self.apply_auth(self.client.post(&init_url)).send().await?;
+
         if !res.status().is_success() {
             anyhow::bail!("Failed to initiate blob upload: {}", res.status());
         }
 
-        let location = res.headers()
+        let location = res
+            .headers()
             .get(header::LOCATION)
             .context("Missing Location header in upload initiation")?
             .to_str()?;
@@ -144,9 +154,12 @@ impl OciClient {
         };
 
         // Step 2: Upload data
-        upload_url.query_pairs_mut().append_pair("digest", digest_str);
-        
-        let res = self.apply_auth(self.client.put(upload_url))
+        upload_url
+            .query_pairs_mut()
+            .append_pair("digest", digest_str);
+
+        let res = self
+            .apply_auth(self.client.put(upload_url))
             .header(header::CONTENT_TYPE, "application/octet-stream")
             .body(data.to_vec())
             .send()
@@ -155,7 +168,7 @@ impl OciClient {
         if !res.status().is_success() {
             anyhow::bail!("Failed to upload blob: {}", res.status());
         }
-        
+
         Ok(())
     }
 }

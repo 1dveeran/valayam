@@ -3,13 +3,9 @@ pub mod core;
 pub mod features;
 pub use valayam_network::network;
 pub use valayam_network::stealth;
-pub mod template;
 pub mod distribution;
+pub mod template;
 
-pub mod rpc {
-    tonic::include_proto!("valayam");
-}
-
-pub mod plugin_rpc {
-    tonic::include_proto!("valayam.plugin");
-}
+// Re-exported from valayam-proto (single source of truth)
+pub use valayam_proto::plugin as plugin_rpc;
+pub use valayam_proto::valayam as rpc;

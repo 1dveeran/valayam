@@ -1,3 +1,1 @@
-pub mod valayam {
-    tonic::include_proto!("valayam");
-}
+pub use valayam_proto::valayam;

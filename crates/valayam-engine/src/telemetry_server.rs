@@ -1,6 +1,6 @@
 use tonic::{transport::Server, Request, Response, Status};
-use crate::plugin_rpc::scanner_server::{Scanner, ScannerServer};
-use crate::plugin_rpc::{ScanRequest, ScanResponse, TelemetryEvent, TelemetryResponse, ControlRequest, ControlResponse};
+use crate::rpc::scanner_server::{Scanner, ScannerServer};
+use crate::rpc::{ScanRequest, ScanResponse, TelemetryEvent, TelemetryResponse, ControlRequest, ControlResponse};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use crate::executor::ScanState;

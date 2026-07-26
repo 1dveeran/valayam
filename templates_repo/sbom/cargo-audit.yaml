@@ -7,4 +7,4 @@ info:
     cwe: "CWE-1104"
 sbom_audit:
   - target: "{{Hostname}}"
-    r#type: "Cargo.toml"
+    type: "Cargo.toml"

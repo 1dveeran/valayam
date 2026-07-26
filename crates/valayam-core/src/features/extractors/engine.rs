@@ -1,6 +1,6 @@
-use valayam_models::templates::extractors::Extractor;
 use regex::Regex;
 use std::collections::HashMap;
+use valayam_models::templates::extractors::Extractor;
 
 /// Extracts values from an HTTP response using the provided extractor rules.
 ///
@@ -33,7 +33,11 @@ pub fn extract_from_response(
                 let document = scraper::Html::parse_document(&body_text);
                 if let Some(element) = document.select(&selector).next() {
                     let extracted = if let Some(attr) = &extractor.attribute {
-                        element.value().attr(attr).map(|v| v.to_string()).unwrap_or_default()
+                        element
+                            .value()
+                            .attr(attr)
+                            .map(|v| v.to_string())
+                            .unwrap_or_default()
                     } else {
                         element.text().collect::<Vec<_>>().join("")
                     };

@@ -36,7 +36,7 @@ mod tests {
                 }
             }
         }"#;
-        
+
         let res = extract_openapi_endpoints(openapi_json);
         assert_eq!(res.len(), 2);
         assert!(res.contains("/users"));

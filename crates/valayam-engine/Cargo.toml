@@ -11,6 +11,7 @@ lazy_static = { workspace = true }
 tracing = "0.1"
 valayam-models = { path = "../valayam-models" }
 valayam-network = { path = "../valayam-network" }
+valayam-proto = { workspace = true }
 tokio-util = { version = "0.7.11" }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -39,4 +40,3 @@ serde_yaml = { workspace = true }
 hickory-resolver.workspace = true
 
 [build-dependencies]
-tonic-build = { workspace = true }

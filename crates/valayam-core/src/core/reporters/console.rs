@@ -1,6 +1,6 @@
-use valayam_engine::traits::{FindingOwned, Reporter};
 use colored::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use valayam_engine::traits::{FindingOwned, Reporter};
 
 /// Console reporter that renders vulnerability findings as visually rich,
 /// boxed cards with severity badges, timestamps, and optional metadata.
@@ -25,9 +25,7 @@ impl ConsoleReporter {
             "medium" => " MEDIUM ".on_yellow().black().bold(),
             "low" => " LOW ".on_green().white().bold(),
             "info" => " INFO ".on_blue().white().bold(),
-            _ => format!(" {} ", severity.to_uppercase())
-                .normal()
-                .dimmed(),
+            _ => format!(" {} ", severity.to_uppercase()).normal().dimmed(),
         }
     }
 

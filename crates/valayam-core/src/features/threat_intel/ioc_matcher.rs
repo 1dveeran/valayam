@@ -14,7 +14,7 @@ impl IocMatcher {
             malicious_domains: DashSet::new(),
         }
     }
-    
+
     /// Checks if an IP is in the malicious IPs list.
     pub fn is_malicious_ip(&self, ip: &str) -> bool {
         self.malicious_ips.contains(ip)

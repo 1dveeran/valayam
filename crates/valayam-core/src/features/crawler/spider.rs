@@ -1,13 +1,13 @@
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use url::Url;
 
-use valayam_engine::rate_limiter::RateLimiter;
-use crate::network::http::StealthHttpClient;
 use super::parsers::{javascript, openapi, wasm};
 use super::wordlists::CRAWLER_PROBE_PATHS;
+use crate::network::http::StealthHttpClient;
+use valayam_engine::rate_limiter::RateLimiter;
 
 pub struct Crawler {
     client: Arc<StealthHttpClient>,
@@ -51,9 +51,12 @@ impl Crawler {
 fn extract_links_from_html(body_text: &str) -> HashSet<String> {
     let mut found = HashSet::new();
     let document = scraper::Html::parse_document(body_text);
-    let selector = scraper::Selector::parse("a[href], form[action], script[src], link[href]").unwrap();
+    let selector =
+        scraper::Selector::parse("a[href], form[action], script[src], link[href]").unwrap();
     for el in document.select(&selector) {
-        let link = el.value().attr("href")
+        let link = el
+            .value()
+            .attr("href")
             .or(el.value().attr("action"))
             .or(el.value().attr("src"))
             .unwrap_or("");
@@ -77,16 +80,12 @@ impl Crawler {
 
         // 1. Proactively probe active wordlist paths
         let probe_clone = self.clone_instance();
-        join_set.spawn(async move {
-            probe_clone.probe_wordlists().await
-        });
+        join_set.spawn(async move { probe_clone.probe_wordlists().await });
 
         // 2. Start the regular recursive crawl from depth 0
         let self_clone = self.clone_instance();
         let target_url = self.target_url.clone();
-        join_set.spawn(async move {
-            self_clone.crawl_url_inner(target_url, 0).await
-        });
+        join_set.spawn(async move { self_clone.crawl_url_inner(target_url, 0).await });
 
         // 3. Process the JoinSet to manage bounded crawling
         let concurrency_semaphore = Arc::new(tokio::sync::Semaphore::new(10)); // max 10 concurrent requests
@@ -100,7 +99,7 @@ impl Crawler {
                         vis.insert(url_str.clone());
                         let worker_clone = self.clone_instance();
                         let sem_clone = concurrency_semaphore.clone();
-                        
+
                         join_set.spawn(async move {
                             // Bound the concurrency using the semaphore
                             let _permit = sem_clone.acquire().await;
@@ -117,23 +116,27 @@ impl Crawler {
 
     async fn probe_wordlists(&self) -> Vec<(Url, usize)> {
         let mut newly_discovered = Vec::new();
-        
+
         for &path in CRAWLER_PROBE_PATHS {
             if let Ok(probe_url) = self.target_url.join(path) {
                 let probe_url_str = probe_url.to_string();
-                
+
                 // Throttle
                 if let Some(ref rl) = self.rate_limiter {
                     rl.acquire().await;
                 }
 
-                if let Ok(resp) = self.client.send_request("GET", &probe_url_str, self.crawl_headers.as_ref(), None).await {
+                if let Ok(resp) = self
+                    .client
+                    .send_request("GET", &probe_url_str, self.crawl_headers.as_ref(), None)
+                    .await
+                {
                     if resp.status().is_success() {
                         {
                             let mut disc = self.discovered_urls.lock().await;
                             disc.insert(probe_url_str.clone());
                         }
-                        
+
                         // If it's a Swagger/OpenAPI JSON, parse it immediately
                         if probe_url_str.ends_with(".json") || probe_url_str.contains("api-docs") {
                             if let Ok(body_text) = resp.text().await {
@@ -151,12 +154,12 @@ impl Crawler {
                         }
                     }
                 }
-                
+
                 let mut vis = self.visited.lock().await;
                 vis.insert(probe_url_str);
             }
         }
-        
+
         newly_discovered
     }
 
@@ -174,7 +177,11 @@ impl Crawler {
 
         tracing::debug!(url = %url_str, depth = depth, "Crawling page");
 
-        let response = match self.client.send_request("GET", &url_str, self.crawl_headers.as_ref(), None).await {
+        let response = match self
+            .client
+            .send_request("GET", &url_str, self.crawl_headers.as_ref(), None)
+            .await
+        {
             Ok(resp) => resp,
             Err(_) => return vec![],
         };
@@ -191,11 +198,14 @@ impl Crawler {
 
         let mut next_urls = Vec::new();
 
-        if content_type.contains("javascript") || content_type.contains("typescript") || url_str.ends_with(".js") {
+        if content_type.contains("javascript")
+            || content_type.contains("typescript")
+            || url_str.ends_with(".js")
+        {
             if let Ok(body_text) = response.text().await {
                 let js_endpoints = javascript::extract_js_endpoints(&body_text);
                 next_urls.extend(self.process_discovered_routes(js_endpoints, depth));
-                
+
                 let js_params = javascript::extract_js_parameters(&body_text);
                 if !js_params.is_empty() {
                     tracing::info!(url = %url_str, "Discovered {} parameters in JS bundle: {:?}", js_params.len(), js_params);
@@ -216,7 +226,11 @@ impl Crawler {
         next_urls
     }
 
-    fn process_discovered_routes(&self, routes: HashSet<String>, depth: usize) -> Vec<(Url, usize)> {
+    fn process_discovered_routes(
+        &self,
+        routes: HashSet<String>,
+        depth: usize,
+    ) -> Vec<(Url, usize)> {
         let mut valid_routes = Vec::new();
         for route in routes {
             let normalized_url = if route.starts_with("http://") || route.starts_with("https://") {
@@ -270,14 +284,15 @@ mod tests {
         let client = Arc::new(StealthHttpClient::new(false, false, None, false).unwrap());
         let mut headers = HashMap::new();
         headers.insert("Authorization".to_string(), "Bearer secret".to_string());
-        
+
         let crawler = Crawler::new(
             client,
             "https://example.com/api",
             2,
             None,
             Some(headers.clone()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(crawler.crawl_headers.unwrap(), headers);
         assert_eq!(crawler.target_host, "example.com");

@@ -18,7 +18,12 @@
 /*.py
 /err*.log
 /err.log
+/*.log
+/*.txt
+/*.sqlite
+/*.db
 /arch*.md
+/*arch*.md
 /ref*.md
 /impl*.md
 

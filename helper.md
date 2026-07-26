@@ -1,6 +1,6 @@
 # Valayam Helper
 
-This document provides examples on how to use the `valayam` scanner, covering all template types and features.
+This document provides examples on how to use the `valayam` scanner, specifically focusing on interacting with its new Extism-backed WASM plugin architecture.
 
 ## Getting Help
 
@@ -14,906 +14,123 @@ cargo run --bin valayam-cli -- --help
 |---|---|---|
 | `--target` | `-u` | Target Base URL (default: `https://httpbin.org`) |
 | `--template` | `-t` | Path to Native YAML template file or directory |
-| `--nuclei-template` | `-n` | Path to Nuclei YAML template file or directory |
+| `--plugin` | `-p` | Path to a precompiled `.wasm` plugin to execute |
 | `--output` | `-o` | Path to write JSON output to |
 | `--rate-limit` | `-r` | Max requests per second (default: unlimited) |
 | `--proxy-file` | | Path to proxy list file (one per line) |
-| `--random-agent` | | Randomize User-Agent per request |
 | `--worker` | | Target worker node URI (e.g. `http://localhost:50051`) |
-| `--crawl` | | Crawl the target URL first to discover endpoints |
-| `--crawl-depth` | | Maximum crawling depth (default: `3`) |
-| `--crawl-headers` | | Custom headers for crawler requests (format: Key:Value,Key2:Value2) |
 
-## Running Scans
+## Running Scans (Dynamic Plugins)
 
-### Basic HTTP Scan
+In the new Valayam architecture, scanning logic is delegated to `.wasm` plugins rather than monolithic engine features. 
+
+### Basic Execution via Plugin Flag
+
+You can directly test a compiled WASM plugin against a target:
 
 ```bash
-# Uses default demo template against default target (httpbin.org)
-cargo run --bin valayam-cli
+cargo run --bin valayam-cli -- -u https://example.com -p ./plugins-wasm/target/wasm32-unknown-unknown/debug/valayam_plugin_api_audit.wasm
+```
 
-# Custom target
-cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/demo-template.yaml
+### Template-Driven Plugin Execution
 
-# Batch execution (all .yaml files in directory, concurrently)
+YAML templates are still supported for orchestration, but they now instruct the engine which plugins to load and what parameters to pass via the `WasmInput` context.
+
+```bash
+# Execute all templates in a directory (the templates define which plugins to load)
 cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/
 
 # Save findings to JSON
 cargo run --bin valayam-cli -- -t ./templates_repo/ -o results.json
-
-# Rate-limited scan (max 5 requests/second)
-cargo run --bin valayam-cli -- -t ./templates_repo/ --rate-limit 5
-
-# Crawler-enabled Scan (spider target, then scan all discovered URLs)
-cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/ --crawl --crawl-depth 2
-
-# Authenticated Crawler-enabled Scan (scrapes with session cookie)
-cargo run --bin valayam-cli -- -u https://example.com -t ./templates_repo/ --crawl --crawl-headers "Cookie:session=token,X-Custom:val"
-
-# OpenAPI/Swagger Direct Template Execution (converts Swagger file to scan requests dynamically)
-cargo run --bin valayam-cli -- -u https://api.example.com -t ./templates_repo/swagger.json
 ```
 
 ---
 
-## Plugin Management
+## Developing & Testing Custom WASM Plugins
 
-Valayam supports an extensible plugin architecture (WASM and gRPC) allowing you to execute custom modules seamlessly. Use the `plugin` subcommand to manage them:
+Developers can create their own scanning capabilities using the `valayam-plugin-sdk`.
 
+### 1. Generating a new Plugin
 ```bash
-# Initialize a new WASM plugin project
-cargo run --bin valayam-cli -- plugin init my_plugin --lang rust --runtime wasm
-
-# Generate an ED25519 signing keypair
-cargo run --bin valayam-cli -- plugin generate-key --output my_key
-
-# Package and sign the plugin into a .vpa archive
-cargo run --bin valayam-cli -- plugin package ./my_plugin --output my_plugin.vpa --sign my_key.pem
+cargo new --lib plugins-wasm/my-custom-audit
 ```
 
----
+Update `Cargo.toml`:
+```toml
+[lib]
+crate-type = ["cdylib"]
 
-## Template Examples
+[dependencies]
+valayam-plugin-sdk = { path = "../../crates/valayam-plugin-sdk" }
+extism-pdk = "1.4"
+serde_json = "1.0"
+```
 
-### HTTP-Only Template
+### 2. Testing Plugins Locally
 
-Basic HTTP request with regex and status code matching.
+We provide a specialized `valayam-plugin-test-runner` crate to allow developers to rapidly test their WASM modules without needing to boot the full CLI or Engine stack.
 
-```yaml
-id: http-only-example
-info:
-  name: "HTTP Only Example"
-  severity: "Info"
-  compliance:
-    owasp: "A05:2021-Security Misconfiguration"
-    cwe: "CWE-16"
-requests:
-  - method: "GET"
-    path: "/"
-    matchers:
-      - type: "status"
-        part: "status"
-        status:
-          - 200
+```rust
+// Inside your plugin's tests (e.g. `tests/my_plugin_tests.rs`)
+use valayam_plugin_test_runner::*;
+use serde_json::json;
+use std::collections::HashMap;
+
+#[test]
+fn test_my_custom_plugin() {
+    // 1. Automatically compiles the local crate to WASM and returns the binary
+    let wasm = build_wasm("my-custom-audit");
+    
+    // 2. Mock the input exactly as the CLI would send it
+    let input = WasmInput {
+        template: json!({"id": "custom", "name": "Test"}),
+        context: HashMap::from([("TARGET_URL".into(), "https://httpbin.org".into())]),
+    };
+    
+    // 3. Execute the WASM inside an Extism sandbox mimicking the engine
+    let out = run_plugin(&wasm, &input);
+    
+    // 4. Assert behavior
+    assert!(out.matched);
+    assert_eq!(out.findings[0].name, "Custom Vulnerability Found");
+}
 ```
 
 ```bash
-cargo run --bin valayam-cli -- -t http-only.yaml
+# Run the test suite for your plugin
+cargo test -p my-custom-audit
 ```
 
 ---
-
-### Extractors — Chained Authentication Flow
-
-Extract a token from the login response and use it in a subsequent API request. The `extractors` field captures regex groups into named variables that are available via `{{variable_name}}` in later requests.
-
-```yaml
-id: auth-chain-extractor
-info:
-  name: "Authenticated API Check"
-  severity: "High"
-  description: "Logs in, extracts a bearer token, and queries a protected endpoint."
-  compliance:
-    owasp: "A07:2021-Identification and Authentication Failures"
-    pci_dss: "8.3.1"
-requests:
-  # Step 1: Login and extract the token
-  - method: "POST"
-    path: "/api/login"
-    body: "username=admin&password=admin"
-    headers:
-      Content-Type: "application/x-www-form-urlencoded"
-    matchers:
-      - type: "status"
-        part: "status"
-        status:
-          - 200
-    extractors:
-      - type: "regex"
-        name: "auth_token"
-        part: "body"
-        regex: '"token":\s*"([^"]+)"'
-        group: 1
-
-  # Step 2: Use the extracted token in a protected request
-  - method: "GET"
-    path: "/api/admin/users"
-    headers:
-      Authorization: "Bearer {{auth_token}}"
-    matchers:
-      - type: "status"
-        part: "status"
-        status:
-          - 200
-      - type: "regex"
-        part: "body"
-        regex:
-          - '"role":\s*"admin"'
-```
-
-```bash
-cargo run --bin valayam-cli -- -t auth-chain.yaml -u https://vulnerable-app.com
-```
-
----
-
-### Extractors — JSON Pointer Extraction
-
-Extract a field from a structured JSON API response using a JSON Pointer path (starts with `/`):
-
-```yaml
-id: json-pointer-example
-info:
-  name: "JSON API Token Extraction"
-  severity: "Medium"
-requests:
-  - method: "POST"
-    path: "/api/login"
-    body: '{"username": "admin"}'
-    extractors:
-      - type: "json"
-        name: "api_token"
-        json: "/auth/token"
-  
-  - method: "GET"
-    path: "/api/dashboard"
-    headers:
-      Authorization: "Bearer {{api_token}}"
-```
-
----
-
-### Extractors — CSS Selector HTML Extraction
-
-Extract attributes or inner text from HTML elements natively using CSS selectors:
-
-```yaml
-id: css-selector-example
-info:
-  name: "CSS Selector CSRF Check"
-  severity: "Info"
-requests:
-  - method: "GET"
-    path: "/register"
-    extractors:
-      - type: "css"
-        name: "csrf_val"
-        css: "input[name=csrf_token]"
-        attribute: "value"
- 
-  - method: "POST"
-    path: "/register"
-    body: "username=test&csrf_token={{csrf_val}}"
-```
-
----
-
-### DSL Helper Functions
-
-Use built-in helper functions for encoding, hashing, and transformations directly in template values.
-
-```yaml
-id: helper-functions-demo
-info:
-  name: "DSL Helper Demo"
-  severity: "Info"
-requests:
-  # Base64-encoded Basic Auth header
-  - method: "GET"
-    path: "/api/protected"
-    headers:
-      Authorization: "Basic {{base64(admin:admin)}}"
-    matchers:
-      - type: "status"
-        part: "status"
-        status: [200]
-
-  # MD5 hash check
-  - method: "GET"
-    path: "/api/checksum?hash={{md5(test_payload)}}"
-    matchers:
-      - type: "regex"
-        part: "body"
-        regex:
-          - '"valid":\s*true'
-
-  # URL-encoded payload
-  - method: "GET"
-    path: "/search?q={{url_encode(<script>alert(1)</script>)}}"
-    matchers:
-      - type: "regex"
-        part: "body"
-        regex:
-          - "<script>alert\\(1\\)</script>"
-```
-
-**Available helpers:**
-
-| Helper | Description | Example |
-|---|---|---|
-| `base64(input)` | Base64 encode | `{{base64(admin:password)}}` |
-| `base64_decode(input)` | Base64 decode | `{{base64_decode(YWRtaW4=)}}` |
-| `url_encode(input)` | Percent-encode | `{{url_encode(a b&c)}}` |
-| `url_decode(input)` | Percent-decode | `{{url_decode(a%20b)}}` |
-| `md5(input)` | MD5 hex digest | `{{md5(hello)}}` |
-| `sha256(input)` | SHA-256 hex digest | `{{sha256(hello)}}` |
-| `hex_encode(input)` | Raw hex encoding | `{{hex_encode(ABC)}}` |
-| `to_lower(input)` | Lowercase | `{{to_lower(HELLO)}}` |
-| `to_upper(input)` | Uppercase | `{{to_upper(hello)}}` |
-
----
-
-### Network Scanning — TCP with Banner Grabbing
-
-Scan ports and match against service banners. If a port (like port 80/8080/443) is silent and doesn't return an initial greeting banner, the scanner automatically falls back to sending a lightweight `GET / HTTP/1.1` probe to retrieve headers/banners.
-
-```yaml
-id: network-banner-grab
-info:
-  name: "SSH and FTP Banner Detection"
-  severity: "Info"
-network:
-  - host: "{{Hostname}}"
-    ports:
-      - "21-22"
-      - "80"
-      - "443"
-      - "8080-8100"
-    banner_timeout_ms: 3000
-    matchers:
-      - type: "regex"
-        part: "banner"
-        regex:
-          - "SSH-2\\.0-OpenSSH"
-          - "220.*FTP"
-          - "Apache Tomcat"
-```
-
-```bash
-cargo run --bin valayam-cli -- -t network-banner.yaml -u example.com
-```
-
----
-
-### Network Scanning — Port Discovery Only
-
-Simple open port detection without banner matching.
-
-```yaml
-id: network-only-example
-info:
-  name: "Network Only Example"
-  severity: "Info"
-network:
-  - host: "{{Hostname}}"
-    ports:
-      - "80"
-      - "443"
-      - "3306"
-      - "5432"
-      - "6379"
-      - "27017"
-```
-
-```bash
-cargo run --bin valayam-cli -- -t network-only.yaml -u example.com
-```
-
----
-
-### DNS Audit — Subdomain Takeover Detection
-
-Query DNS records and match for takeover indicators.
-
-```yaml
-id: dns-subdomain-takeover
-info:
-  name: "Subdomain Takeover Check"
-  severity: "High"
-  description: "Detects CNAME records pointing to unclaimed services."
-dns:
-  - domain: "{{Hostname}}"
-    query_type: "CNAME"
-    matchers:
-      - type: "regex"
-        part: "record"
-        regex:
-          - "\\.github\\.io$"
-          - "\\.herokuapp\\.com$"
-          - "\\.azurewebsites\\.net$"
-          - "\\.cloudfront\\.net$"
-```
-
-```bash
-cargo run --bin valayam-cli -- -t dns-takeover.yaml -u sub.example.com
-```
-
----
-
-### DNS Audit — TXT Record Inspection
-
-Check for SPF, DKIM, and DMARC misconfigurations.
-
-```yaml
-id: dns-txt-audit
-info:
-  name: "DNS TXT Record Audit"
-  severity: "Medium"
-dns:
-  - domain: "{{Hostname}}"
-    query_type: "TXT"
-    matchers:
-      - type: "regex"
-        part: "record"
-        regex:
-          - "v=spf1.*\\+all"    # Overly permissive SPF
-```
-
----
-
-### TLS/SSL Certificate Audit
-
-Inspect TLS certificates for expiry, weak ciphers, and issuer details.
-
-```yaml
-id: tls-cert-audit
-info:
-  name: "TLS Certificate Weakness Check"
-  severity: "Medium"
-  description: "Checks for expired certs, weak ciphers, and self-signed certificates."
-tls:
-  - host: "{{Hostname}}"
-    port: 443
-    matchers:
-      - type: "expired"
-        part: "cert"
-      - type: "weak_cipher"
-        part: "cert"
-      - type: "self_signed"
-        part: "cert"
-```
-
-```yaml
-# TLS issuer matching
-id: tls-issuer-check
-info:
-  name: "TLS Issuer Audit"
-  severity: "Info"
-tls:
-  - host: "{{Hostname}}"
-    port: 443
-    matchers:
-      - type: "regex"
-        part: "issuer"
-        regex:
-          - "Let's Encrypt"
-```
-
-```bash
-cargo run --bin valayam-cli -- -t tls-audit.yaml -u https://example.com
-```
-
-#### Available TLS Matcher Types
-
-Valayam TLS auditing supports these special matcher types:
-
-| Matcher Type | Description | Example |
-|--------------|-------------|---------|
-| `expired` | Certificate has passed its validity period | `- type: "expired"` |
-| `self_signed` | Certificate is self-signed (not issued by a trusted CA) | `- type: "self_signed"` |
-| `weak_cipher` | Negotiated cipher suite is considered weak (CBC, RC4, 3DES, etc.) | `- type: "weak_cipher"` |
-| `tls_version` | Regex match against negotiated TLS version | `- type: "tls_version" - part: "version" - regex: ["^TLSv1\\.0$", "^TLSv1\\.1$"]` |
-| `legacy_tls` | Active probe for SSLv3, TLSv1.0, TLSv1.1 support | `- type: "legacy_tls"` |
-| `san` | Regex match against Subject Alternative Names | `- type: "san" - regex: ["\\.example\\.com$", "\\.internal$"]` |
-| `weak_key` | Public key is weak (RSA < 2048 bits, DSA < 2048 bits) | `- type: "weak_key"` |
-| `is_ca` | Certificate is a CA certificate | `- type: "is_ca"` |
-| `basic_constraints` | Match against basic constraints extension (CA:true, pathlen:N) | `- type: "basic_constraints" - regex: ["CA:true", "pathlen:\\d+"]` |
-| `regex` | Generic regex match against certificate/TLS fields | `- type: "regex" - part: "issuer" - regex: ["Let's Encrypt"]` |
-
-#### Available TLS Match Parts (for `regex` type)
-
-| Part | Description |
-|------|-------------|
-| `issuer` | Certificate issuer DN |
-| `subject` | Certificate subject DN |
-| `serial` | Certificate serial number |
-| `version` | Negotiated TLS version (e.g., "TLSv1.2") |
-| `cipher` | Negotiated cipher suite (e.g., "TLS_AES_256_GCM_SHA384") |
-| `san` | Subject Alternative Names (comma-separated list) |
-| `public_key` | Public key algorithm and size (e.g., "RSA 2048") |
-| `is_ca` | Boolean: whether certificate is a CA |
-
----
-
-### Rhai Script — Multi-Step Workflow
-
-Use embedded Rhai scripting for complex logic that YAML cannot express.
-
-```yaml
-id: script-multi-step-demo
-info:
-  name: "Multi-Step Script Demo"
-  severity: "Info"
-  description: "Demonstrates Rhai scripting for chained HTTP requests."
-scripts:
-  - engine: "rhai"
-    source:
-      code: |
-        // Step 1: Make an initial request and verify it succeeds
-        let resp = http_get(target_url + "/get?step=1&marker=valayam_script");
-        log("Step 1 status: " + resp.status);
-
-        if resp.status != 200 {
-          return false;
-        }
-
-        // Step 2: Extract a value from the response using regex
-        let has_marker = regex_match(resp.body, "valayam_script");
-        log("Step 1 marker found: " + has_marker);
-
-        if !has_marker {
-          return false;
-        }
-
-        // Step 3: Chain a second request using data from step 1
-        let resp2 = http_get(target_url + "/get?step=2&ref=chained_from_step1");
-        log("Step 2 status: " + resp2.status);
-
-        // Final verdict: both requests must succeed
-        resp2.status == 200
-```
-
-```bash
-cargo run --bin valayam-cli -- -t script-demo.yaml
-```
-
----
-
-### Rhai Script — Advanced Features
-
-Using TCP builtins, crypto functions, and variable bridge.
-
-```yaml
-id: script-advanced-demo
-info:
-  name: "Advanced Script Demo"
-  severity: "High"
-scripts:
-  - engine: "rhai"
-    source:
-      code: |
-        // TCP banner grab
-        let conn = tcp_connect(hostname, 22);
-        let banner = tcp_recv(conn, 5000);
-        log("SSH Banner: " + banner);
-
-        // Compute API signature
-        let timestamp = "1720000000";
-        let signature = hmac_sha256("secret_key", "GET/api/data" + timestamp);
-        log("Computed HMAC: " + signature);
-
-        // JWT Token forging
-        let header = #{ "alg": "HS256", "typ": "JWT" };
-        let payload = #{ "sub": "admin", "admin": true };
-        let token = jwt_encode(header, payload, "jwt_key");
-        log("Forged JWT: " + token);
-
-        // JWT Token decoding
-        let claims = jwt_decode(token);
-        log("Admin Claim: " + claims.payload.admin);
-
-        // Parse JSON response
-        let resp = http_get(target_url + "/api/info");
-        let data = json_parse(resp.body);
-        log("Server version: " + data.version);
-
-        // Write extracted values to shared context
-        set_variable("server_version", data.version);
-
-        data.version != "patched"
-```
-
----
-
-### Rhai Script — External File
-
-Load script source from a separate `.rhai` file for complex exploits.
-
-```yaml
-id: script-from-file
-info:
-  name: "External Script Example"
-  severity: "High"
-scripts:
-  - engine: "rhai"
-    source:
-      path: "./scripts/custom_exploit.rhai"
-```
-
-```bash
-cargo run --bin valayam-cli -- -t script-file.yaml -u https://target.com
-```
-
----
-
-### Mixed Template — All Features Combined
-
-A single template can use HTTP requests, extractors, helpers, network scanning, DNS audit, TLS audit, and scripts together. The engine executes them in order: HTTP → Network → DNS → TLS → Scripts.
-
-```yaml
-id: full-feature-demo
-info:
-  name: "Full Feature Demonstration"
-  severity: "Critical"
-  description: "Demonstrates all Valayam capabilities in a single template."
-
-requests:
-  - method: "POST"
-    path: "/api/auth"
-    body: "user={{base64(admin)}}&pass={{md5(password123)}}"
-    headers:
-      Content-Type: "application/x-www-form-urlencoded"
-    matchers:
-      - type: "status"
-        part: "status"
-        status: [200]
-    extractors:
-      - type: "regex"
-        name: "session_id"
-        part: "header"
-        regex: 'Set-Cookie:\s*session=([^;]+)'
-        group: 1
-
-  - method: "GET"
-    path: "/api/admin"
-    headers:
-      Cookie: "session={{session_id}}"
-    matchers:
-      - type: "regex"
-        part: "body"
-        regex:
-          - '"admin":\s*true'
-
-network:
-  - host: "{{Hostname}}"
-    ports:
-      - "3306"
-      - "5432"
-      - "6379"
-    banner_timeout_ms: 2000
-    matchers:
-      - type: "regex"
-        part: "banner"
-        regex:
-          - "mysql|MariaDB|PostgreSQL|Redis"
-
-dns:
-  - domain: "{{Hostname}}"
-    query_type: "CNAME"
-    matchers:
-      - type: "regex"
-        part: "record"
-        regex:
-          - "\\.github\\.io$"
-
-tls:
-  - host: "{{Hostname}}"
-    port: 443
-    matchers:
-      - type: "expired"
-        part: "cert"
-
-scripts:
-  - engine: "rhai"
-    source:
-      code: |
-        let session = get_variable("session_id");
-        log("Using extracted session: " + session);
-        let resp = http_get(target_url + "/api/secrets");
-        resp.status == 200
-```
-
----
-
-### Nuclei Template (Compatibility Mode)
-
-Use the `-n` flag for Nuclei templates. This routes to the isolated Nuclei execution engine.
-
-```yaml
-id: nuclei-example
-info:
-  name: Nuclei Info Disclosure
-  author: valayam
-  severity: info
-requests:
-  - method: GET
-    path:
-      - "{{BaseURL}}/.git/config"
-      - "{{BaseURL}}/.env"
-    matchers-condition: or
-    matchers:
-      - type: word
-        words:
-          - "[core]"
-          - "DB_PASSWORD"
-      - type: status
-        status:
-          - 200
-```
-
-```bash
-cargo run --bin valayam-cli -- -n nuclei-demo.yaml -u https://example.com
-```
-
----
-
-## Stealth Options
-
-### Proxy Rotation
-
-Create a proxy file (`proxies.txt`), one proxy per line:
-```
-socks5://127.0.0.1:9050
-http://proxy1.example.com:8080
-socks5://proxy2.example.com:1080
-```
-
-```bash
-cargo run --bin valayam-cli -- -t ./templates_repo/ --proxy-file proxies.txt
-```
-
-### Random User-Agent
-
-```bash
-cargo run --bin valayam-cli -- -t ./templates_repo/ --random-agent
-```
-
-### Combined Stealth + Rate Limiting
-
-```bash
-cargo run --bin valayam-cli -- -t ./templates_repo/ -u https://target.com \
-  --rate-limit 3 --proxy-file proxies.txt --random-agent \
-  -o results.json
-```
 
 ## Distributed Architecture
- 
-### 1. gRPC Mode
- 
-You can run a remote worker node serving requests via gRPC:
- 
+
+Valayam's engine is designed to scale horizontally across network boundaries.
+
+### gRPC Worker Nodes
+
+You can run a remote worker node serving requests via gRPC, executing WASM plugins completely offloaded from the main CLI.
+
 ```bash
 # 1. Start the worker node (listens on 50051)
 cargo run --bin valayam-worker -- --port 50051
- 
-# 2. Delegate scans from the CLI
+
+# 2. Delegate scans from the CLI (it will stream the WASM and Context)
 cargo run --bin valayam-cli -- -u https://httpbin.org -t ./templates_repo/ --worker http://127.0.0.1:50051
 ```
- 
-### 2. Task Queue Mode (Redis & RabbitMQ)
- 
-Run workers in asynchronous queue mode pulling scans from message brokers:
- 
-```bash
-# Redis Broker
-cargo run --bin valayam-worker -- --broker redis://127.0.0.1:6379
- 
-# RabbitMQ Broker
-cargo run --bin valayam-worker -- --broker amqp://localhost:5672
-```
- 
----
- 
+
 ## AI Orchestration
- 
-Valayam includes a Python-based autonomous AI orchestration layer that supports gRPC client execution and multi-step recon loops.
- 
+
+Valayam provides native hooks for Python-based autonomous AI orchestration.
+
 ```bash
 cd services/ai
 python -m venv venv
-source venv/bin/activate  # or `.\venv\Scripts\Activate.ps1` on Windows
+source venv/bin/activate
 pip install -r requirements.txt
- 
-# Set OpenAI key
+
 export OPENAI_API_KEY="sk-..."
- 
-# Run in gRPC Mode (delegates executions to remote worker over gRPC)
-python agent.py -u https://example.com -i "Perform a full port scan and verify web applications" --worker localhost:50051
+
+# The agent will dynamically generate templates and route executions to the gRPC worker
+python agent.py -u https://example.com -i "Perform a full API audit and test for CORS misconfigurations" --worker localhost:50051
 ```
-
----
-
-### Fuzzing Engine — SQL Injection Parameter Scan
-
-Define fuzzing rules to inject SQL payloads into query parameters.
-
-```yaml
-id: sqli-fuzz-test
-info:
-  name: "SQL Injection Parameter Fuzz"
-  severity: "High"
-fuzz:
-  - part: "query"
-    keys:
-      - "id"
-      - "q"
-    payloads:
-      - "' OR 1=1--"
-      - "1; DROP TABLE users--"
-      - "' UNION SELECT NULL,NULL--"
-    matchers:
-      - type: "status"
-        part: "status"
-        status:
-          - 500
-      - type: "regex"
-        part: "body"
-        regex:
-          - "SQL syntax"
-          - "mysql_fetch"
-          - "ORA-\\d+"
-```
-
-```bash
-cargo run --bin valayam-cli -- -u "https://example.com/search?q=test&id=1" -t sqli-fuzz.yaml
-```
-
----
-
-### TLS Audit — Minimum Version Enforcement
-
-Flag servers that negotiate deprecated TLS versions.
-
-```yaml
-id: tls-version-policy
-info:
-  name: "TLS Version Policy Check"
-  severity: "Medium"
-tls:
-  - host: "{{Hostname}}"
-    port: 443
-    min_version: "TLSv1.2"
-    matchers:
-      - type: legacy_tls
-        part: body
-```
-
-```bash
-cargo run --bin valayam-cli -- -u https://example.com -t tls-version-policy.yaml
-```
-
----
-
-### Rhai Script — WebSocket Session Driver
-
-Use `ws_connect`, `ws_send`, and `ws_recv` to test WebSocket-based backends.
-
-```yaml
-id: websocket-exploit
-info:
-  name: "WebSocket Chat Injection"
-  severity: "High"
-scripts:
-  - engine: "rhai"
-    source:
-      code: |
-        let conn = ws_connect("ws://" + hostname + "/chat");
-        ws_send(conn, "{\"type\": \"message\", \"text\": \"<script>alert(1)</script>\"}");
-        let resp = ws_recv(conn);
-        log("WS Response: " + resp);
-        resp.contains("script")
-```
-
-```bash
-cargo run --bin valayam-cli -- -u https://example.com -t websocket-exploit.yaml
-```
-
----
-
-### WAF Detection & Fingerprinting
-
-The WAF detection module (`features/waf_detect/`) can be called programmatically to identify WAF products before running scans. It sends a clean GET request followed by a trigger probe containing XSS/SQLi signatures, then fingerprints the responses via header and body analysis.
-
-Detected WAFs include: **Cloudflare**, **Incapsula/Imperva**, **Akamai**, **Amazon CloudFront**, **Azure Front Door**, **ModSecurity**, **Barracuda**, **Fortinet FortiWeb**, **DDoS-Guard**, **PerimeterX/HUMAN**, and **Citrix NetScaler**.
-
----
-
-## Future Advanced Workflows (Phases 10, 11, 12)
-
-### Cloud Metadata SSRF Testing (Phase 10)
-Automatically negotiate challenge-response metadata tokens:
-```yaml
-id: aws-imdsv2-bypass
-info:
-  name: "AWS IMDSv2 Bypass"
-cloud:
-  type: "aws-imds"
-  action: "extract_credentials"
-requests:
-  - method: "PUT"
-    path: "/latest/api/token"
-    headers:
-      X-aws-ec2-metadata-token-ttl-seconds: "21600"
-    extractors:
-      - type: regex
-        part: body
-        name: imds_token
-        regex:
-          - "(.*)"
-  - method: "GET"
-    path: "/latest/meta-data/iam/security-credentials/"
-    headers:
-      X-aws-ec2-metadata-token: "{{imds_token}}"
-```
-
-### Automated IDOR Detection (Phase 11)
-Identify Insecure Direct Object References by swapping tokens seamlessly.
-```yaml
-id: auto-idor-check
-info:
-  name: "User Profile IDOR"
-auth:
-  primary: "Bearer {{admin_token}}"
-  secondary: "Bearer {{user_token}}"
-logic:
-  - type: "idor"
-    path: "/api/users/{{admin_id}}/profile"
-    method: "GET"
-    matchers:
-      - type: status
-        status: [200]
-      - type: regex
-        regex: ["admin_secret_data"]
-```
-
-### Deep Analysis & Local AI Payload Generation (Phase 12)
-Execute deep static and dynamic evasion templates using local LLMs and WASM analysis.
-
-**1. LLM WAF Evasion**
-```yaml
-id: ai-waf-evasion
-info:
-  name: AI-Driven WAF Evasion
-deep_analysis:
-  - analysis_type: "llm_mutation"
-    prompt: "Mutate this payload to bypass a standard WAF: <script>alert(1)</script>"
-```
-
-**2. WASM Hardcoded Secrets Extraction**
-```yaml
-id: wasm-secrets
-info:
-  name: WASM Decompilation Secrets
-deep_analysis:
-  - analysis_type: "wasm_decompile"
-```
-
-**3. Source Map Taint Tracking**
-```yaml
-id: sourcemap-audit
-info:
-  name: Source Map Secrets Exposure
-deep_analysis:
-  - analysis_type: "source_map"
-```
-

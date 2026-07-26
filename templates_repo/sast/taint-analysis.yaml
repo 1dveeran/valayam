@@ -8,4 +8,8 @@ info:
     owasp: "A03:2021"
 sast_taint:
   - target: "{{Hostname}}"
+    target_dir: "."
+    language: "any"
   - target: "{{TargetPath}}"
+    target_dir: "."
+    language: "any"
