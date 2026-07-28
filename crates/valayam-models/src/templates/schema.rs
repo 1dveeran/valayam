@@ -171,8 +171,6 @@ pub struct VulnerabilityTemplate {
 pub use crate::template_info::TemplateInfo;
 pub use crate::template_info::TemplateMetadata;
 
-use crate::templates::section::TemplateSection;
-
 impl TemplateMetadata for VulnerabilityTemplate {
     fn template_name(&self) -> &str { &self.info.name }
     fn template_severity(&self) -> &str { &self.info.severity }
@@ -250,8 +248,8 @@ impl VulnerabilityTemplate {
     /// Enables trait-based plugin dispatch: plugins check applicability by
     /// calling `template.has_section(plugin_section_name)` instead of matching
     /// on individual fields.
-    pub fn sections(&self) -> Vec<&dyn TemplateSection> {
-        let mut s: Vec<&dyn TemplateSection> = Vec::new();
+    pub fn sections(&self) -> Vec<&dyn super::section::TemplateSection> {
+        let mut s: Vec<&dyn super::section::TemplateSection> = Vec::new();
         if let Some(ref a) = self.auth { s.push(a); }
         for r in &self.requests { s.push(r as &dyn TemplateSection); }
         for n in &self.network { s.push(n as &dyn TemplateSection); }

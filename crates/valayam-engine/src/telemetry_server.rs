@@ -1,6 +1,8 @@
+use crate::reflection::ValayamReflection;
 use tonic::{transport::Server, Request, Response, Status};
 use crate::rpc::scanner_server::{Scanner, ScannerServer};
 use crate::rpc::{ScanRequest, ScanResponse, TelemetryEvent, TelemetryResponse, ControlRequest, ControlResponse};
+use valayam_proto::reflection::v1::server_reflection_server::ServerReflectionServer;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use crate::executor::ScanState;
@@ -28,7 +30,7 @@ impl Scanner for TelemetryService {
                 payload = %event.payload_json,
                 "Received eBPF Telemetry Event"
             );
-            // Here we would route it to the active scan contexts to verify execution, etc.
+            // TODO: route telemetry to active scan contexts
         }
 
         Ok(Response::new(TelemetryResponse { received: true }))
@@ -71,9 +73,36 @@ pub async fn start_telemetry_server(
 
     tracing::info!("Starting Valayam Telemetry Server on {}", addr);
     Server::builder()
+        .add_service(ServerReflectionServer::new(ValayamReflection::default()))
         .add_service(ScannerServer::new(service))
         .serve(addr)
         .await?;
-        
+
     Ok(())
+}
+
+/// Start a minimal HTTP server serving Prometheus metrics at `/metrics`.
+pub async fn start_metrics_server(addr: std::net::SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!("Starting Valayam metrics endpoint on http://{}/metrics", addr);
+
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        tokio::spawn(async move {
+            let mut buf = vec![0u8; 2048];
+            let _ = stream.read(&mut buf).await;
+
+            let body = crate::metrics::gather_metrics();
+            let body_bytes = body.as_bytes();
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body_bytes.len()
+            );
+
+            if stream.write_all(header.as_bytes()).await.is_err() { return; }
+            let _ = stream.write_all(body_bytes).await;
+        });
+    }
 }

@@ -9,8 +9,9 @@ use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{debug, warn};
+use crate::network_metrics;
 
 /// A pool of reqwest clients, each configured with a different proxy.
 /// Clients are created lazily and reused.
@@ -227,6 +228,8 @@ impl StealthHttpClient {
         headers: Option<&HashMap<String, String>>,
         body: Option<&str>,
     ) -> Result<reqwest::Response, ScannerError> {
+        let start = Instant::now();
+
         if self.circuit_breaker.is_open() {
             return Err(ScannerError::CircuitBreakerOpen);
         }
@@ -257,7 +260,11 @@ impl StealthHttpClient {
                     let ua = rotator.get_next_user_agent();
                     proxied_req = proxied_req.header(reqwest::header::USER_AGENT, ua);
                 }
-                return send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await;
+                let proxied_result = send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await;
+                if let Ok(ref resp) = proxied_result {
+                    network_metrics::record_http_request(method, resp.status().as_u16(), true, start.elapsed().as_secs_f64());
+                }
+                return proxied_result;
             } else {
                 warn!("No healthy proxies available, falling back to direct connection");
             }
@@ -305,6 +312,8 @@ impl StealthHttpClient {
         }
 
         let response = response_result?;
+        let elapsed = start.elapsed().as_secs_f64();
+        network_metrics::record_http_request(method, response.status().as_u16(), false, elapsed);
 
         // Handle meta-refresh redirects if enabled
         if self.follow_meta_refresh {

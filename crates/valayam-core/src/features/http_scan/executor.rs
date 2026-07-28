@@ -110,15 +110,12 @@ pub async fn execute(
 
         let mut urls_to_scan = Vec::new();
 
-        let mut resolved_path = String::new();
-
         if is_passive {
             // Passive checks just scan the crawled URL as-is
             urls_to_scan.push(target_url.to_string());
         } else if is_inject {
-            resolved_path = req_rule.path.clone();
             // Inject mode: Parse target URL and inject payloads into parameters
-            if let Ok(mut parsed_url) = url::Url::parse(target_url) {
+            if let Ok(parsed_url) = url::Url::parse(target_url) {
                 let payloads = req_rule.payloads.clone().unwrap_or_default();
                 let inject_in = req_rule.inject_in.as_deref().unwrap_or("query");
 
@@ -167,7 +164,7 @@ pub async fn execute(
             }
         } else {
             // Legacy path-append mode
-            resolved_path = resolve_all(&req_rule.path, variables);
+            let resolved_path = resolve_all(&req_rule.path, variables);
             let full_url =
                 if resolved_path.starts_with("http://") || resolved_path.starts_with("https://") {
                     resolved_path.clone()

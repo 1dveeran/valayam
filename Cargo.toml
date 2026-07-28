@@ -29,6 +29,7 @@ members = [
     "plugins-wasm/iot-audit",
     "plugins-wasm/mobile-audit",
     "plugins-wasm/oauth-audit",
+    "plugins-wasm/reputation-audit",
     "plugins-wasm/test-runner"
 ]
 exclude = [
@@ -88,6 +89,7 @@ jsonwebtoken = "9.3"
 rumqttc = "0.24"
 toml = "0.8"
 hex = "0.4"
+prometheus = { version = "0.13" }
 
 [profile.release]
 strip = true      # Automatically strip debug symbols from the binary

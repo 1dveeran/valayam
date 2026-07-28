@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use ed25519_dalek::{Signature, VerifyingKey};
 use reqwest::Client;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// A puller that fetches signed Wasm plugins via HTTP and caches them locally.
 pub struct PluginPuller {
@@ -55,8 +55,9 @@ impl PluginPuller {
                 (repo_and_tag, "latest")
             };
 
-            let username = std::env::var("VALAYAM_REGISTRY_USER").ok();
-            let password = std::env::var("VALAYAM_REGISTRY_PASS").ok();
+            let config = crate::config::CoreConfig::from_env();
+            let username = config.valayam_registry_user;
+            let password = config.valayam_registry_pass;
 
             let oci_client = super::oci_client::OciClient::new(
                 registry,

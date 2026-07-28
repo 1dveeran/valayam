@@ -1742,6 +1742,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
 name = "dtoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4229,6 +4235,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "protobuf",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "prost"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4326,6 +4347,12 @@ checksum = "9091c90b0a32608e984ff2fa4091273cbdd755d54935c51d520887f4a1dbd5b0"
 dependencies = [
  "prost 0.12.6",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "psm"
@@ -4692,6 +4719,15 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "reputation-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
 
 [[package]]
 name = "reqwest"
@@ -6436,6 +6472,7 @@ dependencies = [
  "clap",
  "colored",
  "dirs 5.0.1",
+ "dotenvy",
  "ed25519-dalek",
  "futures",
  "genpdf",
@@ -6600,6 +6637,7 @@ dependencies = [
  "lazy_static",
  "notify",
  "opentelemetry",
+ "prometheus",
  "prost 0.12.6",
  "rand 0.8.7",
  "rand_core 0.6.4",
@@ -6610,6 +6648,7 @@ dependencies = [
  "serde_yaml",
  "tar",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tonic 0.11.0",
  "tracing",
@@ -6653,6 +6692,8 @@ dependencies = [
  "governor",
  "hickory-resolver",
  "http 1.4.2",
+ "lazy_static",
+ "prometheus",
  "rand 0.8.7",
  "regex",
  "reqwest",

@@ -8,9 +8,8 @@ impl FeedIngestor {
     /// Fetches the CISA KEV (Known Exploited Vulnerabilities) catalog.
     pub async fn fetch_cisa_kev() -> Result<HashSet<String>, String> {
         let client = Client::new();
-        // CISA KEV JSON endpoint
-        let url =
-            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
+        let config = crate::config::CoreConfig::from_env();
+        let url = config.cisa_kev_url;
 
         let response = client.get(url).send().await.map_err(|e| e.to_string())?;
 

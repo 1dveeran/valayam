@@ -425,8 +425,9 @@ pub async fn push_plugin(file: &str, repo: &str, tag: &str, signature: Option<&s
     
     let repo_name = &repo[registry.len()+1..];
     
-    let username = std::env::var("VALAYAM_REGISTRY_USER").ok();
-    let password = std::env::var("VALAYAM_REGISTRY_PASS").ok();
+    let config = crate::config::CliConfig::from_env();
+    let username = config.valayam_registry_user;
+    let password = config.valayam_registry_pass;
     
     println!("Pushing '{}' to registry '{}', repo '{}', tag '{}'", file, registry, repo_name, tag);
     

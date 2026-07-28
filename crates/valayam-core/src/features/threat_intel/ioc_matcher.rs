@@ -1,5 +1,4 @@
 use dashmap::DashSet;
-use std::sync::Arc;
 
 /// Matches extracted indicators against known threat feeds concurrently.
 pub struct IocMatcher {

@@ -576,7 +576,8 @@ pub async fn sync_vulndb(cdn: &str, output: &str) -> anyhow::Result<()> {
     println!("{} [Simulated] Fetched DB from {}", "[+]".green().bold(), db_url);
     println!("{} [Simulated] Fetched Signature from {}", "[+]".green().bold(), sig_url);
     
-    let public_key_hex = std::env::var("VALAYAM_PUBLIC_KEY").unwrap_or_else(|_| "0000000000000000000000000000000000000000000000000000000000000000".to_string());
+    let config = crate::config::CliConfig::from_env();
+    let public_key_hex = config.valayam_public_key;
     
     println!("{} Verifying Ed25519 signature against public key...", "[*]".blue().bold());
     if public_key_hex == "0000000000000000000000000000000000000000000000000000000000000000" {

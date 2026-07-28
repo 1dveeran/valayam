@@ -1,9 +1,11 @@
 mod cli;
 mod orchestrator;
+pub mod config;
 pub mod notifications;
 pub mod reporting;
 pub mod state;
 pub mod plugin_cli;
+mod tracing_init;
 
 use clap::Parser;
 use colored::*;
@@ -11,7 +13,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use walkdir::WalkDir;
-use opentelemetry_otlp::WithExportConfig;
 
 use valayam_engine::rate_limiter::RateLimiter;
 // NucleiExecutor moved to Wasm
@@ -55,72 +56,25 @@ fn print_scan_config(target: &str, template_count: usize, engine: &str, concurre
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
+    let config = config::CliConfig::from_env();
     print_banner();
     
-    // --- Enterprise Logging Setup ---
-    // Console (stderr): shows ERROR+ only by default — never clutters scan output.
-    // File log:         always DEBUG-level structured JSON for diagnostics/SIEM.
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
-
-    // 1. Determine console log level (env var takes priority over flag)
-    let console_level_str = std::env::var("VALAYAM_LOG")
-        .unwrap_or_else(|_| {
-            // If user explicitly set --log-level to something other than the default "info",
-            // respect it. Otherwise default to error to keep console clean.
+    // --- Telemetry setup (console + OTLP + optional file) ---
+    let console_level_str = config.valayam_log.clone()
+        .unwrap_or_else(|| {
             if args.log_level.eq_ignore_ascii_case("info") {
                 "error".to_string()
             } else {
                 args.log_level.clone()
             }
         });
-    let console_level = console_level_str
-        .parse::<tracing::Level>()
-        .unwrap_or(tracing::Level::ERROR);
-    let console_filter = tracing_subscriber::filter::LevelFilter::from_level(console_level);
-
-    // 2. Console layer: human-readable, stderr, ERROR+ only by default
-    let console_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr)
-        .with_target(false)
-        .with_filter(console_filter);
-
-    // OpenTelemetry pipeline setup
-    let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:4317".to_string());
-    
-    let _tracer = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(
-            opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_endpoint(otlp_endpoint)
-        )
-        .install_batch(opentelemetry_sdk::runtime::Tokio)
-        .expect("Failed to initialize OTLP pipeline");
-
-    // 3. File layer: always DEBUG, structured JSON — independent of console level
-    if let Some(log_path) = &args.log_file {
-        let file = std::fs::File::create(log_path).expect("Failed to create log file");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file);
-
-        // File always captures DEBUG+ for full diagnostics
-        let file_filter = tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::DEBUG);
-        let file_layer = tracing_subscriber::fmt::layer()
-            .json()
-            .with_writer(non_blocking)
-            .with_filter(file_filter);
-
-        tracing_subscriber::registry()
-            .with(console_layer)
-            .with(file_layer)
-            .init();
-
-        std::mem::forget(_guard);
-    } else {
-        tracing_subscriber::registry()
-            .with(console_layer)
-            .init();
-    }
+    let otlp_endpoint = config.otel_exporter_otlp_endpoint.clone()
+        .unwrap_or_else(|| "http://localhost:4317".to_string());
+    let _telemetry = tracing_init::init_telemetry(
+        &console_level_str,
+        &otlp_endpoint,
+        args.log_file.as_deref().map(Path::new),
+    );
 
     // Extract template path, defaulting to a generated native demo template if neither flag is provided
     let default_template = "./templates_repo/demo-template.yaml".to_string();
@@ -424,6 +378,7 @@ network:
         cancel_token,
     ).await?;
 
-    opentelemetry::global::shutdown_tracer_provider();
+    // TelemetryGuard is dropped here → flushes + shuts down OTLP tracer provider
+    drop(_telemetry);
     Ok(())
 }

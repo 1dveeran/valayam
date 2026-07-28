@@ -20,3 +20,5 @@ tracing = "0.1"
 regex = { workspace = true }
 tokio-rustls = { workspace = true }
 x509-parser = { workspace = true }
+prometheus = { workspace = true }
+lazy_static = "1"
