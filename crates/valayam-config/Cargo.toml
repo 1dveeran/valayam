@@ -1,0 +1,11 @@
+[package]
+name = "valayam-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+tracing = "0.1"

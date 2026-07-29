@@ -171,8 +171,6 @@ pub struct VulnerabilityTemplate {
 pub use crate::template_info::TemplateInfo;
 pub use crate::template_info::TemplateMetadata;
 
-use crate::templates::section::TemplateSection;
-
 impl TemplateMetadata for VulnerabilityTemplate {
     fn template_name(&self) -> &str { &self.info.name }
     fn template_severity(&self) -> &str { &self.info.severity }

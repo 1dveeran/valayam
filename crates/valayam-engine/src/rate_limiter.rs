@@ -123,6 +123,13 @@ impl RateLimiter {
         // Acquire from the base limiter
         let limiter = self.limiter.read().await.clone();
         limiter.until_ready().await;
+
+        // Update prometheus metrics after each acquire
+        let stats = self.stats().await;
+        crate::metrics::update_rate_limiter_metrics(
+            1.0, // approximate — governor doesn't expose exact permit count
+            stats.backoff_multiplier as f64,
+        );
     }
 
     /// Records a 429 Too Many Requests response to trigger backoff.

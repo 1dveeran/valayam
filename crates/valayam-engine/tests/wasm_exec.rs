@@ -2,6 +2,7 @@ use extism::{Plugin, Manifest, Wasm};
 use std::path::PathBuf;
 
 #[test]
+#[ignore = "requires pre-built WASM plugins at ../../plugins/"]
 fn test_cors_audit_plugin_raw_extism() {
     let wasm_path = PathBuf::from("../../plugins/cors_audit.wasm");
     let wasm = Wasm::file(&wasm_path);

@@ -10,7 +10,7 @@ sarif = []
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 chrono = { workspace = true }
-uuid = { version = "1.24.0", features = ["v4"] }
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
 serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json", "blocking"] }

@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+pub mod audit;
 pub mod core;
 pub mod features;
 pub use valayam_network::network;

@@ -41,6 +41,7 @@ requests:
 /// Pre-populated FindingOwned for reporter tests.
 pub fn sample_finding() -> FindingOwned {
     FindingOwned {
+            scan_id: uuid::Uuid::default(),
         template_id: "report-001".into(),
         template_name: "Reporter Test".into(),
         severity: "critical".into(),

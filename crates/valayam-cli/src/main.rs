@@ -4,19 +4,16 @@ pub mod notifications;
 pub mod reporting;
 pub mod state;
 pub mod plugin_cli;
+mod tracing_init;
+mod setup;
 
 use clap::Parser;
 use colored::*;
-use std::fs;
-use std::path::Path;
-use std::sync::Arc;
-use walkdir::WalkDir;
-use opentelemetry_otlp::WithExportConfig;
+use tokio_util::sync::CancellationToken;
 
+use setup::*;
+use std::sync::Arc;
 use valayam_engine::rate_limiter::RateLimiter;
-// NucleiExecutor moved to Wasm
-use valayam_core::network::http::StealthHttpClient;
-use valayam_core::stealth::proxy::ProxyRotator;
 
 /// Prints the branded Valayam ASCII banner to stdout.
 fn print_banner() {
@@ -35,336 +32,77 @@ fn print_banner() {
     );
 }
 
-/// Prints a boxed scan configuration summary.
-fn print_scan_config(target: &str, template_count: usize, engine: &str, concurrency: usize, rate_limit: Option<u32>, output: Option<&str>) {
-    let bar = "─".repeat(54);
-    println!("  {}", format!("┌─ Scan Configuration {}┐", "─".repeat(32)).bright_black());
-    println!("  {}  {}     {}", "│".bright_black(), "Target:".bright_black(), target.cyan().bold());
-    println!("  {}  {}  {} {} {}", "│".bright_black(), "Templates:".bright_black(), format!("{}", template_count).white().bold(), "loaded".bright_black(), format!("({})", engine).bright_black());
-    let rate_str = rate_limit.map_or("unlimited".to_string(), |r| format!("{} req/s", r));
-    println!("  {}  {}       {} {} {} {}", "│".bright_black(), "Tuning:".bright_black(), "concurrency".bright_black(), format!("{}", concurrency).white(), "│ rate limit".bright_black(), rate_str.white());
-    if let Some(out) = output {
-        println!("  {}  {}     {} {}", "│".bright_black(), "Output:".bright_black(), "console".white(), format!("+ {}", out).bright_black());
-    } else {
-        println!("  {}  {}     {}", "│".bright_black(), "Output:".bright_black(), "console".white());
-    }
-    println!("  {}", format!("└{}┘", bar).bright_black());
-    println!();
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
     print_banner();
-    
-    // --- Enterprise Logging Setup ---
-    // Console (stderr): shows ERROR+ only by default — never clutters scan output.
-    // File log:         always DEBUG-level structured JSON for diagnostics/SIEM.
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-    // 1. Determine console log level (env var takes priority over flag)
-    let console_level_str = std::env::var("VALAYAM_LOG")
-        .unwrap_or_else(|_| {
-            // If user explicitly set --log-level to something other than the default "info",
-            // respect it. Otherwise default to error to keep console clean.
-            if args.log_level.eq_ignore_ascii_case("info") {
-                "error".to_string()
-            } else {
-                args.log_level.clone()
-            }
-        });
-    let console_level = console_level_str
-        .parse::<tracing::Level>()
-        .unwrap_or(tracing::Level::ERROR);
-    let console_filter = tracing_subscriber::filter::LevelFilter::from_level(console_level);
+    // ── Enterprise Logging Setup (extracted to tracing_init) ──────────────
+    let _guard = {
+        use crate::tracing_init::{init_tracing, resolve_console_level};
+        init_tracing(tracing_init::TracingConfig {
+            console_level: resolve_console_level(&args.log_level),
+            log_file: args.log_file.clone(),
+            otlp_endpoint: std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+                .unwrap_or_else(|_| "http://localhost:4317".to_string()),
+        })
+    };
 
-    // 2. Console layer: human-readable, stderr, ERROR+ only by default
-    let console_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr)
-        .with_target(false)
-        .with_filter(console_filter);
-
-    // OpenTelemetry pipeline setup
-    let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:4317".to_string());
-    
-    let _tracer = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(
-            opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_endpoint(otlp_endpoint)
-        )
-        .install_batch(opentelemetry_sdk::runtime::Tokio)
-        .expect("Failed to initialize OTLP pipeline");
-
-    // 3. File layer: always DEBUG, structured JSON — independent of console level
-    if let Some(log_path) = &args.log_file {
-        let file = std::fs::File::create(log_path).expect("Failed to create log file");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file);
-
-        // File always captures DEBUG+ for full diagnostics
-        let file_filter = tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::DEBUG);
-        let file_layer = tracing_subscriber::fmt::layer()
-            .json()
-            .with_writer(non_blocking)
-            .with_filter(file_filter);
-
-        tracing_subscriber::registry()
-            .with(console_layer)
-            .with(file_layer)
-            .init();
-
-        std::mem::forget(_guard);
-    } else {
-        tracing_subscriber::registry()
-            .with(console_layer)
-            .init();
+    // ── Plugin subcommands ────────────────────────────────────────────────
+    if let Some(cli::Commands::Plugin { action }) = &args.command {
+        return handle_plugin_command(action).await;
     }
-
-    // Extract template path, defaulting to a generated native demo template if neither flag is provided
-    let default_template = "./templates_repo/demo-template.yaml".to_string();
-    
-    let (template_path, is_nuclei) = if let Some(cli::Commands::Plugin { action }) = &args.command {
-        match action {
-            cli::PluginCommands::Package { dir, output, sign } => {
-                if let Err(e) = crate::plugin_cli::package_plugin(dir, output.as_deref(), sign.as_deref()) {
-                    tracing::error!("Failed to package plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Init { name, lang, runtime } => {
-                if let Err(e) = crate::plugin_cli::init_plugin(name, lang, runtime) {
-                    tracing::error!("Failed to init plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::GenerateKey { output } => {
-                if let Err(e) = crate::plugin_cli::generate_key(output) {
-                    tracing::error!("Failed to generate plugin key: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Install { name, url, pubkey } => {
-                if let Err(e) = crate::plugin_cli::install_plugin(name, url, pubkey.as_deref()).await {
-                    tracing::error!("Failed to install plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Push { file, repo, tag, signature } => {
-                if let Err(e) = crate::plugin_cli::push_plugin(file, repo, tag, signature.as_deref()).await {
-                    tracing::error!("Failed to push plugin to OCI registry: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Uninstall { name } => {
-                if let Err(e) = crate::plugin_cli::uninstall_plugin(name) {
-                    tracing::error!("Failed to uninstall plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::List => {
-                if let Err(e) = crate::plugin_cli::list_plugins() {
-                    tracing::error!("Failed to list plugins: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-        }
-    } else if let Some(cli::Commands::SyncVulndb { cdn, output }) = &args.command {
-        if let Err(e) = crate::orchestrator::sync_vulndb(cdn, output).await {
+    if let Some(cli::Commands::SyncVulndb { cdn, output }) = &args.command {
+        return orchestrator::sync_vulndb(cdn, output).await.map_err(|e| {
             tracing::error!("Failed to sync vulnerability database: {}", e);
-            std::process::exit(1);
-        }
-        return Ok(());
-    } else if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
-        use valayam_engine::rpc::scanner_client::ScannerClient;
-        use valayam_engine::rpc::ControlRequest;
-        
-        let url = format!("http://127.0.0.1:{}", port);
-        let mut client = match ScannerClient::connect(url.clone()).await {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!("Failed to connect to control plane at {}: {}", url, e);
-                std::process::exit(1);
-            }
-        };
-
-        let req = tonic::Request::new(ControlRequest {
-            scan_id: scan_id.clone().unwrap_or_default(),
+            e
         });
-
-        match action.as_str() {
-            "pause" => {
-                match client.pause_scan(req).await {
-                    Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
-                    Err(e) => tracing::error!("Failed to pause scan: {}", e),
-                }
-            }
-            "resume" => {
-                match client.resume_scan(req).await {
-                    Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
-                    Err(e) => tracing::error!("Failed to resume scan: {}", e),
-                }
-            }
-            "cancel" | "stop" => {
-                match client.cancel_scan(req).await {
-                    Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
-                    Err(e) => tracing::error!("Failed to cancel scan: {}", e),
-                }
-            }
-            _ => tracing::error!("Unknown control action '{}'. Valid actions: pause, resume, cancel", action),
-        }
-        return Ok(());
-    } else if let Some(t) = &args.template {
-        (t.as_str(), false)
-    } else if let Some(n) = &args.nuclei_template {
-        (n.as_str(), true)
-    } else {
-        println!("{} No template flag provided. Defaulting to Native engine with demo template (-t {}).", "[!]".yellow().bold(), default_template);
-        (default_template.as_str(), false)
-    };
-
-    // --- Developer QoL: Auto-generate a demo template if it doesn't exist ---
-    if !is_nuclei && !Path::new(template_path).exists() {
-        println!(
-            "{} Native template not found at '{}'. Generating demo template...",
-            "[!]".yellow().bold(),
-            template_path
-        );
-
-        if let Some(parent_dir) = Path::new(template_path).parent() {
-            fs::create_dir_all(parent_dir)?;
-        }
-
-        let demo_yaml = r#"
-id: basic-info-disclosure
-info:
-  name: "Basic Information Disclosure / SSRF Test"
-  severity: "Medium"
-  description: "Detects if the target reflects sensitive HTTP headers or payloads."
-requests:
-  - method: "GET"
-    path: "/get?test_param=valayam_engine"
-    headers:
-      X-Scanner-Test: "true"
-    matchers:
-      - type: "regex"
-        part: "body"
-        regex:
-          - "valayam_engine"
-      - type: "status"
-        part: "status"
-        status:
-          - 200
-network:
-  - host: "{{Hostname}}"
-    ports:
-      - "80"
-      - "443"
-      - "8080"
-"#;
-        fs::write(template_path, demo_yaml.trim())?;
-        println!("{} Demo template created successfully.\n", "[+]".green().bold());
+    }
+    if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
+        return handle_control_command(action, scan_id, port).await;
     }
 
+    // ── Template path resolution ──────────────────────────────────────────
+    let (template_path, is_nuclei) = resolve_template(&args);
+    ensure_demo_template(&template_path);
+
+    // ── Scan state channels ────────────────────────────────────────────────
     let (state_tx, state_rx) = tokio::sync::watch::channel(valayam_engine::executor::ScanState::Running);
-    let cancel_token = tokio_util::sync::CancellationToken::new();
-    let state_tx_clone = state_tx.clone();
-    let cancel_token_clone = cancel_token.clone();
+    let cancel_token = CancellationToken::new();
 
-    // Start Telemetry & Control Server in background
-    tokio::spawn(async move {
-        // If args.control_port is set, we could use that, otherwise default to 50051.
-        let port = args.control_port.unwrap_or(50051);
-        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-        if let Err(e) = valayam_engine::telemetry_server::start_telemetry_server(addr, Some(state_tx_clone), Some(cancel_token_clone)).await {
-            tracing::error!("Telemetry/Control server failed: {}", e);
-        }
-    });
+    // ── TLS config + Telemetry server ──────────────────────────────────────
+    let tls_config = load_tls_config(args.tls_cert.as_deref(), args.tls_key.as_deref());
+    spawn_telemetry_server(args.control_port, tls_config.clone(), state_tx.clone(), cancel_token.clone());
 
-    // 1. Initialize Stealth Core
-    let proxy_rotator = if let Some(path) = &args.proxy_file {
-        match ProxyRotator::load_from_file(path) {
-            Ok(rotator) => {
-                println!("{} Loaded {} proxies from {}", "[+]".green().bold(), rotator.len(), path);
-                Some(rotator)
-            }
-            Err(e) => {
-                eprintln!("{} Failed to load proxies: {}", "[✗]".red().bold(), e);
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    let http_client = Arc::new(StealthHttpClient::new(
-        proxy_rotator.is_some(),
-        args.random_agent,
-        None,
-        true,
-    )?);
+    // ── HTTP client + Proxy ────────────────────────────────────────────────
+    let proxy_rotator = init_proxy_rotator(args.proxy_file.as_deref());
+    let http_client = init_http_client(&proxy_rotator, args.random_agent)?;
 
     if args.waf_detect {
         println!("  - WAF detection moved to Wasm plugin");
     }
-
     if let Some(port) = args.mitm_proxy {
         valayam_core::features::ui_proxy::mitm::start_proxy(port, Arc::clone(&http_client)).await;
         return Ok(());
     }
 
-    // Initialize rate limiter if configured
+    // ── Rate limiter ───────────────────────────────────────────────────────
     let rate_limiter = args.rate_limit.map(|rps| {
         println!("{} Rate limiting enabled: {} requests/second", "[+]".green().bold(), rps);
         Arc::new(RateLimiter::new_simple(rps))
     });
 
-    // 1.5 Initialize gRPC Client if requested
-    let mut grpc_client = None;
-    if let Some(ref worker_url) = args.worker {
-        use valayam_core::rpc::scanner_client::ScannerClient;
-        match ScannerClient::connect(worker_url.clone()).await {
-            Ok(client) => {
-                println!("{} Connected to Valayam worker node at {}", "[+]".green().bold(), worker_url);
-                grpc_client = Some(client);
-            }
-            Err(e) => {
-                eprintln!("{} Failed to connect to Valayam worker node: {}", "[✗]".red().bold(), e);
-                return Ok(());
-            }
-        }
-    }
+    // ── gRPC worker client ─────────────────────────────────────────────────
+    let grpc_client = connect_worker(args.worker.as_deref()).await;
 
-    // 2. Discover Templates
-    let mut template_files = Vec::new();
-    let p = Path::new(template_path);
-    if p.is_dir() {
-        for entry in WalkDir::new(p).into_iter().filter_map(|e| e.ok()) {
-            if entry.path().is_file() {
-                if let Some(ext) = entry.path().extension() {
-                    if ext == "yaml" || ext == "yml" {
-                        template_files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    } else if p.is_file() {
-        template_files.push(p.to_path_buf());
-    }
-
+    // ── Template discovery ─────────────────────────────────────────────────
+    let template_files = discover_templates(&template_path);
     if template_files.is_empty() {
         println!("{} No valid YAML templates found in {}", "[!]".yellow().bold(), template_path);
         return Ok(());
     }
 
+    // ── Print scan config ──────────────────────────────────────────────────
     let engine_name = if is_nuclei { "Nuclei" } else { "Native" };
     print_scan_config(
         &args.target,
@@ -375,43 +113,20 @@ network:
         args.output.as_deref(),
     );
 
-    // 2.5 Run Web Crawler if requested to build target URLs list
+    // ── Crawler ────────────────────────────────────────────────────────────
     let mut targets = vec![args.target.clone()];
     if args.crawl {
-        println!("{} Starting Web Crawler discovery on {}...", "[*]".blue().bold(), args.target);
-        
-        let crawl_hdrs = args.crawl_headers.as_ref().map(|s| {
-            let mut map = std::collections::HashMap::new();
-            for kv in s.split(',') {
-                let mut parts = kv.splitn(2, ':');
-                if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
-                    map.insert(k.trim().to_string(), v.trim().to_string());
-                }
-            }
-            map
-        });
-
-        use valayam_core::features::crawler::Crawler;
-        let crawler = Crawler::new(
-            Arc::clone(&http_client),
+        let discovered = run_crawler(
             &args.target,
+            http_client.clone(),
             args.crawl_depth,
             rate_limiter.clone(),
-            crawl_hdrs,
-        );
-        match crawler {
-            Ok(c) => {
-                let discovered = c.run().await;
-                println!("{} Crawler discovered {} page(s) on target domain.", "[+]".green().bold(), discovered.len());
-                if !discovered.is_empty() {
-                    targets = discovered.into_iter().collect();
-                }
-            }
-            Err(e) => {
-                eprintln!("{} Failed to initialize crawler: {}", "[✗]".red().bold(), e);
-            }
-        }
+            args.crawl_headers.as_deref(),
+        ).await;
+        targets = discovered;
     }
+
+    // ── Execute scan ───────────────────────────────────────────────────────
     orchestrator::run_scan(
         args,
         template_files,
@@ -424,6 +139,143 @@ network:
         cancel_token,
     ).await?;
 
+    // ── Graceful shutdown ──────────────────────────────────────────────────
+    drop(_guard);
     opentelemetry::global::shutdown_tracer_provider();
     Ok(())
+}
+
+/// Spawn the telemetry + control gRPC server.
+fn spawn_telemetry_server(
+    control_port: Option<u16>,
+    tls_config: Option<valayam_engine::telemetry_server::TlsConfig>,
+    state_tx: tokio::sync::watch::Sender<valayam_engine::executor::ScanState>,
+    cancel_token: CancellationToken,
+) {
+    tokio::spawn(async move {
+        let port = control_port.unwrap_or(50051);
+        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
+        if let Some(tls) = tls_config {
+            if let Err(e) = valayam_engine::telemetry_server::start_telemetry_server_tls(
+                addr, Some(state_tx), Some(cancel_token), Some(tls),
+            ).await {
+                tracing::error!("Telemetry/Control server (TLS) failed: {}", e);
+            }
+        } else {
+            if let Err(e) = valayam_engine::telemetry_server::start_telemetry_server(
+                addr, Some(state_tx), Some(cancel_token),
+            ).await {
+                tracing::error!("Telemetry/Control server failed: {}", e);
+            }
+        }
+    });
+}
+
+/// Handle plugin subcommands (package, init, generate-key, install, push, uninstall, list).
+async fn handle_plugin_command(action: &cli::PluginCommands) -> anyhow::Result<()> {
+    match action {
+        cli::PluginCommands::Package { dir, output, sign } => {
+            if let Err(e) = crate::plugin_cli::package_plugin(dir, output.as_deref(), sign.as_deref()) {
+                tracing::error!("Failed to package plugin: {}", e);
+                std::process::exit(1);
+            }
+        }
+        cli::PluginCommands::Init { name, lang, runtime } => {
+            if let Err(e) = crate::plugin_cli::init_plugin(name, lang, runtime) {
+                tracing::error!("Failed to init plugin: {}", e);
+                std::process::exit(1);
+            }
+        }
+        cli::PluginCommands::GenerateKey { output } => {
+            if let Err(e) = crate::plugin_cli::generate_key(output) {
+                tracing::error!("Failed to generate plugin key: {}", e);
+                std::process::exit(1);
+            }
+        }
+        cli::PluginCommands::Install { name, url, pubkey } => {
+            if let Err(e) = crate::plugin_cli::install_plugin(name, url, pubkey.as_deref()).await {
+                tracing::error!("Failed to install plugin: {}", e);
+                std::process::exit(1);
+            }
+        }
+        cli::PluginCommands::Push { file, repo, tag, signature } => {
+            if let Err(e) = crate::plugin_cli::push_plugin(file, repo, tag, signature.as_deref()).await {
+                tracing::error!("Failed to push plugin to OCI registry: {}", e);
+                std::process::exit(1);
+            }
+        }
+        cli::PluginCommands::Uninstall { name } => {
+            if let Err(e) = crate::plugin_cli::uninstall_plugin(name) {
+                tracing::error!("Failed to uninstall plugin: {}", e);
+                std::process::exit(1);
+            }
+        }
+        cli::PluginCommands::List => {
+            if let Err(e) = crate::plugin_cli::list_plugins() {
+                tracing::error!("Failed to list plugins: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Handle the control subcommand (pause/resume/cancel).
+async fn handle_control_command(action: &str, scan_id: &Option<String>, port: &u16) -> anyhow::Result<()> {
+    use valayam_engine::rpc::scanner_client::ScannerClient;
+    use valayam_engine::rpc::ControlRequest;
+
+    let url = format!("http://127.0.0.1:{}", port);
+    let mut client = match ScannerClient::connect(url.clone()).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Failed to connect to control plane at {}: {}", url, e);
+            std::process::exit(1);
+        }
+    };
+
+    let req = tonic::Request::new(ControlRequest {
+        scan_id: scan_id.clone().unwrap_or_default(),
+    });
+
+    match action {
+        "pause" => {
+            match client.pause_scan(req).await {
+                Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+                Err(e) => tracing::error!("Failed to pause scan: {}", e),
+            }
+        }
+        "resume" => {
+            match client.resume_scan(req).await {
+                Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+                Err(e) => tracing::error!("Failed to resume scan: {}", e),
+            }
+        }
+        "cancel" | "stop" => {
+            match client.cancel_scan(req).await {
+                Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+                Err(e) => tracing::error!("Failed to cancel scan: {}", e),
+            }
+        }
+        _ => tracing::error!("Unknown control action '{}'. Valid actions: pause, resume, cancel", action),
+    }
+    Ok(())
+}
+
+/// Connect to a remote gRPC worker node.
+async fn connect_worker(worker_url: Option<&str>) -> Option<valayam_core::rpc::scanner_client::ScannerClient<tonic::transport::Channel>> {
+    use valayam_core::rpc::scanner_client::ScannerClient;
+    match worker_url {
+        Some(url) => match ScannerClient::connect(url.to_string()).await {
+            Ok(client) => {
+                println!("{} Connected to Valayam worker node at {}", "[+]".green().bold(), url);
+                Some(client)
+            }
+            Err(e) => {
+                eprintln!("{} Failed to connect to Valayam worker node: {}", "[✗]".red().bold(), e);
+                None
+            }
+        },
+        None => None,
+    }
 }

@@ -26,6 +26,9 @@ jobs:
         against: https://github.com/${{ github.repository }}.git#branch=main,ref=HEAD~1,subdir=crates/valayam-proto/proto
 
   build_and_test:
+    strategy:
+      matrix:
+        rust: [stable, beta]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -35,27 +38,43 @@ jobs:
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        
+
     - name: Cache cargo index
       uses: actions/cache@v3
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        
+
     - name: Cache cargo build
       uses: actions/cache@v3
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Install WASM Target
-      run: rustup target add wasm32-unknown-unknown
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: clippy, rustfmt
+        targets: wasm32-unknown-unknown
 
     - name: Format Check
-      run: cargo fmt -- --check
+      run: cargo fmt --all -- --check
 
     - name: Clippy (Linter)
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Build WASM plugins
+      run: |
+        for plugin in plugins-wasm/*/; do
+          if [ -f "${plugin}Cargo.toml" ]; then
+            echo "Building WASM plugin: $(basename $plugin)"
+            cargo build --manifest-path "${plugin}Cargo.toml" --target wasm32-unknown-unknown --release
+          fi
+        done
+
+    - name: Build Project
+      run: cargo build --verbose
 
     - name: Run Tests
       run: cargo test --verbose

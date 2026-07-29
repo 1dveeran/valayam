@@ -8,31 +8,12 @@ members = [
     "crates/valayam-models",
     "crates/valayam-core-net",
     "crates/valayam-network",
-    "crates/valayam-plugin-sdk",
     "crates/valayam-proto",
     "crates/valayam-ebpf-agent",
-    "plugins-wasm/cors-audit",
-    "plugins-wasm/pii-leak-audit",
-    "plugins-wasm/iac-audit",
-    "plugins-wasm/header-scorecard",
-    "plugins-wasm/browser-audit",
-    "plugins-wasm/csp-audit",
-    "plugins-wasm/dom-redirect-audit",
-    "plugins-wasm/cloud-audit",
-    "plugins-wasm/code-audit",
-    "plugins-wasm/recon-audit",
-    "plugins-wasm/api-audit",
-    "plugins-wasm/threat-audit",
-    "plugins-wasm/specialized-audit",
-    "plugins-wasm/dependency-audit",
-    "plugins-wasm/graphql-audit",
-    "plugins-wasm/iot-audit",
-    "plugins-wasm/mobile-audit",
-    "plugins-wasm/oauth-audit",
-    "plugins-wasm/test-runner"
+    "crates/valayam-config",
 ]
 exclude = [
-    "crates/valayam-ebpf-programs"
+    "crates/valayam-ebpf-programs",
 ]
 resolver = "2"
 
@@ -74,7 +55,7 @@ tokio-rustls = "0.26"
 rand = "0.8"
 hmac = "0.12"
 tempfile = "3.10"
-tonic = "0.11"
+tonic = { version = "0.11", features = ["tls", "tls-roots"] }
 prost = "0.12"
 tonic-build = "0.11"
 scraper = "0.19"
@@ -88,6 +69,8 @@ jsonwebtoken = "9.3"
 rumqttc = "0.24"
 toml = "0.8"
 hex = "0.4"
+once_cell = "1.19"
+prometheus = { version = "0.13", features = ["process"] }
 
 [profile.release]
 strip = true      # Automatically strip debug symbols from the binary

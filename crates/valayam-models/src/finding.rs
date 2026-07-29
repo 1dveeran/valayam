@@ -6,6 +6,7 @@ use crate::result::ScanResult;
 /// A vulnerability finding ready for channel transport and serialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FindingOwned {
+    pub scan_id: uuid::Uuid,
     pub template_id: String,
     pub template_name: String,
     pub severity: String,
@@ -65,6 +66,7 @@ impl FindingOwned {
         }
 
         Self {
+            scan_id: uuid::Uuid::default(),
             template_id,
             template_name,
             severity,
@@ -87,6 +89,7 @@ impl FindingOwned {
         matched_at: impl Into<String>,
     ) -> Self {
         Self {
+            scan_id: uuid::Uuid::default(),
             template_id: template_id.into(),
             template_name: template_meta.template_name().to_string(),
             severity: template_meta.template_severity().to_string(),

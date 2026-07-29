@@ -57,7 +57,14 @@ impl VariableScope {
 // ─── ScanContext ────────────────────────────────────────────────────────
 
 /// Typed execution context passed to every plugin.
+///
+/// All fields are behind `Arc`, `RwLock`, or owned `String` so the context
+/// is safe to share across concurrent plugin executions and across `catch_unwind`
+/// boundaries via `SafePluginFuture`.
 pub struct ScanContext {
+    /// Unique scan session identifier, propagated through the entire MPSC pipeline
+    /// for audit trail and provenance tracking.
+    pub scan_id: uuid::Uuid,
     pub target: String,
     pub target_host: String,
     pub template: Arc<valayam_models::templates::schema::VulnerabilityTemplate>, // Passed via Arc, no cloning!
@@ -160,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_finding_owned_dedup_key() {
-        let f = FindingOwned {
+        let f = FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: "test-001".into(),
             template_name: "Test Finding".into(),
             severity: "high".into(),
@@ -177,19 +184,19 @@ mod tests {
 
     #[test]
     fn test_finding_owned_dedup_key_differentiates() {
-        let f1 = FindingOwned {
+        let f1 = FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: "test-001".into(),
             target: "https://example.com".into(),
             matched_at: "/login".into(),
             ..default_finding()
         };
-        let f2 = FindingOwned {
+        let f2 = FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: "test-002".into(),
             target: "https://example.com".into(),
             matched_at: "/login".into(),
             ..default_finding()
         };
-        let f3 = FindingOwned {
+        let f3 = FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: "test-001".into(),
             target: "https://other.com".into(),
             matched_at: "/login".into(),
@@ -201,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_finding_owned_into_scan_result() {
-        let f = FindingOwned {
+        let f = FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: "cve-2024-1234".into(),
             template_name: "SQL Injection Test".into(),
             severity: "critical".into(),
@@ -315,6 +322,7 @@ mod tests {
         })));
 
         let ctx = ScanContext {
+            scan_id: uuid::Uuid::default(),
             target: "https://example.com".into(),
             target_host: "example.com".into(),
             template: Arc::new(valayam_models::templates::schema::VulnerabilityTemplate::default()),
@@ -331,6 +339,7 @@ mod tests {
     async fn test_scan_context_set_variable() {
         let vars = Arc::new(RwLock::new(VariableScope::new(HashMap::new())));
         let ctx = ScanContext {
+            scan_id: uuid::Uuid::default(),
             target: "https://example.com".into(),
             target_host: "example.com".into(),
             template: Arc::new(valayam_models::templates::schema::VulnerabilityTemplate::default()),
@@ -348,6 +357,7 @@ mod tests {
     async fn test_scan_context_is_cancelled() {
         let token = CancellationToken::new();
         let ctx = ScanContext {
+            scan_id: uuid::Uuid::default(),
             target: "https://example.com".into(),
             target_host: "example.com".into(),
             template: Arc::new(valayam_models::templates::schema::VulnerabilityTemplate::default()),
@@ -364,6 +374,7 @@ mod tests {
     async fn test_scan_context_emit_finding() {
         let (tx, mut rx) = mpsc::channel(10);
         let ctx = ScanContext {
+            scan_id: uuid::Uuid::default(),
             target: "https://example.com".into(),
             target_host: "example.com".into(),
             template: Arc::new(valayam_models::templates::schema::VulnerabilityTemplate {
@@ -381,7 +392,7 @@ mod tests {
             cancellation: CancellationToken::new(),
         };
 
-        let finding = FindingOwned {
+        let finding = FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: "test-001".into(),
             template_name: "Test".into(),
             severity: "info".into(),
@@ -475,7 +486,7 @@ mod tests {
     // ── Helpers ────────────────────────────────────────────────────────────
 
     fn default_finding() -> FindingOwned {
-        FindingOwned {
+        FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: String::new(),
             template_name: String::new(),
             severity: String::new(),

@@ -35,8 +35,11 @@ regex = { workspace = true }
 futures = { workspace = true }
 tracing-opentelemetry = "0.22"
 opentelemetry = "0.21"
-uuid = { version = "1.24.0", features = ["v4"] }
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
 serde_yaml = { workspace = true }
 hickory-resolver.workspace = true
+prometheus = { workspace = true }
+tonic-reflection = "0.11"
+once_cell = { workspace = true }
 
 [build-dependencies]

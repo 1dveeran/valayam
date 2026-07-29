@@ -352,9 +352,9 @@ impl OobServer {
             }
         }
 
-        // Fallback: if the entire query name looks like a correlation ID
-        if domain_name.len() >= 8 && domain_name.len() <= 64 {
-            if domain_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        // Fallback: single-label name that looks like an opaque correlation ID
+        if !domain_name.contains('.') && domain_name.len() >= 8 && domain_name.len() <= 64 {
+            if domain_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
                 return Some(domain_name);
             }
         }
