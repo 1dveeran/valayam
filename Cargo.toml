@@ -8,7 +8,6 @@ members = [
     "crates/valayam-models",
     "crates/valayam-core-net",
     "crates/valayam-network",
-    "crates/valayam-plugin-sdk",
     "crates/valayam-proto",
     "crates/valayam-ebpf-agent",
     "plugins-wasm/cors-audit",
@@ -33,7 +32,7 @@ members = [
     "plugins-wasm/test-runner"
 ]
 exclude = [
-    "crates/valayam-ebpf-programs"
+    "crates/valayam-ebpf-programs",
 ]
 resolver = "2"
 
@@ -75,7 +74,7 @@ tokio-rustls = "0.26"
 rand = "0.8"
 hmac = "0.12"
 tempfile = "3.10"
-tonic = "0.11"
+tonic = { version = "0.11", features = ["tls", "tls-roots"] }
 prost = "0.12"
 tonic-build = "0.11"
 scraper = "0.19"

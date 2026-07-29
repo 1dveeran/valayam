@@ -30,6 +30,7 @@ pub fn scan_result_to_finding(res: ScanResult) -> FindingOwned {
         metadata.insert("::tags".to_string(), res.tags.join(","));
     }
     FindingOwned {
+        scan_id: uuid::Uuid::default(),
         template_id: res.template_id,
         template_name: res.template_name,
         severity: res.template_severity,
@@ -98,6 +99,7 @@ mod tests {
     fn test_finding_to_scan_result_preserves_solution() {
         // solution in FindingOwned.solution should take precedence over metadata
         let finding = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test".into(),
             template_name: "Test".into(),
             severity: "info".into(),
@@ -117,6 +119,7 @@ mod tests {
     #[test]
     fn test_finding_to_scan_result_cvss_from_metadata() {
         let finding = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test".into(),
             template_name: "Test".into(),
             severity: "high".into(),
@@ -135,6 +138,7 @@ mod tests {
     #[test]
     fn test_finding_to_scan_result_with_compliance() {
         let finding = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "compliance-only".into(),
             template_name: "Compliance".into(),
             severity: "medium".into(),
@@ -156,6 +160,7 @@ mod tests {
     #[test]
     fn test_finding_to_scan_result_tags_from_metadata() {
         let finding = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test".into(),
             template_name: "Test".into(),
             severity: "high".into(),

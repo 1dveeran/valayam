@@ -35,19 +35,19 @@
 | P2.8 | Add span instrumentation to all public async fns | ⬜ Pending | — | — | — | `#[tracing::instrument]` |
 | P2.8 | Add span instrumentation to all public async fns | ✅ Done | — | 2026-07-26 | 2026-07-26 | `#[tracing::instrument]` on registry entry points |
 | P2.9 | Add gRPC server reflection (`tonic-reflection`) | ⬜ Pending | — | — | — | Debugging / tooling |
-| P2.10 | Implement mTLS for gRPC control plane | ⬜ Pending | — | — | — | `--tls-cert`, `--tls-key` CLI flag |
-| P2.11 | WASM plugin signature validation at execution time | ⬜ Pending | — | — | — | `--require-signed-plugins` flag |
-| P2.12 | Create Grafana dashboard JSON template | ⬜ Pending | — | — | — | `dashboards/valayam.json` |
+| P2.10 | Implement mTLS for gRPC control plane | ✅ Done | — | 2026-07-26 | — | `--tls-cert`, `--tls-key` CLI flags |
+| P2.11 | WASM plugin signature validation at execution time | ✅ Done | — | 2026-07-26 | — | `--require-signed-plugins` flag |
+| P2.12 | Create Grafana dashboard JSON template | ✅ Done | — | 2026-07-26 | — | `dashboards/valayam.json` |
 
 ## Phase 3 — CI/CD (HIGH)
 
 | ID | Task | Status | Assignee | Started | Notes |
 |---|---|---|---|---|---|
-| P3.1 | GitHub Actions: `ci.yml` (build + test + lint + wasm build) | ⬜ Pending | — | — | — | Matrix: stable, beta |
-| P3.2 | GitHub Actions: `release.yml` (binary artifacts + docker push) | ⬜ Pending | — | — | — | Tags: |
-| P3.3 | GitHub Actions: `dependency-audit.yml` (cargo-audit, cargo-deny) | ⬜ Pending | — | — | — | Security scanning |
-| P3.4 | Multi-stage Dockerfile (musl static → scratch/alpine) | ⬜ Pending | — | — | — | Include WASM pre-builds |
-| P3.5 | Docker-compose for distributed deployment | ⬜ Pending | — | — | — | CLI + engine + worker nodes |
+| P3.1 | GitHub Actions: `ci.yml` (build + test + lint + wasm build) | ✅ Done | — | 2026-07-26 | — | Matrix: stable, beta |
+| P3.2 | GitHub Actions: `release.yml` (binary artifacts + docker push) | ✅ Done | — | 2026-07-26 | — | Multi-arch + docker push |
+| P3.3 | GitHub Actions: `dependency-audit.yml` (cargo-audit, cargo-deny) | ✅ Done | — | 2026-07-26 | — | Weekly + on Cargo.toml changes |
+| P3.4 | Multi-stage Dockerfile (musl static → scratch/alpine) | ✅ Done | — | 2026-07-26 | — | Including WASM pre-builds |
+| P3.5 | Docker-compose for distributed deployment | ✅ Done | — | 2026-07-26 | — | Prometheus + Grafana + OTEL + worker |
 | P3.6 | Create `crates/valayam-config/` crate with `ValayamConfig` struct | ⬜ Pending | — | — | — | Serde + schema validation |
 | P3.7 | Implement layered config: defaults < file < env < CLI | ⬜ Pending | — | — | — | Implement `config-rs` or roll own |
 | P3.8 | Add config validation pipeline (CI: validate config schema) | ⬜ Pending | — | — | — | `cargo test` validates sample configs |
@@ -56,23 +56,23 @@
 
 | ID | Task | Status | Assignee | Started | Notes |
 |---|---|---|---|---|---|
-| P4.1 | Create audit log crate/module (`crates/valayam-core/src/audit.rs`) | ⬜ Pending | — | — | — | JSONL scan events |
-| P4.2 | Implement HMAC hash chain for tamper-proof audit | ⬜ Pending | — | — | — | Per-session UUID key |
-| P4.3 | Add scan session UUID tracking through entire MPSC pipeline | ⬜ Pending | — | — | — | `ScanSessionId` in `ScanContext` |
-| P4.4 | Runtime plugin coverage validation | ⬜ Pending | — | — | — | Warn if template section has zero plugins |
-| P4.5 | Remove `MycustomscannerScanner` orphan | ⬜ Pending | — | — | — | Graph: isolated node |
-| P4.6 | Document `SafePluginFuture<F>` properly | ⬜ Pending | — | — | — | Add module-level docs |
-| P4.7 | Audit remaining 33 isolated graph nodes | ⬜ Pending | — | — | — | Remove or document each |
-| P4.8 | Create `grafana.json` dashboard template | ⬜ Pending | — | — | — | `dashboards/valayam.json` |
+| P4.1 | Create audit log crate/module (`crates/valayam-core/src/audit.rs`) | ✅ Done | — | 2026-07-26 | — | JSONL scan events |
+| P4.2 | Implement HMAC hash chain for tamper-proof audit | ✅ Done | — | 2026-07-26 | — | Per-session UUID key |
+| P4.3 | Add scan session UUID tracking through entire MPSC pipeline | ✅ Done | — | 2026-07-26 | — | `scan_id: Uuid` in `ScanContext` + `FindingOwned` |
+| P4.4 | Runtime plugin coverage validation | ✅ Done | — | 2026-07-26 | — | Warns if template sections have zero applicable plugins |
+| P4.5 | Remove `MycustomscannerScanner` orphan | ✅ Done | — | 2026-07-26 | — | `my-custom-scanner/` directory deleted |
+| P4.6 | Document `SafePluginFuture<F>` properly | ✅ Done | — | 2026-07-26 | — | Module-level docs in `unwind_safe.rs` |
+| P4.7 | Audit remaining 33 isolated graph nodes | ⬜ Pending | — | — | — | Needs graphify analysis |
+| P4.8 | Create `grafana.json` dashboard template | ✅ Done | — | 2026-07-26 | — | `dashboards/valayam.json` |
 
 ## Phase 5 — Refinement (LOW)
 
 | ID | Task | Status | Assignee | Start | Notes |
 |---|---|---|---|---|---|
-| P5.1 | Extract `main.rs:58-416` into `orchestrator.rs` + `setup.rs` | ⬜ Pending | — | — | — | main.rs should be < 80 lines |
+| P5.1 | Extract `main.rs:58-416` into `orchestrator.rs` + `setup.rs` | ⬜ Pending | — | — | — | main.rs still ~400 lines; orchestrator exists but setup code remains in main |
 | P5.2 | Merge single-file wasm plugins into proper crate layering | ⬜ Pending | — | — | — | `src/lib.rs` + `tests/` per plugin |
 | P5.3 | Write Architecture Decision Record (ADR) for each phase | ⬜ Pending | — | — | — | `docs/adr/0**-title.md` |
-| P5.4 | `--help` update: all new flags documented | ⬜ Pending | — | — | — | clap doc strings |
+| P5.4 | `--help` update: all new flags documented | ✅ Done | — | 2026-07-26 | — | clap doc strings on `--tls-cert`, `--tls-key`, `--require-signed-plugins` |
 
 ---
 

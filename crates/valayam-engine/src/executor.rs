@@ -100,6 +100,7 @@ mod tests {
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
         async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
             let _ = ctx.finding_tx.send(FindingOwned {
+            scan_id: uuid::Uuid::default(),
                 template_id: "mock-001".into(),
                 template_name: "Mock".into(),
                 severity: "info".into(),

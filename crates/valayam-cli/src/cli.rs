@@ -100,6 +100,15 @@ pub struct Args {
     #[arg(long, help = "Port to start the execution control API server on")]
     pub control_port: Option<u16>,
 
+    #[arg(long, help = "Path to TLS certificate file (PEM) for gRPC control plane encryption")]
+    pub tls_cert: Option<String>,
+
+    #[arg(long, help = "Path to TLS private key file (PEM) for gRPC control plane encryption")]
+    pub tls_key: Option<String>,
+
+    #[arg(long, help = "Enforce plugin signature verification — reject unsigned WASM/VPA plugins at load time")]
+    pub require_signed_plugins: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -297,6 +306,35 @@ mod tests {
             Some(_) => panic!("Unexpected command"),
             None => panic!("Expected a subcommand"),
         }
+    }
+
+    #[test]
+    fn test_tls_args() {
+        let args = Args::parse_from(&[
+            "valayam", "--tls-cert", "/etc/valayam/cert.pem",
+            "--tls-key", "/etc/valayam/key.pem",
+        ]);
+        assert_eq!(args.tls_cert, Some("/etc/valayam/cert.pem".into()));
+        assert_eq!(args.tls_key, Some("/etc/valayam/key.pem".into()));
+        assert!(!args.require_signed_plugins);
+    }
+
+    #[test]
+    fn test_require_signed_plugins() {
+        let args = Args::parse_from(&["valayam", "--require-signed-plugins"]);
+        assert!(args.require_signed_plugins);
+    }
+
+    #[test]
+    fn test_tls_with_require_signed() {
+        let args = Args::parse_from(&[
+            "valayam", "-u", "https://example.com",
+            "--tls-cert", "cert.pem", "--tls-key", "key.pem",
+            "--require-signed-plugins",
+        ]);
+        assert_eq!(args.tls_cert, Some("cert.pem".into()));
+        assert_eq!(args.tls_key, Some("key.pem".into()));
+        assert!(args.require_signed_plugins);
     }
 
     #[test]

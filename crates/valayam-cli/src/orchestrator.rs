@@ -169,6 +169,7 @@ fn print_summary(
     println!();
 }
 
+#[tracing::instrument(skip(http_client, rate_limiter, grpc_client, state_rx, cancel))]
 pub async fn run_scan(
     args: Args,
     template_files: Vec<PathBuf>,
@@ -237,7 +238,43 @@ pub async fn run_scan(
 
     // ── 3. Build PluginRegistry ──
     let registry = {
-        let reg = PluginRegistry::new();
+        // Resolve trusted public key for plugin signature verification
+        let pub_key: Option<[u8; 32]> = if args.require_signed_plugins {
+            let pk_hex = std::env::var("VALAYAM_PUBLIC_KEY")
+                .unwrap_or_default();
+            if pk_hex.is_empty() || pk_hex == "0000000000000000000000000000000000000000000000000000000000000000" {
+                eprintln!("{} --require-signed-plugins requires VALAYAM_PUBLIC_KEY env var set to a valid 32-byte hex key", "[✗]".red().bold());
+                std::process::exit(1);
+            }
+            let decoded = hex::decode(&pk_hex).expect("Invalid VALAYAM_PUBLIC_KEY hex");
+            if decoded.len() != 32 {
+                eprintln!("{} VALAYAM_PUBLIC_KEY must be 32 bytes (64 hex characters)", "[✗]".red().bold());
+                std::process::exit(1);
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&decoded);
+            Some(arr)
+        } else {
+            // Optional: still try to use a key if available in env (soft mode)
+            std::env::var("VALAYAM_PUBLIC_KEY").ok().and_then(|pk_hex| {
+                if pk_hex == "0000000000000000000000000000000000000000000000000000000000000000" {
+                    None
+                } else {
+                    hex::decode(&pk_hex).ok().and_then(|bytes| {
+                        if bytes.len() == 32 {
+                            let mut arr = [0u8; 32];
+                            arr.copy_from_slice(&bytes);
+                            Some(arr)
+                        } else { None }
+                    })
+                }
+            })
+        };
+        if pub_key.is_some() {
+            println!("{} Plugin signature verification enabled", "[+]".green().bold());
+        }
+
+        let reg = PluginRegistry::with_key(pub_key);
         // Core protocols
         reg.register(HttpScanPlugin::new(http_client.clone()));
     // Scripting and Fuzzer moved to Wasm
@@ -560,6 +597,7 @@ mod tests {
     }
 }
 
+#[tracing::instrument]
 pub async fn sync_vulndb(cdn: &str, output: &str) -> anyhow::Result<()> {
     use colored::*;
     println!("{} Syncing vulnerability database from {}...", "[*]".blue().bold(), cdn);

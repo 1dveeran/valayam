@@ -148,6 +148,7 @@ mod tests {
 
     fn sample_finding() -> FindingOwned {
         FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-001".into(),
             template_name: "Test Finding".into(),
             severity: "high".into(),
@@ -173,6 +174,7 @@ mod tests {
         let reporter = ConsoleReporter::default();
         let f1 = sample_finding();
         let f2 = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-002".into(),
             template_name: "Low Severity".into(),
             severity: "low".into(),

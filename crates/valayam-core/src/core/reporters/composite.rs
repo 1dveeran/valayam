@@ -56,6 +56,7 @@ mod tests {
 
     fn sample_finding() -> FindingOwned {
         FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "composite-001".into(),
             template_name: "Composite Test".into(),
             severity: "high".into(),

@@ -9,6 +9,7 @@ use valayam_engine::traits::FindingOwned;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
 #[tokio::test]
+#[ignore = "requires Go and Python toolchains installed"]
 async fn test_multilang_plugins() {
     // 1. Create a temporary directory for plugins
     let temp_dir = tempfile::tempdir().unwrap();

@@ -97,6 +97,7 @@ mod tests {
 
     fn sample_finding() -> FindingOwned {
         FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "json-001".into(),
             template_name: "JSON Test".into(),
             severity: "medium".into(),

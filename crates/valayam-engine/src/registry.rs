@@ -322,7 +322,22 @@ impl PluginRegistry {
             .cloned()
             .collect();
 
+        // P4.4: Runtime plugin coverage validation — warn if template has sections
+        // but no registered plugin can handle any of them.
+        let template_sections = template.sections();
         if applicable.is_empty() {
+            if !template_sections.is_empty() {
+                let section_names: Vec<&str> = template_sections
+                    .iter()
+                    .map(|s| s.section_name())
+                    .collect();
+                tracing::warn!(
+                    template_id = %template.id,
+                    target = %target,
+                    sections = ?section_names,
+                    "no registered plugins cover this template — scan will produce zero findings"
+                );
+            }
             return Vec::new();
         }
 
@@ -381,6 +396,7 @@ impl PluginRegistry {
                 let plugin = plugin_name_map.get(plugin_name).unwrap().clone();
 
                 let ctx = ScanContext {
+                    scan_id: template.id.parse::<uuid::Uuid>().unwrap_or_else(|_| uuid::Uuid::new_v4()),
                     target: target.to_string(),
                     target_host: target_host.clone(),
                     template: template.clone(),
@@ -538,6 +554,7 @@ async fn execute_plugin_isolated(
 
     // We need a fresh ScanContext per attempt since execute() consumes finding_tx by clone
     let make_ctx = || ScanContext {
+        scan_id: ctx.scan_id,
         target: ctx.target.clone(),
         target_host: ctx.target_host.clone(),
         template: ctx.template.clone(),
@@ -661,7 +678,7 @@ mod tests {
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
         async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
             for i in 0..3 {
-                let _ = ctx.finding_tx.send(FindingOwned {
+                let _ = ctx.finding_tx.send(FindingOwned { scan_id: uuid::Uuid::default(), 
                     template_id: "test".into(),
                     template_name: "test".into(),
                     severity: "medium".into(),
