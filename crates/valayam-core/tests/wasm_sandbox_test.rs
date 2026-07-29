@@ -73,6 +73,7 @@ async fn test_wasm_plugin_execution_success() {
     );
 
     let (tx, _) = mpsc::channel::<valayam_engine::traits::FindingOwned>(1);
+    // Template must include at least one section block (Phase 1 requirement).
     let template_yaml = r#"
 id: test-template
 info:

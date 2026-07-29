@@ -1,7 +1,9 @@
 pub mod executor;
 pub mod matchers;
+pub mod metrics;
 pub mod plugin_macro;
 pub mod rate_limiter;
+pub mod reflection;
 pub mod registry;
 pub mod traits;
 pub mod unwind_safe;

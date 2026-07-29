@@ -12,3 +12,13 @@ pub mod valayam {
 pub mod plugin {
     tonic::include_proto!("valayam.plugin");
 }
+
+/// gRPC server reflection protocol.
+pub mod reflection {
+    pub mod v1 {
+        tonic::include_proto!("grpc.reflection.v1");
+    }
+}
+
+/// Compiled file descriptor set for gRPC server reflection.
+pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("proto_descriptor");

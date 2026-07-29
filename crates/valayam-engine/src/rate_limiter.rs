@@ -124,12 +124,9 @@ impl RateLimiter {
         let limiter = self.limiter.read().await.clone();
         limiter.until_ready().await;
 
-        // Update prometheus metrics after each acquire
+        // Update prometheus gauge with effective RPS snapshot
         let stats = self.stats().await;
-        crate::metrics::update_rate_limiter_metrics(
-            1.0, // approximate — governor doesn't expose exact permit count
-            stats.backoff_multiplier as f64,
-        );
+        crate::metrics::RATE_LIMITER_PERMITS.set(stats.current_rps as f64);
     }
 
     /// Records a 429 Too Many Requests response to trigger backoff.
@@ -159,6 +156,9 @@ impl RateLimiter {
             backoff_multiplier = backoff.backoff_multiplier,
             "Rate limit hit (429), applying backoff"
         );
+
+        // Update prometheus gauge
+        crate::metrics::RATE_LIMITER_PERMITS.set(config.base_rps as f64 / backoff.backoff_multiplier as f64);
     }
 
     /// Records a successful response, potentially reducing backoff.
@@ -191,6 +191,11 @@ impl RateLimiter {
             backoff.consecutive_429s = 0;
             backoff.backoff_multiplier = 1;
         }
+
+        // Snapshot effective RPS into prometheus gauge
+        let multiplier = backoff.backoff_multiplier;
+        drop(backoff);
+        crate::metrics::RATE_LIMITER_PERMITS.set(self.config().await.base_rps as f64 / multiplier as f64);
     }
 
     /// Get current configuration
@@ -205,6 +210,7 @@ impl RateLimiter {
         let quota = Quota::per_second(NonZeroU32::new(new_config.base_rps).expect("RPS must be > 0"))
             .allow_burst(NonZeroU32::new(new_config.burst_size.unwrap_or(new_config.base_rps)).expect("Burst size must be > 0"));
         *self.limiter.write().await = Arc::new(GovLimiter::direct(quota));
+        crate::metrics::RATE_LIMITER_PERMITS.set(new_config.base_rps as f64);
     }
 
     /// Get current statistics

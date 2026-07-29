@@ -1,5 +1,5 @@
 use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 
 /// Handler for catching remote shells.
 pub struct ShellHandler;

@@ -26,6 +26,8 @@
 /*arch*.md
 /ref*.md
 /impl*.md
+/enterprise*.md
+/enterprise_tracker.md
 
 # Graphify outputs
 graphify-out/

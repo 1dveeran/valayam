@@ -10,7 +10,26 @@ members = [
     "crates/valayam-network",
     "crates/valayam-proto",
     "crates/valayam-ebpf-agent",
-    "crates/valayam-config",
+    "plugins-wasm/cors-audit",
+    "plugins-wasm/pii-leak-audit",
+    "plugins-wasm/iac-audit",
+    "plugins-wasm/header-scorecard",
+    "plugins-wasm/browser-audit",
+    "plugins-wasm/csp-audit",
+    "plugins-wasm/dom-redirect-audit",
+    "plugins-wasm/cloud-audit",
+    "plugins-wasm/code-audit",
+    "plugins-wasm/recon-audit",
+    "plugins-wasm/api-audit",
+    "plugins-wasm/threat-audit",
+    "plugins-wasm/specialized-audit",
+    "plugins-wasm/dependency-audit",
+    "plugins-wasm/graphql-audit",
+    "plugins-wasm/iot-audit",
+    "plugins-wasm/mobile-audit",
+    "plugins-wasm/oauth-audit",
+    "plugins-wasm/reputation-audit",
+    "plugins-wasm/test-runner"
 ]
 exclude = [
     "crates/valayam-ebpf-programs",
@@ -69,8 +88,7 @@ jsonwebtoken = "9.3"
 rumqttc = "0.24"
 toml = "0.8"
 hex = "0.4"
-once_cell = "1.19"
-prometheus = { version = "0.13", features = ["process"] }
+prometheus = { version = "0.13" }
 
 [profile.release]
 strip = true      # Automatically strip debug symbols from the binary

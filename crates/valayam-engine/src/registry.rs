@@ -208,7 +208,7 @@ impl PluginRegistry {
         Ok(Box::new(watcher))
     }
 
-    /// Initialize all plugins. Call once at startup.
+    #[tracing::instrument(skip(self))]
     pub async fn init_all(&self) -> Result<(), ScannerError> {
         let plugins = self.plugins.lock().unwrap().clone();
         for plugin in &plugins {
@@ -223,6 +223,7 @@ impl PluginRegistry {
     }
 
     /// Validate all applicable plugin configs for a template. Fail-fast.
+    #[tracing::instrument(skip(self, template), fields(template_id = %template.id))]
     pub fn validate_template(
         &self,
         template: &VulnerabilityTemplate,
@@ -237,6 +238,7 @@ impl PluginRegistry {
     }
 
     /// Shutdown all plugins gracefully.
+    #[tracing::instrument(skip(self))]
     pub async fn shutdown_all(&self) {
         let plugins = self.plugins.lock().unwrap().clone();
         for plugin in &plugins {
@@ -251,6 +253,7 @@ impl PluginRegistry {
     /// Returns a vector of `PluginHealth` results — one per plugin. The caller
     /// can inspect the results to decide whether to continue execution, log
     /// warnings, or halt.
+    #[tracing::instrument(skip(self))]
     pub async fn health_check_all(&self) -> Vec<crate::traits::PluginHealth> {
         use crate::traits::PluginHealth;
         use std::time::Instant;
@@ -617,16 +620,13 @@ async fn execute_plugin_isolated(
         "plugin completed"
     );
 
-    // Record prometheus metrics
-    let outcome_str = match &outcome_kind {
-        PluginOutcomeKind::NoMatch => "no_match",
-        PluginOutcomeKind::Matched => "matched",
-        PluginOutcomeKind::Skipped => "skipped",
-        PluginOutcomeKind::Failed => "failed",
-        PluginOutcomeKind::TimedOut => "timed_out",
-        PluginOutcomeKind::Crashed => "crashed",
-    };
-    crate::metrics::record_plugin_outcome(plugin_name, outcome_str, duration.as_secs_f64(), finding_count);
+    // Record Prometheus metrics
+    crate::metrics::record_plugin_outcome(
+        plugin_name,
+        &outcome_kind.to_string(),
+        duration.as_secs_f64(),
+        finding_count,
+    );
 
     PluginMetrics {
         plugin_name: plugin_name.to_string(),
@@ -797,58 +797,7 @@ mod tests {
                 description: None,
                 compliance: Default::default(),
             },
-            auth: None,
-            requests: vec![],
-            network: vec![],
-            scripts: vec![],
-            dns: vec![],
-            tls: vec![],
-            fuzz: vec![],
-            cloud: vec![],
-            logic: vec![],
-            deep_analysis: vec![],
-            iac_audit: vec![],
-            sbom_audit: vec![],
-            grpc_audit: vec![],
-            graphql_audit: vec![],
-            drift_detect: vec![],
-            cred_monitor: vec![],
-            oauth_audit: vec![],
-            idp_audit: vec![],
-            aws_escalate: vec![],
-            azure_gcp_escalate: vec![],
-            browser_audit: vec![],
-            iot_audit: vec![],
-            scada_audit: vec![],
-            auto_redteam: vec![],
-            implant_deploy: vec![],
-            client_secret_audit: vec![],
-            dom_redirect_audit: vec![],
-            cors_audit: vec![],
-            csp_audit: vec![],
-            waf_bypass_verify: vec![],
-            header_scorecard: vec![],
-            reputation_audit: vec![],
-            ct_log_audit: vec![],
-            remediation_gen: vec![],
-            mitre_mapping: vec![],
-            container_audit: vec![],
-            k8s_audit: vec![],
-            sast_taint: vec![],
-            sast_secrets: vec![],
-            subdomain_takeover: vec![],
-            port_scan: vec![],
-            schema_drift: vec![],
-            pii_leak_audit: vec![],
-            cicd_audit: vec![],
-            dependency_audit: vec![],
-            easm: vec![],
-            web3_audit: vec![],
-            mobile_audit: vec![],
-            serverless_audit: vec![],
-            auto_exploit: vec![],
-            ui_proxy: vec![],
-            oob_interaction: false,
+            ..VulnerabilityTemplate::empty()
         })
     }
 

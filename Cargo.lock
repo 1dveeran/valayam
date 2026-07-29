@@ -1672,6 +1672,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "dom-redirect-audit"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
 name = "dtoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4073,29 +4088,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "procfs"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731e0d9356b0c25f16f33b5be79b1c57b562f141ebfcdb0ad8ac2c13a24293b4"
-dependencies = [
- "bitflags 2.13.0",
- "hex",
- "lazy_static",
- "procfs-core",
- "rustix 0.38.44",
-]
-
-[[package]]
-name = "procfs-core"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d3554923a69f4ce04c4a754260c338f505ce22642d3830e049a399fc2059a29"
-dependencies = [
- "bitflags 2.13.0",
- "hex",
-]
-
-[[package]]
 name = "prometheus"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4104,10 +4096,8 @@ dependencies = [
  "cfg-if",
  "fnv",
  "lazy_static",
- "libc",
  "memchr",
  "parking_lot",
- "procfs",
  "protobuf",
  "thiserror 1.0.69",
 ]
@@ -4569,6 +4559,15 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "reputation-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
 
 [[package]]
 name = "reqwest"
@@ -6381,6 +6380,7 @@ dependencies = [
  "clap",
  "colored",
  "dirs 5.0.1",
+ "dotenvy",
  "ed25519-dalek",
  "futures",
  "genpdf",
@@ -6568,6 +6568,7 @@ dependencies = [
  "serde_yaml",
  "tar",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tonic 0.11.0",
  "tonic-reflection",
@@ -6612,6 +6613,8 @@ dependencies = [
  "governor",
  "hickory-resolver",
  "http 1.4.2",
+ "lazy_static",
+ "prometheus",
  "rand 0.8.7",
  "regex",
  "reqwest",

@@ -26,7 +26,7 @@ impl CircuitBreaker {
         let fails = self.failure_count.load(Ordering::Relaxed);
         if fails >= self.threshold {
             let last_fail = self.last_failure_time.load(Ordering::Relaxed);
-            let now = Instant::now().elapsed().as_millis() as u64; // Fallback time tracking
+            let _now = Instant::now().elapsed().as_millis() as u64; // Fallback time tracking
             // In a real implementation we'd use a better absolute time reference,
             // but for simplicity we assume time elapsed from process start or use epoch
             let sys_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;

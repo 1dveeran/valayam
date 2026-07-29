@@ -123,7 +123,7 @@ impl WasmScanner for ReputationAuditScanner {
         let mut blocked_by_ip = false;
         let mut blocked_by_domain = false;
         let mut dnsbl_listed = false;
-        let mut dnsbl_count = 0usize;
+        let mut _dnsbl_count = 0usize;
 
         for &ip in &ips {
             if ip_in_known_malicious_ips(ip) || ip_in_known_cidrs(ip) {
@@ -141,7 +141,7 @@ impl WasmScanner for ReputationAuditScanner {
                 for zone in DNSBL_ZONES {
                     if check_dnsbl(ip, zone) {
                         dnsbl_listed = true;
-                        dnsbl_count += 1;
+                        _dnsbl_count += 1;
                     }
                 }
             }

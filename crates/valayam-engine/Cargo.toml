@@ -13,6 +13,7 @@ valayam-models = { path = "../valayam-models" }
 valayam-network = { path = "../valayam-network" }
 valayam-proto = { workspace = true }
 tokio-util = { version = "0.7.11" }
+tokio-stream = { version = "0.1", features = ["net"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -39,7 +40,5 @@ uuid = { version = "1.24.0", features = ["v4", "serde"] }
 serde_yaml = { workspace = true }
 hickory-resolver.workspace = true
 prometheus = { workspace = true }
-tonic-reflection = "0.11"
-once_cell = { workspace = true }
 
 [build-dependencies]

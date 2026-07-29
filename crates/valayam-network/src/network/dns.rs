@@ -5,8 +5,6 @@
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 use reqwest::Client;
-use hickory_resolver::AsyncResolver;
-use serde::{Deserialize, Serialize};
 use hickory_resolver::proto::rr::*;
 use tracing::debug;
 

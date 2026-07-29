@@ -34,39 +34,23 @@ impl ScanPlugin for WasmPluginBridge {
     /// the plugin's corresponding section. This prevents plugins like `cors-audit` from
     /// running against every template and producing false/duplicate findings.
     ///
-    /// The match is done by normalising the plugin name (strip `.wasm`, replace `-` with `_`)
-    /// and checking if the template has a non-empty matching section via a well-known lookup table.
+    /// The match is done by normalising the plugin name (strip `.wasm`, replace `_` with `-`)
+    /// and checking via the trait-based `has_section()` method.
     fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
-        // Normalise: "cors-audit.wasm" → "cors_audit"
+        // Normalise: "cors-audit.wasm" → "cors-audit", "cors_audit.wasm" → "cors-audit"
         let normalised = self.name
             .trim_end_matches(".wasm")
-            .replace('-', "_")
+            .replace('_', "-")
             .to_lowercase();
 
         match normalised.as_str() {
-            "cors_audit"         => !template.cors_audit.is_empty(),
-            "csp_audit"          => !template.csp_audit.is_empty(),
-            "header_scorecard"   => !template.header_scorecard.is_empty(),
-            "waf_bypass_verify"  => !template.waf_bypass_verify.is_empty(),
-            "graphql_audit"      => !template.graphql_audit.is_empty(),
-            "iac_audit"          => !template.iac_audit.is_empty(),
-            "pii_leak_audit"     => !template.pii_leak_audit.is_empty(),
-            "sbom_audit"         => !template.sbom_audit.is_empty(),
-            "reputation_audit"   => !template.reputation_audit.is_empty(),
-            "ct_log_audit"       => !template.ct_log_audit.is_empty(),
-            "grpc_audit"         => !template.grpc_audit.is_empty(),
-            "sast_taint"         => !template.sast_taint.is_empty(),
-            "sast_secrets"       => !template.sast_secrets.is_empty(),
-            "subdomain_takeover" => !template.subdomain_takeover.is_empty(),
-            "web3_audit"         => !template.web3_audit.is_empty(),
-            "mobile_audit"       => !template.mobile_audit.is_empty(),
-            "serverless_audit"   => !template.serverless_audit.is_empty(),
-            "specialized_audit"  => !template.deep_analysis.is_empty(),
+            // Well-known: check if template has a matching section by kebab-case name
+            n if template.has_section(n) => true,
             // Unknown WASM plugin: opt-in by default (backwards compatible for custom plugins)
             _ => {
                 tracing::debug!(
                     plugin = %self.name,
-                    "Unknown WASM plugin '{}'; running against all templates (add a match arm to restrict)",
+                    "Unknown WASM plugin '{}'; running against all templates",
                     self.name
                 );
                 true

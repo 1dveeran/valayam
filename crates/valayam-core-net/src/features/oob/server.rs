@@ -5,7 +5,6 @@
 // - Support multiple concurrent callback domains for correlation.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
@@ -323,7 +322,7 @@ impl OobServer {
         while pos < query.len() {
             let len = query[pos] as usize;
             if len == 0 {
-                pos += 1;
+                // pos += 1; — no-op; loop breaks immediately
                 break; // End of domain name
             }
             if len > 63 || pos + len + 1 > query.len() {
