@@ -144,6 +144,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
+name = "api-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "approx"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -577,6 +588,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "browser-audit"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -928,6 +947,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
+name = "cloud-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -943,6 +972,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
 dependencies = [
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "code-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "regex",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+ "valayam-plugin-sdk",
 ]
 
 [[package]]
@@ -1035,6 +1076,15 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "cors-audit"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
 
 [[package]]
 name = "cpp_demangle"
@@ -1421,6 +1471,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "csp-audit"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "regex",
+ "scraper",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "cssparser"
 version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1511,6 +1572,16 @@ checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
  "uuid",
+]
+
+[[package]]
+name = "dependency-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
 ]
 
 [[package]]
@@ -1937,6 +2008,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "extism-pdk"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "352fcb5a66eb74145a1c4a01f2bd15d59c62c85be73aac8471880c65b26b798f"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "extism-convert",
+ "extism-manifest",
+ "extism-pdk-derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "extism-pdk-derive"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d086daea5fd844e3c5ac69ddfe36df4a9a43e7218cf7d1f888182b089b09806c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2331,6 +2428,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2431,6 +2538,14 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
+name = "header-scorecard"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "valayam-plugin-sdk",
+]
 
 [[package]]
 name = "heck"
@@ -2689,6 +2804,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "iac-audit"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2920,6 +3044,16 @@ name = "io-lifetimes"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
+name = "iot-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
 
 [[package]]
 name = "ipconfig"
@@ -3347,6 +3481,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mobile-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "mockito"
 version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3502,6 +3646,16 @@ name = "number_prefix"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
+
+[[package]]
+name = "oauth-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "valayam-plugin-sdk",
+]
 
 [[package]]
 name = "object"
@@ -3871,6 +4025,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
 dependencies = [
  "siphasher 1.0.3",
+]
+
+[[package]]
+name = "pii-leak-audit"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde_json",
+ "valayam-plugin-sdk",
 ]
 
 [[package]]
@@ -4471,6 +4634,19 @@ dependencies = [
  "ring",
  "time 0.3.54",
  "yasna",
+]
+
+[[package]]
+name = "recon-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "md5",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "uuid",
+ "valayam-plugin-sdk",
 ]
 
 [[package]]
@@ -5290,6 +5466,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "specialized-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "valayam-plugin-sdk",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5591,6 +5778,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
+name = "test-runner"
+version = "0.1.0"
+dependencies = [
+ "extism",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "thin-vec"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5646,6 +5842,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "threat-audit"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "valayam-plugin-sdk",
 ]
 
 [[package]]
@@ -6054,19 +6261,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic-reflection"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "548c227bd5c0fae5925812c4ec6c66ffcfced23ea370cb823f4d18f0fc1cb6a7"
-dependencies = [
- "prost 0.12.6",
- "prost-types",
- "tokio",
- "tokio-stream",
- "tonic 0.11.0",
-]
-
-[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6421,17 +6615,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "valayam-config"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_yaml",
- "thiserror 1.0.69",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "valayam-core"
 version = "0.1.0"
 dependencies = [
@@ -6555,7 +6738,6 @@ dependencies = [
  "hickory-resolver",
  "lazy_static",
  "notify",
- "once_cell",
  "opentelemetry",
  "prometheus",
  "prost 0.12.6",
@@ -6571,7 +6753,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic 0.11.0",
- "tonic-reflection",
  "tracing",
  "tracing-opentelemetry",
  "url",
@@ -6638,6 +6819,16 @@ dependencies = [
  "tokio-stream",
  "tonic 0.11.0",
  "valayam-proto",
+]
+
+[[package]]
+name = "valayam-plugin-sdk"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "serde",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
