@@ -1,6 +1,8 @@
 //! Declarative macro for generating ScanPlugin adapters from existing executors.
 //!
+//! Used by all `impl_scan_plugin!` call sites in `valayam-core` and `valayam-core-net`.
 //! Eliminates ~2600 lines of boilerplate. Each plugin is defined in ~5 lines.
+//! Generated via `#[macro_export]` — available at crate root.
 
 /// Generate a `ScanPlugin` implementation that wraps an existing feature executor.
 #[macro_export]

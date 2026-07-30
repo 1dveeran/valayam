@@ -17,6 +17,7 @@ use valayam_models::templates::schema::VulnerabilityTemplate;
 use crate::unwind_safe::SafePluginFuture;
 use futures::FutureExt;
 use rand::Rng;
+use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
@@ -56,7 +57,7 @@ impl RetryConfig {
 }
 
 pub struct PluginRegistry {
-    plugins: Arc<std::sync::Mutex<Vec<Arc<dyn ScanPlugin>>>>,
+    plugins: Arc<Mutex<Vec<Arc<dyn ScanPlugin>>>>,
     pub_key: Option<[u8; 32]>,
     retry_config: RetryConfig,
 }
@@ -68,7 +69,7 @@ impl PluginRegistry {
 
     /// Create a new PluginRegistry with an optional trusted public key for signature verification
     pub fn with_key(pub_key: Option<[u8; 32]>) -> Self {
-        Self { plugins: Arc::new(std::sync::Mutex::new(Vec::new())), pub_key, retry_config: RetryConfig::default() }
+        Self { plugins: Arc::new(Mutex::new(Vec::new())), pub_key, retry_config: RetryConfig::default() }
     }
 
     pub fn set_trusted_key(&mut self, pub_key: [u8; 32]) {
@@ -77,7 +78,7 @@ impl PluginRegistry {
 
     /// Returns a list of all currently registered plugins.
     pub fn list_plugins(&self) -> Vec<String> {
-        self.plugins.lock().unwrap().iter().map(|p| p.name().to_string()).collect()
+        self.plugins.lock().iter().map(|p| p.name().to_string()).collect()
     }
 
     pub fn set_retry_config(&mut self, config: RetryConfig) {
@@ -103,7 +104,7 @@ impl PluginRegistry {
         }
 
         tracing::info!(plugin = plugin.name(), version = plugin.version(), "registered plugin");
-        self.plugins.lock().unwrap().push(Arc::new(plugin));
+        self.plugins.lock().push(Arc::new(plugin));
     }
 
     pub fn load_external_plugins(&self, dir_path: &std::path::Path) -> std::io::Result<()> {
@@ -210,7 +211,7 @@ impl PluginRegistry {
 
     #[tracing::instrument(skip(self))]
     pub async fn init_all(&self) -> Result<(), ScannerError> {
-        let plugins = self.plugins.lock().unwrap().clone();
+        let plugins = self.plugins.lock().clone();
         for plugin in &plugins {
             plugin.init().await.map_err(|e| {
                 tracing::error!(plugin = plugin.name(), error = %e, "plugin init failed");
@@ -228,7 +229,7 @@ impl PluginRegistry {
         &self,
         template: &VulnerabilityTemplate,
     ) -> Result<(), ScannerError> {
-        let plugins = self.plugins.lock().unwrap().clone();
+        let plugins = self.plugins.lock().clone();
         for plugin in &plugins {
             if plugin.is_applicable(template) {
                 plugin.validate_config(template)?;
@@ -240,7 +241,7 @@ impl PluginRegistry {
     /// Shutdown all plugins gracefully.
     #[tracing::instrument(skip(self))]
     pub async fn shutdown_all(&self) {
-        let plugins = self.plugins.lock().unwrap().clone();
+        let plugins = self.plugins.lock().clone();
         for plugin in &plugins {
             if let Err(e) = plugin.shutdown().await {
                 tracing::warn!(plugin = plugin.name(), error = %e, "plugin shutdown error");
@@ -258,7 +259,7 @@ impl PluginRegistry {
         use crate::traits::PluginHealth;
         use std::time::Instant;
 
-        let plugins = self.plugins.lock().unwrap().clone();
+        let plugins = self.plugins.lock().clone();
         let mut results = Vec::with_capacity(plugins.len());
         for plugin in &plugins {
             let start = Instant::now();
@@ -285,8 +286,8 @@ impl PluginRegistry {
         results
     }
 
-    pub fn len(&self) -> usize { self.plugins.lock().unwrap().len() }
-    pub fn is_empty(&self) -> bool { self.plugins.lock().unwrap().is_empty() }
+    pub fn len(&self) -> usize { self.plugins.lock().len() }
+    pub fn is_empty(&self) -> bool { self.plugins.lock().is_empty() }
 
     /// Execute all applicable plugins for a template against a target.
     ///
@@ -317,7 +318,7 @@ impl PluginRegistry {
         let variables = Arc::new(RwLock::new(VariableScope::new(initial_vars)));
 
         // Filter to applicable plugins
-        let applicable: Vec<_> = self.plugins.lock().unwrap().iter()
+        let applicable: Vec<_> = self.plugins.lock().iter()
             .filter(|p| p.is_applicable(&template))
             .cloned()
             .collect();
@@ -393,7 +394,9 @@ impl PluginRegistry {
             );
 
             for plugin_name in &ready_queue {
-                let plugin = plugin_name_map.get(plugin_name).unwrap().clone();
+                let plugin = plugin_name_map.get(plugin_name)
+            .expect("plugin_name drawn from plugin_name_map keys — guaranteed to exist")
+            .clone();
 
                 let ctx = ScanContext {
                     scan_id: template.id.parse::<uuid::Uuid>().unwrap_or_else(|_| uuid::Uuid::new_v4()),
@@ -772,7 +775,7 @@ mod tests {
     struct MockOrderPlugin {
         name: &'static str,
         deps: &'static [&'static str],
-        order: Arc<std::sync::Mutex<Vec<&'static str>>>,
+        order: Arc<Mutex<Vec<&'static str>>>,
     }
 
     #[async_trait::async_trait]
@@ -781,7 +784,7 @@ mod tests {
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
         fn depends_on(&self) -> &[&'static str] { self.deps }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
-            self.order.lock().unwrap().push(self.name);
+            self.order.lock().push(self.name);
             PluginOutcome::Matched { count: 1 }
         }
     }
@@ -1061,7 +1064,7 @@ mod tests {
     #[tokio::test]
     async fn test_execution_order_with_mock_order_plugin() {
         let registry = PluginRegistry::new();
-        let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let order = Arc::new(Mutex::new(Vec::new()));
 
         // B depends on A → A must execute before B
         registry.register(MockOrderPlugin { name: "plugin_a", deps: &[], order: order.clone() });
@@ -1079,7 +1082,7 @@ mod tests {
         )
         .await;
 
-        let executed = order.lock().unwrap();
+        let executed = order.lock();
         // A must appear before B
         let a_pos = executed.iter().position(|n| *n == "plugin_a").unwrap();
         let b_pos = executed.iter().position(|n| *n == "plugin_b").unwrap();

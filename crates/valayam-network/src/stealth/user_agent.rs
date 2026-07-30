@@ -1,6 +1,4 @@
-// TODO: Upgrade User-Agent Rotation logic.
-// - Integrate Machine Learning based generation for statistically normal UAs.
-// - Sync UAs with corresponding TLS fingerprints to avoid detection.
+// TODO: User-Agent rotation — add ML-based generation and TLS fingerprint sync.
 use rand::seq::SliceRandom;
 use rand::rngs::StdRng;
 use rand::SeedableRng;

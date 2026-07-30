@@ -1,7 +1,4 @@
-// TODO: Enhance DNS auditing capabilities for DNS.
-// - Implement DNSSEC validation and chain verification.
-// - Add rate limiting awareness for DNS queries.
-// - Cache DNS responses to reduce redundant queries.
+// TODO: DNS — DNSSEC validation, rate-limiting awareness, response caching.
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 use reqwest::Client;

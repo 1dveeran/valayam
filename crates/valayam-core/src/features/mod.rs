@@ -1,9 +1,8 @@
-// TODO: Implement Vertical Slices (Phases 1-30) as isolated features.
-// - Ensure each module owns its parser, executor, and matcher logic without cross-dependencies.
-// - Phase 1: http_scan
-// - Phase 2: network_scan, dns_audit
-// - Phase 5+: crawler, cloud_sec, iac_audit, etc.
-// - Maintain strict downward dependency on core/ and network/ only.
+//! Feature modules for the core scanning engine.
+//!
+//! Each submodule implements a vertical slice of scanning capability:
+//! HTTP scanning, crawling, extraction, schema drift detection, threat intel,
+//! UI proxy, and helper functions.
 
 pub mod crawler;
 pub mod extractors;

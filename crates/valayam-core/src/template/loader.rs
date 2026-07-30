@@ -1,6 +1,6 @@
-// TODO: Optimize Template Orchestration Pipeline.
-// - Ensure `{{variable}}` context flows thread-safely between phases.
-// - Add telemetry spans for performance monitoring of each execution slice.
+// TODO(perf): Optimize Template Orchestration Pipeline.
+// - Benchmark `{{variable}}` context propagation under 1000+ concurrent templates.
+// - Add telemetry spans for per-phase execution timing.
 use super::schema::VulnerabilityTemplate;
 use crate::features::http_scan;
 use crate::network::http::StealthHttpClient;

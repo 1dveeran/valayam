@@ -1,11 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-// TODO: Deep Analysis Template Parser — Full Implementation Plan
-// ===============================================================
-// Goal: Expand the flat `analysis_type` string discriminator into a
-//       structured enum with per-type configuration fields and template
-//       validation. Support YAML-based template loading with nested
-//       module-specific configs.
+// TODO: Deep Analysis template — structured enum for analysis_type with per-type config fields.
 //
 // Required Crates:
 //   - serde / serde_yaml (template loading)

@@ -1,6 +1,7 @@
-// TODO: Implement DNS Audit Scanning (Phase 2).
-// - executor.rs: Support A, AAAA, CNAME, TXT, MX querying via hickory-resolver.
-// - Add specific matchers for Subdomain Takeover and DNS Rebinding detection.
-// - Implement AXFR zone transfer attempts as a fallback probe.
+//! DNS audit scanning — DNS record enumeration and vulnerability detection.
+//!
+//! Supports A, AAAA, CNAME, TXT, MX querying via hickory-resolver.
+//! Detects subdomain takeover and DNS rebinding vulnerabilities.
+//! Attempts AXFR zone transfer as a fallback probe.
 
 pub mod executor;

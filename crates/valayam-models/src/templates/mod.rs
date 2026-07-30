@@ -1,3 +1,9 @@
+//! Template definitions for all vulnerability scan types.
+//!
+//! Each submodule defines the section schema and default templates for a
+//! specific scan category: web application, network, cloud, mobile, IoT,
+//! API, graphql, etc. The `schema` module defines the core VulnerabilityTemplate.
+
 pub mod matcher;
 pub mod functions;
 pub mod section;

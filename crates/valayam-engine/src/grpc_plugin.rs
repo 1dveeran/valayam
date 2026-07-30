@@ -39,7 +39,7 @@ impl ScanPlugin for GrpcPluginBridge {
         // gRPC plugins are external processes — we can't know applicability
         // without calling them. Assume applicable and let the plugin return
         // NoMatch/Failed during execute if it cannot handle the template.
-        // TODO(future): Add bidirectional handshake to negotiate capabilities.
+        // TODO(future): Add bidirectional handshake to negotiate plugin capabilities at startup
         true
     }
 

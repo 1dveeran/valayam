@@ -1,8 +1,4 @@
-// TODO: Deepen TLS Auditing capabilities.
-// - Implement raw SSLv2 ClientHello probes (real, not our current wrapper).
-// - Add cipher suite ranking and weak cipher detection.
-// - Support STARTTLS for SMTP/IMAP/FTP over TLS.
-// - Implement OCSP stapling verification during handshake.
+// TODO: TLS auditing — raw SSLv2 probes, cipher ranking, STARTTLS, OCSP stapling.
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;

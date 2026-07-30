@@ -5,17 +5,16 @@ pub mod notifications;
 pub mod reporting;
 pub mod state;
 pub mod plugin_cli;
+mod setup;
 mod tracing_init;
 
 use clap::Parser;
 use colored::*;
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use walkdir::WalkDir;
+use tokio_util::sync::CancellationToken;
 
 use setup::*;
-use std::sync::Arc;
 use valayam_engine::rate_limiter::RateLimiter;
 
 /// Prints the branded Valayam ASCII banner to stdout.
@@ -58,67 +57,18 @@ async fn main() -> anyhow::Result<()> {
         args.log_file.as_deref().map(Path::new),
     );
 
-    // Extract template path, defaulting to a generated native demo template if neither flag is provided
-    let default_template = "./templates_repo/demo-template.yaml".to_string();
-    
-    let (template_path, is_nuclei) = if let Some(cli::Commands::Plugin { action }) = &args.command {
-        match action {
-            cli::PluginCommands::Package { dir, output, sign } => {
-                if let Err(e) = crate::plugin_cli::package_plugin(dir, output.as_deref(), sign.as_deref()) {
-                    tracing::error!("Failed to package plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Init { name, lang, runtime } => {
-                if let Err(e) = crate::plugin_cli::init_plugin(name, lang, runtime) {
-                    tracing::error!("Failed to init plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::GenerateKey { output } => {
-                if let Err(e) = crate::plugin_cli::generate_key(output) {
-                    tracing::error!("Failed to generate plugin key: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Install { name, url, pubkey } => {
-                if let Err(e) = crate::plugin_cli::install_plugin(name, url, pubkey.as_deref()).await {
-                    tracing::error!("Failed to install plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Push { file, repo, tag, signature } => {
-                if let Err(e) = crate::plugin_cli::push_plugin(file, repo, tag, signature.as_deref()).await {
-                    tracing::error!("Failed to push plugin to OCI registry: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::Uninstall { name } => {
-                if let Err(e) = crate::plugin_cli::uninstall_plugin(name) {
-                    tracing::error!("Failed to uninstall plugin: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-            cli::PluginCommands::List => {
-                if let Err(e) = crate::plugin_cli::list_plugins() {
-                    tracing::error!("Failed to list plugins: {}", e);
-                    std::process::exit(1);
-                }
-                return Ok(());
-            }
-        }
-    } else if let Some(cli::Commands::SyncVulndb { cdn, output }) = &args.command {
+    // Handle plugin subcommands — early return
+    if let Some(cli::Commands::Plugin { action }) = &args.command {
+        return handle_plugin_command(action).await;
+    }
+    // Handle vuln DB sync — early return
+    if let Some(cli::Commands::SyncVulndb { cdn, output }) = &args.command {
         if let Err(e) = crate::orchestrator::sync_vulndb(cdn, output).await {
             tracing::error!("Failed to sync vulnerability database: {}", e);
-            e
-        });
+        }
+        return Ok(());
     }
+    // Handle control subcommand — early return
     if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
         return handle_control_command(action, scan_id, port).await;
     }

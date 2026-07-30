@@ -1,6 +1,4 @@
-// TODO: Enhance UDP Scanning capabilities.
-// - Add support for protocol-specific probes (DNS, SNMP, etc.)
-// - Improve response parsing and service detection
+// TODO: UDP scanning — protocol-specific probes (DNS, SNMP), response parsing.
 use futures::future::join_all;
 use std::collections::HashSet;
 use tokio::net::UdpSocket;

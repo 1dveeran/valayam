@@ -1,4 +1,4 @@
-// TODO: Optimize RateLimiter for Enterprise Batch processing.
+// TODO(perf): Optimize RateLimiter for enterprise batch processing.
 // - Benchmark `governor` under 10k+ concurrent async tasks.
 // - Implement dynamic backoff integration for 429 Too Many Requests.
 use std::num::NonZeroU32;
@@ -186,8 +186,12 @@ impl RateLimiter {
             }
         }
 
-        // If no recent 429s, reset completely
-        if backoff.last_429.is_none() || now.duration_since(backoff.last_429.unwrap()) > Duration::from_secs(300) {
+        // If no recent 429s or older than 5min, reset completely
+        let should_reset = match backoff.last_429 {
+            Some(ts) => now.duration_since(ts) > Duration::from_secs(300),
+            None => true,
+        };
+        if should_reset {
             backoff.consecutive_429s = 0;
             backoff.backoff_multiplier = 1;
         }

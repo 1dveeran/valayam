@@ -1,3 +1,9 @@
+//! Scan execution engine for Valayam.
+//!
+//! Central orchestrator: plugin registry with topological execution, WASM/gRPC
+//! plugin bridges, rate limiting with adaptive backoff, variable resolution,
+//! retry logic with exponential backoff, telemetry, and crypto verification.
+//! All scan execution flows through this crate.
 pub mod executor;
 pub mod matchers;
 pub mod metrics;

@@ -1,4 +1,8 @@
-#![allow(dead_code)]
+//! Core scanning engine for Valayam network security scanner.
+//!
+//! Provides HTTP scanning, crawling, template execution, threat intelligence,
+//! UI proxy, and distribution coordination. This is the primary crate where
+//! feature plugins register and execute against targets.
 pub mod config;
 pub mod core;
 pub mod features;

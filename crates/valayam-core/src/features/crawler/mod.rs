@@ -1,7 +1,8 @@
-// TODO: Implement Enterprise Web Crawler (Phase 5).
-// - spider.rs: Build async crawling loop with rate limiting and domain bounds.
-// - parsers.rs: Implement JS/SPA route extraction, WASM decompilation, and OpenAPI parsing.
-// - Inject custom auth headers dynamically during the crawling process.
+//! Enterprise web crawler — async crawling with SPA/JS route extraction.
+//!
+//! Crawls websites to discover endpoints, forms, links, and JS routes.
+//! Supports rate limiting, domain scope control, and auth header injection.
+//! Includes JS/SPA route extraction, WASM decompilation, and OpenAPI parsing.
 pub mod parsers;
 pub mod spider;
 pub mod wordlists;

@@ -1,6 +1,4 @@
-// TODO: Expand ScannerError enum.
-// - Map all Phase 1-30 slice errors to this central enum.
-// - Ensure error variants serialize cleanly for SIEM ingestion.
+// TODO: ScannerError — add error variants for all feature modules, ensure clean SIEM serialization.
 use thiserror::Error;
 use std::io;
 use std::net::AddrParseError;

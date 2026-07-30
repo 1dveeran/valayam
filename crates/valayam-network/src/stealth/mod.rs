@@ -1,7 +1,8 @@
-// TODO: Implement Evasion & Network Stealth layer (Phase 2).
-// - user_agent.rs: Implement dynamic User-Agent randomization pool for requests.
-// - proxy.rs: Build SOCKS5/HTTP proxy rotation cycler for the StealthHttpClient.
-// - tls_fingerprint: Inject JA3/JA4 TLS spoofing via customized rustls cipher ordering to evade WAFs.
+//! Evasion and network stealth layer.
+//!
+//! Dynamic User-Agent rotation pool, SOCKS5/HTTP proxy rotation cycler,
+//! and JA3/JA4 TLS fingerprint spoofing for WAF evasion via customized
+//! cipher ordering.
 pub mod user_agent;
 pub mod proxy;
 pub mod tls;

@@ -1,3 +1,7 @@
+//! WASM host functions exposed to Extism plugins.
+//!
+//! Used by: wasm_plugin.rs — plugins call these functions at runtime.
+//! Each function provides a sandboxed bridge to the host environment.
 use extism::host_fn;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::Resolver;

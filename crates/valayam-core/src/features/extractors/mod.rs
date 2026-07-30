@@ -1,6 +1,6 @@
-// TODO: Implement Dynamic Value Extraction (Phase 1).
-// - engine.rs: Support Regex, JSON Pointer, and CSS Selector extraction types.
-// - Ensure extracted values populate the shared variables map.
-// - Add validation to handle missing or malformed extraction targets safely.
+//! Dynamic value extraction from HTTP responses.
+//!
+//! Supports Regex, JSON Pointer, and CSS Selector extraction types.
+//! Extracted values populate the shared variables map for downstream use.
 
 pub mod engine;

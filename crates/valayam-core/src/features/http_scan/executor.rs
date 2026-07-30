@@ -209,7 +209,7 @@ pub async fn execute(
 
             tracing::debug!(target = %target_url, method = %req_rule.method, url = %full_url, "Sending HTTP request");
 
-            // TODO: Pass follow_redirects to client if supported, for now just trace it
+            // TODO: Pass follow_redirects to StealthHttpClient when it supports the option; currently ignored
             if let Some(follow) = req_rule.follow_redirects {
                 tracing::trace!("Template specified follow_redirects: {}", follow);
             }

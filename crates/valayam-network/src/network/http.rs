@@ -1,7 +1,4 @@
-// TODO: Enhance StealthHttpClient for WAF Evasion.
-// - Integrate JA3/JA4 TLS spoofing at the `reqwest`/`rustls` layer.
-// - Add logic to detect and transparently follow meta-refreshes.
-// - Implement proxy health-checking before using a proxy from the pool.
+// TODO: StealthHttpClient — JA3/JA4 spoofing, meta-refresh handling, proxy health checks.
 use valayam_models::error::ScannerError;
 use crate::stealth::tls::{Ja3Ja4Spoofer, Ja3Ja4Profile};
 use crate::stealth::proxy::ProxyRotator;
@@ -406,7 +403,7 @@ fn build_text_response(body: String) -> reqwest::Response {
     reqwest::Response::from(http_response)
 }
 
-// TODO: Fix regex quote handling
+// TODO: Fix regex quote handling — special chars in HTTP body cause incorrect match results
 /// Extract redirect URL from meta-refresh tag in HTML.
 fn extract_meta_refresh(html: &str) -> Option<String> {
     // Match <meta http-equiv="refresh" content="5;url=https://example.com/">

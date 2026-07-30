@@ -99,7 +99,8 @@ pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&
         
         // We verify the signature against the raw bytes of plugin.yaml
         let manifest_content = fs::read(extract_dir.join("plugin.yaml"))?;
-        let sig_array: [u8; 64] = sig.try_into().unwrap();
+        let sig_array: [u8; 64] = sig.try_into()
+            .map_err(|_: Vec<u8>| VpaError::ExtractionError("signature length mismatch after validation".to_string()))?;
         
         let is_valid = crate::crypto::PluginCrypto::verify(pk, &manifest_content, &sig_array)
             .map_err(|e| VpaError::ExtractionError(format!("Signature verification failed: {}", e)))?;

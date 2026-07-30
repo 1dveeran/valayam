@@ -37,7 +37,7 @@ impl Scanner for TelemetryService {
                 payload = %event.payload_json,
                 "Received eBPF Telemetry Event"
             );
-            // TODO: route telemetry to active scan contexts
+            // TODO: route telemetry events to active scan contexts for real-time display
         }
 
         Ok(Response::new(TelemetryResponse { received: true }))
@@ -172,7 +172,7 @@ pub async fn start_telemetry_server_tls(
     addr: std::net::SocketAddr,
     state_tx: Option<watch::Sender<ScanState>>,
     cancellation_token: Option<CancellationToken>,
-    tls_config: Option<TlsConfig>,
+    _tls_config: Option<TlsConfig>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Spawn the /metrics HTTP endpoint
     let metrics_addr: std::net::SocketAddr = ([0, 0, 0, 0], 9090).into();

@@ -6739,6 +6739,7 @@ dependencies = [
  "lazy_static",
  "notify",
  "opentelemetry",
+ "parking_lot",
  "prometheus",
  "prost 0.12.6",
  "rand 0.8.7",

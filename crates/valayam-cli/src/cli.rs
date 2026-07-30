@@ -1,8 +1,4 @@
-// TODO: Refactor CLI application for Enterprise execution (Phase 4 & 5).
-// - Integrate standard Clap subcommands (`scan`, `listen`, `serve`, `crawl`).
-// - Implement advanced batch execution logic for directory template scanning.
-// - Integrate the AI Autonomous Loop fallback execution.
-// - Finalize reporting/ notifications (JSONL, Webhooks, PDF generation).
+// TODO(enterprise): CLI refactor — standard subcommands, batch execution, AI loop, reporting.
 use clap::Parser;
 
 #[derive(Parser, Debug, Clone)]

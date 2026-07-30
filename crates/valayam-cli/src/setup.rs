@@ -15,6 +15,7 @@ use valayam_engine::rate_limiter::RateLimiter;
 use valayam_core::rpc::scanner_client::ScannerClient;
 
 /// Result of the scan setup phase. Everything needed for `orchestrator::run_scan`.
+#[allow(dead_code)]
 pub struct ScanSetup {
     /// Resolved template files to scan with.
     pub template_files: Vec<PathBuf>,

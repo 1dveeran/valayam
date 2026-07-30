@@ -1,4 +1,4 @@
-// TODO: Harden Variable Substitution & DSL Helpers.
+// TODO: Harden Variable Substitution — circular-dep detection already implemented, add cycle reporting
 // - Implement strict circular-dependency detection during resolution.
 // - Optimize Regex substitutions for zero-copy where possible.
 use lazy_static::lazy_static;
@@ -43,9 +43,9 @@ fn resolve_variables_with_detection(
 
     for cap in VARIABLE_RE.captures_iter(template_str) {
         // Push text before the variable
-        result.push_str(&template_str[last_pos..cap.get(0).unwrap().start()]);
+        result.push_str(&template_str[last_pos..cap.get(0).expect("capture group 0 always exists").start()]);
 
-        let var_name = cap.get(1).unwrap().as_str();
+        let var_name = cap.get(1).expect("capture group 1 always exists for matched pattern").as_str();
 
         // Check for circular dependency
         if !visited.insert(var_name.to_string()) {
@@ -54,7 +54,7 @@ fn resolve_variables_with_detection(
             result.push_str(&placeholder);
             // Remove from visited set to allow other paths
             visited.remove(var_name);
-            last_pos = cap.get(0).unwrap().end();
+            last_pos = cap.get(0).expect("capture group 0 always exists").end();
             continue;
         }
 
@@ -69,7 +69,7 @@ fn resolve_variables_with_detection(
 
         // Remove from visited set after processing
         visited.remove(var_name);
-        last_pos = cap.get(0).unwrap().end();
+        last_pos = cap.get(0).expect("capture group 0 always exists").end();
     }
 
     // Push remaining text
@@ -140,9 +140,9 @@ fn resolve_variables_advanced_with_detection(
 
     for cap in ADVANCED_VARIABLE_RE.captures_iter(template_str) {
         // Push text before the variable
-        result.push_str(&template_str[last_pos..cap.get(0).unwrap().start()]);
+        result.push_str(&template_str[last_pos..cap.get(0).expect("capture group 0 always exists").start()]);
 
-        let var_name = cap.get(1).unwrap().as_str();
+        let var_name = cap.get(1).expect("capture group 1 always exists for matched pattern").as_str();
         let modifiers = cap.get(2).map(|m| m.as_str());
 
         // Check for circular dependency
@@ -157,7 +157,7 @@ fn resolve_variables_advanced_with_detection(
             }
             // Remove from visited set to allow other paths
             visited.remove(var_name);
-            last_pos = cap.get(0).unwrap().end();
+            last_pos = cap.get(0).expect("capture group 0 always exists").end();
             continue;
         }
 
@@ -179,7 +179,7 @@ fn resolve_variables_advanced_with_detection(
                             result.push_str(&placeholder);
                         }
                         visited.remove(var_name);
-                        last_pos = cap.get(0).unwrap().end();
+                        last_pos = cap.get(0).expect("capture group 0 always exists").end();
                         continue;
                     }
                 } else {
@@ -187,7 +187,7 @@ fn resolve_variables_advanced_with_detection(
                     let placeholder = format!("{{{{{}}}}}", var_name);
                     result.push_str(&placeholder);
                     visited.remove(var_name);
-                    last_pos = cap.get(0).unwrap().end();
+                    last_pos = cap.get(0).expect("capture group 0 always exists").end();
                     continue;
                 }
             }
@@ -202,7 +202,7 @@ fn resolve_variables_advanced_with_detection(
 
         // Remove from visited set after processing
         visited.remove(var_name);
-        last_pos = cap.get(0).unwrap().end();
+        last_pos = cap.get(0).expect("capture group 0 always exists").end();
     }
 
     // Push remaining text

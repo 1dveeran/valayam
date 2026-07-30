@@ -1,8 +1,4 @@
-// TODO: Expand Dynamic Proxy Rotation for enterprise deployments.
-// - Add cloud provider API integration (AWS Instance Metadata, GCP Metadata) for ephemeral IP rotation.
-// - Implement proxy scoring (latency, success rate) to prefer faster proxies.
-// - Add automatic proxy discovery via proxy list APIs.
-// - Support proxy authentication (username/password) per proxy.
+// TODO(enterprise): Dynamic proxy rotation — cloud provider API integration, proxy scoring, auth.
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;

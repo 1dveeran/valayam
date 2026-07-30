@@ -1,4 +1,4 @@
-// TODO: Enhance OOB Server for enterprise deployments.
+// TODO(enterprise): Enhance OOB server for production deployments.
 // - Add TLS termination for HTTPS callbacks.
 // - Implement DNS query payload extraction for blind vulnerabilities (XXE, SSRF).
 // - Add real-time WebSocket notifications for detected interactions.
