@@ -16,6 +16,9 @@ pub struct JsonReporter {
     templates: Vec<String>,
     targets: Vec<String>,
     scanner_version: String,
+    /// Platform-assigned job ID — included in the output envelope
+    /// so the platform can match results to the dispatched job.
+    job_id: Option<String>,
     findings: Mutex<Vec<FindingOwned>>,
 }
 
@@ -37,8 +40,15 @@ impl JsonReporter {
             templates,
             targets,
             scanner_version,
+            job_id: None,
             findings: Mutex::new(Vec::new()),
         })
+    }
+
+    /// Set the platform-assigned job ID for this scan. Included in the output
+    /// envelope so the platform can correlate results with a dispatched job.
+    pub fn set_job_id(&mut self, job_id: String) {
+        self.job_id = Some(job_id);
     }
 }
 
@@ -62,7 +72,7 @@ impl Reporter for JsonReporter {
             std::mem::take(&mut *guard)
         };
 
-        let report = serde_json::json!({
+        let mut report = serde_json::json!({
             "scan_metadata": {
                 "scan_id": self.scan_id,
                 "scanner_name": "valayam",
@@ -80,6 +90,11 @@ impl Reporter for JsonReporter {
             },
             "findings": findings
         });
+
+        // Include platform job_id if set, for result-schema contract
+        if let Some(ref job_id) = self.job_id {
+            report["job_id"] = serde_json::json!(job_id);
+        }
 
         let file = File::create(&self.path)?;
         let writer = BufWriter::new(file);

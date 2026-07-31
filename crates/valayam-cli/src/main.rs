@@ -1,3 +1,5 @@
+mod agent;
+mod agent_config;
 mod cli;
 mod orchestrator;
 pub mod config;
@@ -13,6 +15,8 @@ use colored::*;
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+
+use crate::agent::start_agent;
 
 use setup::*;
 use valayam_engine::rate_limiter::RateLimiter;
@@ -71,6 +75,19 @@ async fn main() -> anyhow::Result<()> {
     // Handle control subcommand — early return
     if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
         return handle_control_command(action, scan_id, port).await;
+    }
+    // Handle agent subcommand — early return (worker polling loop)
+    if let Some(cli::Commands::Agent { platform_url, worker_id, poll_interval_secs, heartbeat_interval_secs, capabilities }) = &args.command {
+        let cfg = agent_config::AgentConfig {
+            platform_url: platform_url.clone(),
+            worker_id: worker_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            poll_interval_secs: *poll_interval_secs,
+            heartbeat_interval_secs: *heartbeat_interval_secs,
+            capabilities: capabilities.split(',').map(|s| s.trim().to_string()).collect(),
+            job_secret: std::env::var("PLATFORM_JOB_SECRET").unwrap_or_default(),
+        };
+        let cancel = CancellationToken::new();
+        return start_agent(cfg, cancel).await;
     }
 
     // ── Template path resolution ──────────────────────────────────────────

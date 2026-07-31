@@ -181,6 +181,25 @@ pub async fn run_scan(
     state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::executor::ScanState>>,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
+    run_scan_with_job_id(args, template_files, is_nuclei, targets, http_client, rate_limiter, grpc_client, state_rx, cancel, None).await
+}
+
+/// Extended entrypoint that accepts a platform-assigned `job_id`.
+/// When provided, it is written into the JSON output envelope so the
+/// platform can correlate results with the dispatched job.
+#[tracing::instrument(skip(http_client, rate_limiter, grpc_client, state_rx, cancel))]
+pub async fn run_scan_with_job_id(
+    args: Args,
+    template_files: Vec<PathBuf>,
+    is_nuclei: bool,
+    targets: Vec<String>,
+    http_client: Arc<valayam_core::network::http::StealthHttpClient>,
+    rate_limiter: Option<Arc<RateLimiter>>,
+    grpc_client: Option<ScannerClient<tonic::transport::Channel>>,
+    state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::executor::ScanState>>,
+    cancel: CancellationToken,
+    job_id: Option<String>,
+) -> anyhow::Result<()> {
     let scan_start = Instant::now();
 
     // ── Progress bar setup using MultiProgress ──
@@ -349,19 +368,24 @@ pub async fn run_scan(
     if let Some(ref path) = args.output {
         let plugins = registry.list_plugins();
         let templates = template_files.iter().map(|p| p.to_string_lossy().into_owned()).collect();
-        let scan_id = uuid::Uuid::new_v4().to_string();
+        let scan_id = job_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let start_time = chrono::Utc::now().to_rfc3339();
         let targets: Vec<String> = actual_targets.iter().cloned().collect();
         let scanner_version = env!("CARGO_PKG_VERSION").to_string();
-        reporters.push(Box::new(JsonReporter::new(
-            path.to_string(), 
-            scan_id, 
-            start_time, 
-            plugins, 
-            templates, 
-            targets, 
+        let mut json_reporter = JsonReporter::new(
+            path.to_string(),
+            scan_id,
+            start_time,
+            plugins,
+            templates,
+            targets,
             scanner_version
-        )?));
+        )?;
+        // Propagate platform job_id into the output envelope
+        if let Some(ref jid) = job_id {
+            json_reporter.set_job_id(jid.clone());
+        }
+        reporters.push(Box::new(json_reporter));
     }
     let composite = CompositeReporter::new(reporters);
 
