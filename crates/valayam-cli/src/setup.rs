@@ -162,7 +162,7 @@ pub fn init_proxy_rotator(proxy_file: Option<&str>) -> Option<ProxyRotator> {
     match proxy_file {
         Some(path) => match ProxyRotator::load_from_file(path) {
             Ok(rotator) => {
-                println!("{} Loaded {} proxies from {}", "[+]".green().bold(), rotator.len(), path);
+                println!("{} Loaded proxies from {}", "[+]".green().bold(), path);
                 Some(rotator)
             }
             Err(e) => {

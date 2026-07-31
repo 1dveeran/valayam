@@ -3,7 +3,9 @@
 // - Optimize Regex substitutions for zero-copy where possible.
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::HashMap;
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
+use valayam_models::error::ScannerError;
 
 /// Resolves all `{{variable}}` placeholders in a template string using the
 /// provided variable context with circular dependency detection.
@@ -15,67 +17,77 @@ use std::collections::HashMap;
 /// Helper function evaluation (e.g., `{{base64(...)}}`) is handled
 /// separately by the `features::helpers` module and called after
 /// variable resolution.
-pub fn resolve_variables(template_str: &str, context: &HashMap<String, String>) -> String {
-    // Detect and prevent circular references
-    let mut visited = std::collections::HashSet::new();
+pub fn resolve_variables(template_str: &str, context: &HashMap<String, String>) -> Result<String, ScannerError> {
+    let mut visited = HashSet::new();
     resolve_variables_with_detection(template_str, context, &mut visited)
 }
 
-/// Internal recursive function for variable resolution with cycle detection
 fn resolve_variables_with_detection(
     template_str: &str,
     context: &HashMap<String, String>,
-    visited: &mut std::collections::HashSet<String>,
-) -> String {
-    // Fast path: if no variables, return original string
+    visited: &mut HashSet<String>,
+) -> Result<String, ScannerError> {
     if !template_str.contains("{{") || !template_str.contains("}}") {
-        return template_str.to_string();
-    }
-
-    lazy_static! {
-        // Pre-compiled regex for better performance
-        static ref VARIABLE_RE: Regex =
-            Regex::new(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}").expect("Valid regex");
+        return Ok(template_str.to_string());
     }
 
     let mut result = String::with_capacity(template_str.len());
-    let mut last_pos = 0;
+    let mut remaining = template_str;
 
-    for cap in VARIABLE_RE.captures_iter(template_str) {
-        // Push text before the variable
-        result.push_str(&template_str[last_pos..cap.get(0).expect("capture group 0 always exists").start()]);
+    while let Some(start_idx) = remaining.find("{{") {
+        result.push_str(&remaining[..start_idx]);
+        let after_start = &remaining[start_idx + 2..];
 
-        let var_name = cap.get(1).expect("capture group 1 always exists for matched pattern").as_str();
+        if let Some(end_idx) = after_start.find("}}") {
+            let var_name = &after_start[..end_idx];
+            
+            if !is_valid_var_name(var_name) {
+                // If it's not a valid variable name, leave it as is
+                result.push_str("{{");
+                result.push_str(var_name);
+                result.push_str("}}");
+                remaining = &after_start[end_idx + 2..];
+                continue;
+            }
 
-        // Check for circular dependency
-        if !visited.insert(var_name.to_string()) {
-            // Circular dependency detected - leave variable unresolved
-            let placeholder = format!("{{{{{}}}}}", var_name);
-            result.push_str(&placeholder);
-            // Remove from visited set to allow other paths
+            if !visited.insert(var_name.to_string()) {
+                return Err(ScannerError::VariableResolutionError(format!(
+                    "Circular dependency detected for variable: {}",
+                    var_name
+                )));
+            }
+
+            if let Some(value) = context.get(var_name) {
+                result.push_str(value);
+            } else {
+                result.push_str("{{");
+                result.push_str(var_name);
+                result.push_str("}}");
+            }
+
             visited.remove(var_name);
-            last_pos = cap.get(0).expect("capture group 0 always exists").end();
-            continue;
-        }
-
-        // Replace with variable value if found
-        if let Some(value) = context.get(var_name) {
-            result.push_str(value);
+            remaining = &after_start[end_idx + 2..];
         } else {
-            // Variable not found - keep original placeholder
-            let placeholder = format!("{{{{{}}}}}", var_name);
-            result.push_str(&placeholder);
+            // No closing tags found
+            result.push_str("{{");
+            remaining = after_start;
+            break;
         }
-
-        // Remove from visited set after processing
-        visited.remove(var_name);
-        last_pos = cap.get(0).expect("capture group 0 always exists").end();
     }
+    result.push_str(remaining);
 
-    // Push remaining text
-    result.push_str(&template_str[last_pos..]);
+    Ok(result)
+}
 
-    result
+fn is_valid_var_name(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let first = s.chars().next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    s.chars().skip(1).all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Builds the initial variable context from the target URL.
@@ -112,104 +124,96 @@ pub fn extract_placeholder_names(template_str: &str) -> Vec<String> {
 pub fn resolve_variables_advanced(
     template_str: &str,
     context: &HashMap<String, String>,
-) -> String {
-    // Detect and prevent circular references
-    let mut visited = std::collections::HashSet::new();
+) -> Result<String, ScannerError> {
+    let mut visited = HashSet::new();
     resolve_variables_advanced_with_detection(template_str, context, &mut visited)
 }
 
-/// Internal recursive function for advanced variable resolution with cycle detection
 fn resolve_variables_advanced_with_detection(
     template_str: &str,
     context: &HashMap<String, String>,
-    visited: &mut std::collections::HashSet<String>,
-) -> String {
-    // Fast path: if no variables, return original string
+    visited: &mut HashSet<String>,
+) -> Result<String, ScannerError> {
     if !template_str.contains("{{") || !template_str.contains("}}") {
-        return template_str.to_string();
-    }
-
-    lazy_static! {
-        // Regex to capture variable name and optional modifiers
-        static ref ADVANCED_VARIABLE_RE: Regex =
-            Regex::new(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)(?:\|([^}]+))?\}\}").expect("Valid regex");
+        return Ok(template_str.to_string());
     }
 
     let mut result = String::with_capacity(template_str.len());
-    let mut last_pos = 0;
+    let mut remaining = template_str;
 
-    for cap in ADVANCED_VARIABLE_RE.captures_iter(template_str) {
-        // Push text before the variable
-        result.push_str(&template_str[last_pos..cap.get(0).expect("capture group 0 always exists").start()]);
+    while let Some(start_idx) = remaining.find("{{") {
+        result.push_str(&remaining[..start_idx]);
+        let after_start = &remaining[start_idx + 2..];
 
-        let var_name = cap.get(1).expect("capture group 1 always exists for matched pattern").as_str();
-        let modifiers = cap.get(2).map(|m| m.as_str());
-
-        // Check for circular dependency
-        if !visited.insert(var_name.to_string()) {
-            // Circular dependency detected - leave variable unresolved
-            if let Some(mods) = modifiers {
-                let placeholder = format!("{{{{{}|{}}}}}", var_name, mods);
-                result.push_str(&placeholder);
+        if let Some(end_idx) = after_start.find("}}") {
+            let inner = &after_start[..end_idx];
+            
+            // Parse var_name and optional modifiers
+            let (var_name, modifiers) = if let Some(pipe_idx) = inner.find('|') {
+                (&inner[..pipe_idx], Some(&inner[pipe_idx + 1..]))
             } else {
-                let placeholder = format!("{{{{{}}}}}", var_name);
-                result.push_str(&placeholder);
-            }
-            // Remove from visited set to allow other paths
-            visited.remove(var_name);
-            last_pos = cap.get(0).expect("capture group 0 always exists").end();
-            continue;
-        }
+                (inner, None)
+            };
 
-        // Get variable value
-        let mut value = match context.get(var_name) {
-            Some(v) => v.clone(),
-            None => {
-                // Variable not found - check for default value in modifiers
-                if let Some(mods) = modifiers {
-                    if let Some(default_val) = extract_default_value(mods) {
-                        default_val.to_string()
-                    } else {
-                        // Keep original placeholder if no default
-                        if let Some(mods) = modifiers {
-                            let placeholder = format!("{{{{{}|{}}}}}", var_name, mods);
-                            result.push_str(&placeholder);
+            if !is_valid_var_name(var_name) {
+                result.push_str("{{");
+                result.push_str(inner);
+                result.push_str("}}");
+                remaining = &after_start[end_idx + 2..];
+                continue;
+            }
+
+            if !visited.insert(var_name.to_string()) {
+                return Err(ScannerError::VariableResolutionError(format!(
+                    "Circular dependency detected for variable: {}",
+                    var_name
+                )));
+            }
+
+            let mut value = match context.get(var_name) {
+                Some(v) => v.clone(),
+                None => {
+                    if let Some(mods) = modifiers {
+                        if let Some(default_val) = extract_default_value(mods) {
+                            default_val.to_string()
                         } else {
-                            let placeholder = format!("{{{{{}}}}}", var_name);
-                            result.push_str(&placeholder);
+                            result.push_str("{{");
+                            result.push_str(inner);
+                            result.push_str("}}");
+                            visited.remove(var_name);
+                            remaining = &after_start[end_idx + 2..];
+                            continue;
                         }
+                    } else {
+                        result.push_str("{{");
+                        result.push_str(inner);
+                        result.push_str("}}");
                         visited.remove(var_name);
-                        last_pos = cap.get(0).expect("capture group 0 always exists").end();
+                        remaining = &after_start[end_idx + 2..];
                         continue;
                     }
-                } else {
-                    // No modifiers and no variable - keep placeholder
-                    let placeholder = format!("{{{{{}}}}}", var_name);
-                    result.push_str(&placeholder);
-                    visited.remove(var_name);
-                    last_pos = cap.get(0).expect("capture group 0 always exists").end();
-                    continue;
                 }
+            };
+
+            if let Some(mods) = modifiers {
+                value = apply_modifiers(&value, mods);
             }
-        };
 
-        // Apply modifiers if present
-        if let Some(mods) = modifiers {
-            value = apply_modifiers(&value, mods);
+            result.push_str(&value);
+            visited.remove(var_name);
+            remaining = &after_start[end_idx + 2..];
+        } else {
+            result.push_str("{{");
+            remaining = after_start;
+            break;
         }
-
-        result.push_str(&value);
-
-        // Remove from visited set after processing
-        visited.remove(var_name);
-        last_pos = cap.get(0).expect("capture group 0 always exists").end();
     }
 
-    // Push remaining text
-    result.push_str(&template_str[last_pos..]);
-
-    result
+    result.push_str(remaining);
+    Ok(result)
 }
+
+// Replaced by above block
 
 /// Extract default value from modifier string like `default:"value"` or `default:'value'`
 fn extract_default_value(modifiers: &str) -> Option<&str> {
@@ -260,7 +264,7 @@ mod tests {
         ctx.insert("BaseURL".to_string(), "https://example.com".to_string());
         ctx.insert("token".to_string(), "abc123".to_string());
 
-        let result = resolve_variables("{{BaseURL}}/api?t={{token}}", &ctx);
+        let result = resolve_variables("{{BaseURL}}/api?t={{token}}", &ctx).unwrap();
         assert_eq!(result, "https://example.com/api?t=abc123");
     }
 
@@ -270,7 +274,7 @@ mod tests {
         ctx.insert("a".to_string(), "{{b}}".to_string());
         ctx.insert("b".to_string(), "{{a}}".to_string());
 
-        let result = resolve_variables("Start {{a}} end", &ctx);
+        let result = resolve_variables("Start {{a}} end", &ctx).unwrap();
         // Should detect circular dependency and leave unresolved
         assert!(result.contains("{{a}}") || result.contains("{{b}}"));
     }
@@ -281,24 +285,24 @@ mod tests {
         ctx.insert("name".to_string(), "John".to_string());
 
         // Test default value
-        let result = resolve_variables_advanced("Hello {{name|default:\"Guest\"}}!", &ctx);
+        let result = resolve_variables_advanced("Hello {{name|default:\"Guest\"}}!", &ctx).unwrap();
         assert_eq!(result, "Hello John!");
 
         // Test default when variable missing
-        let result = resolve_variables_advanced("Hello {{missing|default:\"Guest\"}}!", &ctx);
+        let result = resolve_variables_advanced("Hello {{missing|default:\"Guest\"}}!", &ctx).unwrap();
         assert_eq!(result, "Hello Guest!");
 
         // Test modifiers
-        let result = resolve_variables_advanced("Hello {{name|upper}}!", &ctx);
+        let result = resolve_variables_advanced("Hello {{name|upper}}!", &ctx).unwrap();
         assert_eq!(result, "Hello JOHN!");
 
-        let result = resolve_variables_advanced("Hello {{name|lower}}!", &ctx);
+        let result = resolve_variables_advanced("Hello {{name|lower}}!", &ctx).unwrap();
         assert_eq!(result, "Hello john!");
 
-        let result = resolve_variables_advanced("Hello {{name|reverse}}!", &ctx);
+        let result = resolve_variables_advanced("Hello {{name|reverse}}!", &ctx).unwrap();
         assert_eq!(result, "Hello nhoJ!");
 
-        let result = resolve_variables_advanced("Length: {{name|len}}", &ctx);
+        let result = resolve_variables_advanced("Length: {{name|len}}", &ctx).unwrap();
         assert_eq!(result, "Length: 4");
     }
 
@@ -323,14 +327,14 @@ mod tests {
     #[test]
     fn test_resolve_variables_no_placeholders() {
         let ctx = HashMap::new();
-        assert_eq!(resolve_variables("plain text", &ctx), "plain text");
-        assert_eq!(resolve_variables("", &ctx), "");
+        assert_eq!(resolve_variables("plain text", &ctx).unwrap(), "plain text");
+        assert_eq!(resolve_variables("", &ctx).unwrap(), "");
     }
 
     #[test]
     fn test_resolve_variables_missing_var_keeps_placeholder() {
         let ctx = HashMap::new();
-        let result = resolve_variables("Hello {{unknown}}!", &ctx);
+        let result = resolve_variables("Hello {{unknown}}!", &ctx).unwrap();
         assert_eq!(result, "Hello {{unknown}}!");
     }
 
@@ -339,7 +343,7 @@ mod tests {
         let mut ctx = HashMap::new();
         ctx.insert("a".to_string(), "hello".to_string());
         ctx.insert("b".to_string(), "world".to_string());
-        let result = resolve_variables("{{a}}_{{b}}", &ctx);
+        let result = resolve_variables("{{a}}_{{b}}", &ctx).unwrap();
         assert_eq!(result, "hello_world");
     }
 
@@ -348,7 +352,7 @@ mod tests {
         // Variable names with underscores (valid in regex)
         let mut ctx = HashMap::new();
         ctx.insert("my_var".to_string(), "value".to_string());
-        let result = resolve_variables("{{my_var}}", &ctx);
+        let result = resolve_variables("{{my_var}}", &ctx).unwrap();
         assert_eq!(result, "value");
     }
 
@@ -357,7 +361,7 @@ mod tests {
         let mut ctx = HashMap::new();
         ctx.insert("a".to_string(), "x".to_string());
         ctx.insert("b".to_string(), "y".to_string());
-        let result = resolve_variables("{{a}}{{b}}", &ctx);
+        let result = resolve_variables("{{a}}{{b}}", &ctx).unwrap();
         assert_eq!(result, "xy");
     }
 
@@ -367,7 +371,7 @@ mod tests {
         ctx.insert("outer".to_string(), "prefix_{{inner}}_suffix".to_string());
         ctx.insert("inner".to_string(), "mid".to_string());
         // Only one pass of resolution — {{inner}} inside the value is NOT resolved
-        let result = resolve_variables("{{outer}}", &ctx);
+        let result = resolve_variables("{{outer}}", &ctx).unwrap();
         assert_eq!(result, "prefix_{{inner}}_suffix");
     }
 
@@ -381,7 +385,7 @@ mod tests {
         for i in 0..50 {
             input.push_str(&format!("{{{{key_{}}}}},", i));
         }
-        let result = resolve_variables(&input, &ctx);
+        let result = resolve_variables(&input, &ctx).unwrap();
         for i in 0..50 {
             assert!(result.contains(&format!("value_{}", i)));
         }
@@ -394,7 +398,7 @@ mod tests {
         ctx.insert("b".to_string(), "{{c}}".to_string());
         ctx.insert("c".to_string(), "{{a}}".to_string());
 
-        let result = resolve_variables("start {{a}} end", &ctx);
+        let result = resolve_variables("start {{a}} end", &ctx).unwrap();
         // At least one placeholder should remain unresolved
         assert!(result.contains("{{a}}") || result.contains("{{b}}") || result.contains("{{c}}"));
     }
@@ -404,14 +408,14 @@ mod tests {
     #[test]
     fn test_advanced_no_placeholders() {
         let ctx = HashMap::new();
-        assert_eq!(resolve_variables_advanced("simple text", &ctx), "simple text");
+        assert_eq!(resolve_variables_advanced("simple text", &ctx).unwrap(), "simple text");
     }
 
     #[test]
     fn test_advanced_chained_modifiers() {
         let mut ctx = HashMap::new();
         ctx.insert("name".to_string(), "Hello".to_string());
-        let result = resolve_variables_advanced("{{name|upper|reverse}}", &ctx);
+        let result = resolve_variables_advanced("{{name|upper|reverse}}", &ctx).unwrap();
         assert_eq!(result, "OLLEH");
     }
 
@@ -419,9 +423,9 @@ mod tests {
     fn test_advanced_modifier_on_empty_string() {
         let mut ctx = HashMap::new();
         ctx.insert("empty".to_string(), "".to_string());
-        assert_eq!(resolve_variables_advanced("{{empty|len}}", &ctx), "0");
-        assert_eq!(resolve_variables_advanced("{{empty|upper}}", &ctx), "");
-        assert_eq!(resolve_variables_advanced("{{empty|reverse}}", &ctx), "");
+        assert_eq!(resolve_variables_advanced("{{empty|len}}", &ctx).unwrap(), "0");
+        assert_eq!(resolve_variables_advanced("{{empty|upper}}", &ctx).unwrap(), "");
+        assert_eq!(resolve_variables_advanced("{{empty|reverse}}", &ctx).unwrap(), "");
     }
 
     #[test]
@@ -429,21 +433,21 @@ mod tests {
         let mut ctx = HashMap::new();
         ctx.insert("x".to_string(), "value".to_string());
         // Unknown modifier should pass through value unchanged
-        let result = resolve_variables_advanced("{{x|unknownmod}}", &ctx);
+        let result = resolve_variables_advanced("{{x|unknownmod}}", &ctx).unwrap();
         assert_eq!(result, "value");
     }
 
     #[test]
     fn test_advanced_default_with_empty_string() {
         let ctx = HashMap::new();
-        let result = resolve_variables_advanced("{{missing|default:\"\"}}", &ctx);
+        let result = resolve_variables_advanced("{{missing|default:\"\"}}", &ctx).unwrap();
         assert_eq!(result, "");
     }
 
     #[test]
     fn test_advanced_missing_var_no_default() {
         let ctx = HashMap::new();
-        let result = resolve_variables_advanced("{{missing}}", &ctx);
+        let result = resolve_variables_advanced("{{missing}}", &ctx).unwrap();
         assert_eq!(result, "{{missing}}");
     }
 
@@ -453,7 +457,7 @@ mod tests {
         let result = resolve_variables_advanced(
             "{{missing|default:\"hello world! @#$%\"}}",
             &ctx,
-        );
+        ).unwrap();
         assert_eq!(result, "hello world! @#$%");
     }
 
@@ -465,7 +469,7 @@ mod tests {
         let result = resolve_variables_advanced(
             "{{user|lower}}@{{domain}} via {{missing|default:\"default\"}}",
             &ctx,
-        );
+        ).unwrap();
         assert_eq!(result, "alice@example.com via default");
     }
 

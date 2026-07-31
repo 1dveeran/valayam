@@ -31,28 +31,36 @@ pub mod service_info {
         pub is_snmp: bool,
         /// Whether this appears to be a DHCP service
         pub is_dhcp: bool,
+        /// Whether this appears to be an NTP service
+        pub is_ntp: bool,
+        /// Whether this appears to be a TFTP service
+        pub is_tftp: bool,
+        /// Whether this appears to be an SSDP service
+        pub is_ssdp: bool,
     }
 }
 
+use valayam_models::error::ScannerError;
+
 /// Parses a list of port strings, expanding ranges into individual port numbers.
 /// E.g., ["53", "161", "8000-8005"] -> {53, 161, 8000, 8001, ..., 8005}
-fn parse_ports(ports: &[String]) -> Result<HashSet<u16>, String> {
+fn parse_ports(ports: &[String]) -> Result<HashSet<u16>, ScannerError> {
     let mut parsed_ports = HashSet::new();
     for port_str in ports {
         if let Some((start, end)) = port_str.split_once('-') {
             let start_port: u16 = start
                 .trim()
                 .parse()
-                .map_err(|_| format!("Invalid port range start: {}", start))?;
+                .map_err(|_| ScannerError::ConfigurationError(format!("Invalid port range start: {}", start)))?;
             let end_port: u16 = end
                 .trim()
                 .parse()
-                .map_err(|_| format!("Invalid port range end: {}", end))?;
+                .map_err(|_| ScannerError::ConfigurationError(format!("Invalid port range end: {}", end)))?;
             if start_port > end_port {
-                return Err(format!(
+                return Err(ScannerError::ConfigurationError(format!(
                     "Invalid port range: start > end ({} > {})",
                     start_port, end_port
-                ));
+                )));
             }
             for port in start_port..=end_port {
                 parsed_ports.insert(port);
@@ -61,7 +69,7 @@ fn parse_ports(ports: &[String]) -> Result<HashSet<u16>, String> {
             let port: u16 = port_str
                 .trim()
                 .parse()
-                .map_err(|_| format!("Invalid port: {}", port_str))?;
+                .map_err(|_| ScannerError::ConfigurationError(format!("Invalid port: {}", port_str)))?;
             parsed_ports.insert(port);
         }
     }
@@ -161,6 +169,34 @@ async fn probe_udp_service(_socket: &UdpSocket, port: u16) -> Option<Vec<u8>> {
             pkt.push(0xff);
             Some(pkt)
         }
+        // NTP - NTPv4 client request
+        123 => {
+            let mut pkt = vec![0u8; 48];
+            // LI=0 (0), VN=4 (4), Mode=3 (Client) -> 0x23
+            pkt[0] = 0x23;
+            Some(pkt)
+        }
+        // TFTP - Read Request (RRQ) for a dummy file
+        69 => {
+            let mut pkt = Vec::new();
+            // Opcode: 1 (Read Request)
+            pkt.push(0x00);
+            pkt.push(0x01);
+            // Filename: "test"
+            pkt.extend_from_slice(b"test\x00");
+            // Mode: "octet"
+            pkt.extend_from_slice(b"octet\x00");
+            Some(pkt)
+        }
+        // SSDP (UPnP) - M-SEARCH
+        1900 => {
+            let payload = "M-SEARCH * HTTP/1.1\r\n\
+                           Host: 239.255.255.250:1900\r\n\
+                           Man: \"ssdp:discover\"\r\n\
+                           MX: 1\r\n\
+                           ST: ssdp:all\r\n\r\n";
+            Some(payload.as_bytes().to_vec())
+        }
         _ => None, // No specific probe for other ports
     }
 }
@@ -236,6 +272,58 @@ fn parse_dhcp_response(response: &[u8]) -> service_info::ServiceInfo {
     info
 }
 
+/// Extract NTP information from response
+fn parse_ntp_response(response: &[u8]) -> service_info::ServiceInfo {
+    let mut info = service_info::ServiceInfo::default();
+    info.is_ntp = true;
+    info.service_name = Some("NTP".to_string());
+
+    // NTP response is at least 48 bytes
+    if response.len() >= 48 {
+        // LI, VN, Mode are in the first byte
+        let mode = response[0] & 0x07;
+        // Mode 4 is Server
+        if mode == 4 {
+            let vn = (response[0] & 0x38) >> 3;
+            info.version = Some(format!("NTPv{}", vn));
+        }
+    }
+    info
+}
+
+/// Extract TFTP information from response
+fn parse_tftp_response(response: &[u8]) -> service_info::ServiceInfo {
+    let mut info = service_info::ServiceInfo::default();
+    info.is_tftp = true;
+    info.service_name = Some("TFTP".to_string());
+
+    if response.len() >= 4 {
+        let opcode = u16::from_be_bytes([response[0], response[1]]);
+        // TFTP Server usually responds with Error (5) for dummy file, or Data (3)
+        if opcode == 5 || opcode == 3 {
+            info.version = Some("TFTP Server".to_string());
+        }
+    }
+    info
+}
+
+/// Extract SSDP information from response
+fn parse_ssdp_response(response: &[u8]) -> service_info::ServiceInfo {
+    let mut info = service_info::ServiceInfo::default();
+    info.is_ssdp = true;
+    info.service_name = Some("SSDP".to_string());
+
+    let resp_str = String::from_utf8_lossy(response);
+    if resp_str.contains("HTTP/1.1 200 OK") || resp_str.contains("UPnP") {
+        info.version = Some("UPnP Device".to_string());
+        // Try to extract Server header
+        if let Some(server_line) = resp_str.lines().find(|l| l.to_lowercase().starts_with("server:")) {
+            info.version = Some(server_line["server:".len()..].trim().to_string());
+        }
+    }
+    info
+}
+
 /// Performs a concurrent UDP probe on a list of ports for a given host.
 /// UDP is stateless, so we send a protocol-specific probe and wait for a response.
 pub async fn scan_ports(
@@ -243,11 +331,8 @@ pub async fn scan_ports(
     ports: &[String],
     banner_timeout_ms: Option<u64>,
     enable_service_detection: bool,
-) -> Vec<UdpPortResult> {
-    let Ok(parsed_ports) = parse_ports(ports) else {
-        eprintln!("[!] Invalid UDP port format provided.");
-        return Vec::new();
-    };
+) -> Result<Vec<UdpPortResult>, ScannerError> {
+    let parsed_ports = parse_ports(ports)?;
 
     let scan_futures = parsed_ports.into_iter().map(|port| {
         let host = host.to_string();
@@ -324,6 +409,21 @@ pub async fn scan_ports(
                             info.raw_response = Some(resp.clone());
                             info
                         }
+                        123 => {
+                            let mut info = parse_ntp_response(resp);
+                            info.raw_response = Some(resp.clone());
+                            info
+                        }
+                        69 => {
+                            let mut info = parse_tftp_response(resp);
+                            info.raw_response = Some(resp.clone());
+                            info
+                        }
+                        1900 => {
+                            let mut info = parse_ssdp_response(resp);
+                            info.raw_response = Some(resp.clone());
+                            info
+                        }
                         _ => {
                             // Generic handling - just check if we got any response
                             if !resp.is_empty() {
@@ -346,10 +446,10 @@ pub async fn scan_ports(
 
     let results = join_all(scan_futures).await;
 
-    results
+    Ok(results
         .into_iter()
         .filter_map(|res| res.unwrap_or(None))
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]
@@ -389,5 +489,25 @@ mod tests {
         let info = parse_snmp_response(&response);
         assert!(info.is_snmp);
         assert_eq!(info.service_name.as_deref(), Some("SNMP"));
+    }
+    #[tokio::test]
+    async fn test_parse_ntp_response() {
+        // NTPv4 Server response (LI=0, VN=4, Mode=4 -> 0x24)
+        let mut response = vec![0u8; 48];
+        response[0] = 0x24;
+        let info = parse_ntp_response(&response);
+        assert!(info.is_ntp);
+        assert_eq!(info.service_name.as_deref(), Some("NTP"));
+        assert_eq!(info.version.as_deref(), Some("NTPv4"));
+    }
+
+    #[tokio::test]
+    async fn test_parse_tftp_response() {
+        // TFTP Error response (Opcode 5)
+        let response = [0x00, 0x05, 0x00, 0x01, b'e', b'r', b'r', 0x00];
+        let info = parse_tftp_response(&response);
+        assert!(info.is_tftp);
+        assert_eq!(info.service_name.as_deref(), Some("TFTP"));
+        assert_eq!(info.version.as_deref(), Some("TFTP Server"));
     }
 }

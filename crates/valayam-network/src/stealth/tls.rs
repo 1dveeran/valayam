@@ -104,59 +104,121 @@ impl Ja3Ja4Spoofer {
         self
     }
 
-    /// Apply JA3/JA4 spoofing to a TLS client config
-    pub fn apply_to_config(&self, mut config: rustls::ClientConfig) -> rustls::ClientConfig {
-        // Apply the profile-specific settings
+    /// Get a custom CryptoProvider tailored to the spoofing profile
+    pub fn get_provider(&self) -> rustls::crypto::CryptoProvider {
         match self.profile {
-            Ja3Ja4Profile::Chrome => self.apply_chrome_profile(&mut config),
-            Ja3Ja4Profile::Firefox => self.apply_firefox_profile(&mut config),
-            Ja3Ja4Profile::Safari => self.apply_safari_profile(&mut config),
-            Ja3Ja4Profile::Edge => self.apply_edge_profile(&mut config),
-            Ja3Ja4Profile::Random => self.apply_random_profile(&mut config),
+            Ja3Ja4Profile::Chrome => self.chrome_provider(),
+            Ja3Ja4Profile::Firefox => self.firefox_provider(),
+            Ja3Ja4Profile::Safari => self.safari_provider(),
+            Ja3Ja4Profile::Edge => self.edge_provider(),
+            Ja3Ja4Profile::Random => self.random_provider(),
         }
-
-        config
     }
 
-    /// Apply Chrome-like TLS fingerprint
-    fn apply_chrome_profile(&self, _config: &mut rustls::ClientConfig) {
-        // Chrome 123 JA3: 771,4865-4866-4867-49195-49199-49200,0-23-65281-10-11-35-16-5-13-18-0-43-27-21,23-24-25,0
-        // In rustls 0.23, cipher suite ordering is managed at the provider level.
-        // This is a simplified approximation using default settings.
-        // Full JA3 spoofing would require lower-level manipulation of ClientHello bytes.
+    /// Chrome-like TLS provider
+    fn chrome_provider(&self) -> rustls::crypto::CryptoProvider {
         tracing::debug!("Applying Chrome TLS profile");
+        let mut provider = rustls::crypto::ring::default_provider();
+        
+        // Chrome typically prioritizes GREASE, AES_128_GCM, CHACHA20, AES_256_GCM
+        // We rearrange the default provider's cipher suites to match Chrome's preference
+        let suites = &provider.cipher_suites;
+        let mut new_suites = Vec::new();
+        
+        // Note: rustls doesn't support GREASE natively in configuration, but we can reorder the real ones.
+        // Chrome preference: TLS13_AES_128_GCM, TLS13_CHACHA20, TLS13_AES_256_GCM
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        // TLS 1.2
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        
+        provider.cipher_suites = new_suites;
+        provider
     }
 
-    /// Apply Firefox-like TLS fingerprint
-    fn apply_firefox_profile(&self, _config: &mut rustls::ClientConfig) {
+    /// Firefox-like TLS provider
+    fn firefox_provider(&self) -> rustls::crypto::CryptoProvider {
         tracing::debug!("Applying Firefox TLS profile");
+        let mut provider = rustls::crypto::ring::default_provider();
+        
+        // Firefox prioritizes AES_128_GCM, CHACHA20, AES_256_GCM just like Chrome, but sometimes with slight variation in TLS 1.2
+        let suites = &provider.cipher_suites;
+        let mut new_suites = Vec::new();
+        
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        
+        provider.cipher_suites = new_suites;
+        provider
     }
 
-    /// Apply Safari-like TLS fingerprint
-    fn apply_safari_profile(&self, _config: &mut rustls::ClientConfig) {
+    /// Safari-like TLS provider
+    fn safari_provider(&self) -> rustls::crypto::CryptoProvider {
         tracing::debug!("Applying Safari TLS profile");
+        let mut provider = rustls::crypto::ring::default_provider();
+        
+        // Safari (macOS/iOS) heavily prioritizes CHACHA20 over AES
+        let suites = &provider.cipher_suites;
+        let mut new_suites = Vec::new();
+        
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS13_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        if let Some(c) = suites.iter().find(|s| s.suite() == rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) { new_suites.push(*c); }
+        
+        provider.cipher_suites = new_suites;
+        provider
     }
 
-    /// Apply Edge-like TLS fingerprint
-    fn apply_edge_profile(&self, _config: &mut rustls::ClientConfig) {
+    /// Edge-like TLS provider
+    fn edge_provider(&self) -> rustls::crypto::CryptoProvider {
         tracing::debug!("Applying Edge TLS profile");
+        // Edge is Chromium based, use same as Chrome
+        self.chrome_provider()
     }
 
     /// Apply a random profile to avoid fingerprinting
-    fn apply_random_profile(&self, config: &mut rustls::ClientConfig) {
+    fn random_provider(&self) -> rustls::crypto::CryptoProvider {
         use rand::seq::SliceRandom;
         use rand::thread_rng;
 
-        let profiles: [fn(&Self, &mut rustls::ClientConfig); 4] = [
-            Self::apply_chrome_profile,
-            Self::apply_firefox_profile,
-            Self::apply_safari_profile,
-            Self::apply_edge_profile,
+        let profiles = [
+            Ja3Ja4Profile::Chrome,
+            Ja3Ja4Profile::Firefox,
+            Ja3Ja4Profile::Safari,
+            Ja3Ja4Profile::Edge,
         ];
 
         let mut rng = thread_rng();
         let chosen = profiles.choose(&mut rng).unwrap();
-        chosen(self, config);
+        
+        match chosen {
+            Ja3Ja4Profile::Chrome => self.chrome_provider(),
+            Ja3Ja4Profile::Firefox => self.firefox_provider(),
+            Ja3Ja4Profile::Safari => self.safari_provider(),
+            Ja3Ja4Profile::Edge => self.edge_provider(),
+            _ => self.chrome_provider(),
+        }
     }
 }
 
@@ -192,17 +254,20 @@ impl TlsConfig {
 
     /// Build a ClientConfig with optional JA3/JA4 spoofing
     pub fn build(&self) -> Result<rustls::ClientConfig, valayam_models::error::ScannerError> {
-        let config = rustls::ClientConfig::builder()
+        let provider = if let Some(ref spoofer) = self.spoofer {
+            spoofer.get_provider()
+        } else {
+            rustls::crypto::ring::default_provider()
+        };
+
+        let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(provider))
+            .with_safe_default_protocol_versions()
+            .map_err(|e| valayam_models::error::ScannerError::ConfigurationError(e.to_string()))?
             .dangerous()
             .with_custom_certificate_verifier(std::sync::Arc::new(NoCertVerification::new()))
             .with_no_client_auth();
 
-        // Apply spoofing if configured
-        if let Some(ref spoofer) = self.spoofer {
-            Ok(spoofer.apply_to_config(config))
-        } else {
-            Ok(config)
-        }
+        Ok(config)
     }
 
     /// Enable JA3/JA4 spoofing with a specific profile

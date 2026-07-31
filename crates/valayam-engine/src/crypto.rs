@@ -45,31 +45,34 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_and_verify_roundtrip() {
+    fn test_sign_and_verify_roundtrip() -> anyhow::Result<()> {
         let (private, public) = PluginCrypto::generate_keypair();
         let message = b"test message to sign";
-        let signature = PluginCrypto::sign(&private, message).unwrap();
+        let signature = PluginCrypto::sign(&private, message)?;
         assert_eq!(signature.len(), 64);
 
-        let valid = PluginCrypto::verify(&public, message, &signature).unwrap();
+        let valid = PluginCrypto::verify(&public, message, &signature)?;
         assert!(valid);
+        Ok(())
     }
 
     #[test]
-    fn test_verify_rejects_tampered_message() {
+    fn test_verify_rejects_tampered_message() -> anyhow::Result<()> {
         let (private, public) = PluginCrypto::generate_keypair();
-        let signature = PluginCrypto::sign(&private, b"original message").unwrap();
-        let valid = PluginCrypto::verify(&public, b"tampered message", &signature).unwrap();
+        let signature = PluginCrypto::sign(&private, b"original message")?;
+        let valid = PluginCrypto::verify(&public, b"tampered message", &signature)?;
         assert!(!valid);
+        Ok(())
     }
 
     #[test]
-    fn test_verify_rejects_wrong_key() {
+    fn test_verify_rejects_wrong_key() -> anyhow::Result<()> {
         let (private_a, _public_a) = PluginCrypto::generate_keypair();
         let (_private_b, public_b) = PluginCrypto::generate_keypair();
-        let signature = PluginCrypto::sign(&private_a, b"test message").unwrap();
-        let valid = PluginCrypto::verify(&public_b, b"test message", &signature).unwrap();
+        let signature = PluginCrypto::sign(&private_a, b"test message")?;
+        let valid = PluginCrypto::verify(&public_b, b"test message", &signature)?;
         assert!(!valid);
+        Ok(())
     }
 
     #[test]
@@ -84,19 +87,21 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_empty_message() {
+    fn test_sign_empty_message() -> anyhow::Result<()> {
         let (private, public) = PluginCrypto::generate_keypair();
-        let signature = PluginCrypto::sign(&private, b"").unwrap();
-        let valid = PluginCrypto::verify(&public, b"", &signature).unwrap();
+        let signature = PluginCrypto::sign(&private, b"")?;
+        let valid = PluginCrypto::verify(&public, b"", &signature)?;
         assert!(valid);
+        Ok(())
     }
 
     #[test]
-    fn test_sign_and_verify_large_message() {
+    fn test_sign_and_verify_large_message() -> anyhow::Result<()> {
         let (private, public) = PluginCrypto::generate_keypair();
         let large_msg = vec![0xABu8; 10000];
-        let sig = PluginCrypto::sign(&private, &large_msg).unwrap();
-        let valid = PluginCrypto::verify(&public, &large_msg, &sig).unwrap();
+        let sig = PluginCrypto::sign(&private, &large_msg)?;
+        let valid = PluginCrypto::verify(&public, &large_msg, &sig)?;
         assert!(valid);
+        Ok(())
     }
 }

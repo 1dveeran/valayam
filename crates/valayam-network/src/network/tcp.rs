@@ -314,6 +314,7 @@ pub async fn scan_ports(
     banner_timeout_ms: Option<u64>,
     enable_service_detection: bool,
     send_probe: Option<String>,
+    stealth_syn_scan: bool,
 ) -> Vec<PortResult> {
     let Ok(parsed_ports) = parse_ports(ports) else {
         eprintln!("[!] Invalid port format provided.");
@@ -332,7 +333,37 @@ pub async fn scan_ports(
             let address = format!("{}:{}", host, port);
             let connect_timeout = Duration::from_secs(3); // Slightly increased for reliability
 
-            // Attempt TCP connection
+            // If stealth SYN scan is enabled, attempt it first
+            if stealth_syn_scan {
+                if let Ok(target_ip) = host.parse::<std::net::IpAddr>() {
+                    // Try the raw SYN scan. If it fails due to permissions (or any error), fall back to standard connect
+                    match crate::network::raw::syn_scan(target_ip, port, connect_timeout).await {
+                        Ok(true) => {
+                            // Port is open according to SYN-ACK
+                            // We can't easily grab banners passively from a raw SYN-ACK without completing the handshake.
+                            // We return basic information.
+                            return Some(PortResult {
+                                port,
+                                banner: None,
+                                service_info: ServiceInfo {
+                                    service_name: Some("unknown".to_string()),
+                                    ..Default::default()
+                                },
+                            });
+                        },
+                        Ok(false) => {
+                            // Port is closed or filtered
+                            return None;
+                        },
+                        Err(_) => {
+                            // Permission error or raw socket failure; fallback to connect scan below
+                            tracing::debug!("Raw SYN scan failed for {}, falling back to Connect scan", address);
+                        }
+                    }
+                }
+            }
+
+            // Attempt TCP Connect connection
             let mut stream = match timeout(connect_timeout, TcpStream::connect(&address)).await {
                 Ok(Ok(s)) => s,
                 _ => return None, // Connection failed or timed out

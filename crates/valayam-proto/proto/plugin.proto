@@ -20,10 +20,15 @@ service PluginService {
     rpc Shutdown (ShutdownRequest) returns (ShutdownResponse);
 }
 
-message InitRequest {}
+message InitRequest {
+    string engine_version = 1;
+}
 message InitResponse {
     bool success = 1;
     string error_message = 2;
+    repeated string supported_protocols = 3;
+    repeated string supported_template_ids = 4;
+    repeated string supported_tags = 5;
 }
 
 message ValidateConfigRequest {

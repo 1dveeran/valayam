@@ -14,6 +14,9 @@ impl PluginService for ExamplePlugin {
         Ok(Response::new(InitResponse {
             success: true,
             error_message: String::new(),
+            supported_protocols: vec!["grpc".to_string()],
+            supported_template_ids: vec!["grpc-example".to_string()],
+            supported_tags: vec![],
         }))
     }
 

@@ -171,45 +171,46 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn test_audit_log_creates_file() {
-        let dir = tempdir().unwrap();
+    async fn test_audit_log_creates_file() -> anyhow::Result<()> {
+        let dir = tempdir()?;
         let path = dir.path().join("audit.jsonl");
-        let mut audit = AuditLog::new(&path).await.unwrap();
+        let mut audit = AuditLog::new(&path).await?;
         assert!(path.exists());
 
         audit.record(AuditEvent::ScanStarted {
             scan_id: uuid::Uuid::new_v4(),
             target: "https://example.com".into(),
-        }).await.unwrap();
+        }).await?;
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_audit_log_sequential_entries() {
-        let dir = tempdir().unwrap();
+    async fn test_audit_log_sequential_entries() -> anyhow::Result<()> {
+        let dir = tempdir()?;
         let path = dir.path().join("audit.jsonl");
-        let mut audit = AuditLog::new(&path).await.unwrap();
+        let mut audit = AuditLog::new(&path).await?;
 
         let scan_id = uuid::Uuid::new_v4();
         audit.record(AuditEvent::ScanStarted {
             scan_id,
             target: "https://example.com".into(),
-        }).await.unwrap();
+        }).await?;
 
         audit.record(AuditEvent::PluginExecuted {
             scan_id,
             plugin: "test-plugin".into(),
             outcome: "matched".into(),
             duration_ms: 42,
-        }).await.unwrap();
+        }).await?;
 
         // Verify the file has two lines
-        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let content = tokio::fs::read_to_string(&path).await?;
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 2);
 
         // Parse entries and verify chain linkage
-        let entry1: AuditEntry = serde_json::from_str(lines[0]).unwrap();
-        let entry2: AuditEntry = serde_json::from_str(lines[1]).unwrap();
+        let entry1: AuditEntry = serde_json::from_str(lines[0])?;
+        let entry2: AuditEntry = serde_json::from_str(lines[1])?;
 
         assert_eq!(entry1.seq, 1);
         assert_eq!(entry2.seq, 2);
@@ -217,39 +218,41 @@ mod tests {
         assert_eq!(entry2.prev_digest, entry1.digest);
         // First entry has zero prev_digest
         assert_eq!(entry1.prev_digest, "0000000000000000000000000000000000000000000000000000000000000000");
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_audit_log_tamper_detection() {
-        let dir = tempdir().unwrap();
+    async fn test_audit_log_tamper_detection() -> anyhow::Result<()> {
+        let dir = tempdir()?;
         let path = dir.path().join("audit.jsonl");
-        let mut audit = AuditLog::new(&path).await.unwrap();
+        let mut audit = AuditLog::new(&path).await?;
 
         let scan_id = uuid::Uuid::new_v4();
         audit.record(AuditEvent::ScanStarted {
             scan_id,
             target: "https://example.com".into(),
-        }).await.unwrap();
+        }).await?;
 
         // Read the file and tamper with the entry
-        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let content = tokio::fs::read_to_string(&path).await?;
         let tampered = content.replace("https://example.com", "https://evil.com");
-        tokio::fs::write(&path, tampered).await.unwrap();
+        tokio::fs::write(&path, tampered).await?;
 
         // Re-read and verify digests no longer match
-        let new_content = tokio::fs::read_to_string(&path).await.unwrap();
-        let tampered_entry: AuditEntry = serde_json::from_str(new_content.lines().next().unwrap()).unwrap();
+        let new_content = tokio::fs::read_to_string(&path).await?;
+        let tampered_entry: AuditEntry = serde_json::from_str(new_content.lines().next().unwrap())?;
         // We can't recompute without the session key, but the entry's own
         // digest field will not match a recomputation — demonstrating tampering.
         // In a real verification, the verifier with the session key would detect this.
         assert!(tampered_entry.event.to_string().contains("evil"), "tampered content should contain 'evil'");
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_audit_log_multiple_events() {
-        let dir = tempdir().unwrap();
+    async fn test_audit_log_multiple_events() -> anyhow::Result<()> {
+        let dir = tempdir()?;
         let path = dir.path().join("audit.jsonl");
-        let mut audit = AuditLog::new(&path).await.unwrap();
+        let mut audit = AuditLog::new(&path).await?;
 
         let scan_id = uuid::Uuid::new_v4();
         for i in 0..10 {
@@ -258,11 +261,12 @@ mod tests {
                 plugin: format!("plugin-{}", i),
                 outcome: "no_match".into(),
                 duration_ms: i as u64,
-            }).await.unwrap();
+            }).await?;
         }
 
-        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let content = tokio::fs::read_to_string(&path).await?;
         assert_eq!(content.lines().count(), 10);
+        Ok(())
     }
 }
 

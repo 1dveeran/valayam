@@ -44,10 +44,48 @@ use crate::templates::matcher::ResponseMatcher;
 // ===============================================================
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum BrowserAction {
+    Navigate { url: String },
+    Click { selector: String },
+    FillForm { selector: String, value: String },
+    ExecuteJs { code: String },
+    WaitForSelector { selector: String, timeout_ms: u64 },
+    Screenshot { path: Option<String> },
+    EvaluateAndMatch { js: String, matchers: Vec<ResponseMatcher> },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DomCondition {
+    pub selector: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attribute: Option<String>,
+    #[serde(default = "default_true")]
+    pub exists: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_contains: Option<String>,
+}
+
+fn default_true() -> bool { true }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BrowserAuditTemplate {
     pub target: String,
-    pub script: String, // Python worker script identifier
+    
+    #[serde(default)]
+    pub script: String,
+    
+    #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
+    
+    #[serde(default)]
+    pub actions: Vec<BrowserAction>,
+    
+    #[serde(default)]
+    pub expected_console: Vec<String>,
+    
+    #[serde(default)]
+    pub dom_conditions: Vec<DomCondition>,
 }
 
 #[cfg(test)]
@@ -61,6 +99,9 @@ mod tests {
         assert_eq!(tmpl.target, "https://example.com");
         assert_eq!(tmpl.script, "login.py");
         assert!(tmpl.matchers.is_empty());
+        assert!(tmpl.actions.is_empty());
+        assert!(tmpl.expected_console.is_empty());
+        assert!(tmpl.dom_conditions.is_empty());
     }
 
     #[test]
@@ -77,9 +118,28 @@ mod tests {
             target: "https://site.com".into(),
             script: "script.py".into(),
             matchers: vec![],
+            actions: vec![
+                BrowserAction::Navigate { url: "https://site.com".into() },
+                BrowserAction::Click { selector: "#submit".into() }
+            ],
+            expected_console: vec!["error".into()],
+            dom_conditions: vec![
+                DomCondition {
+                    selector: ".success".into(),
+                    attribute: None,
+                    exists: true,
+                    text_contains: Some("Success!".into()),
+                }
+            ],
         };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: BrowserAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.script, "script.py");
+        assert_eq!(back.actions.len(), 2);
+        if let BrowserAction::Navigate { url } = &back.actions[0] {
+            assert_eq!(url, "https://site.com");
+        } else {
+            panic!("Wrong action type");
+        }
     }
 }

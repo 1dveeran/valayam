@@ -30,7 +30,7 @@ impl StateDB {
             completed_targets: completed.to_vec(),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
         };
 
@@ -66,69 +66,75 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_scan_snapshot_serde() {
+    fn test_scan_snapshot_serde() -> anyhow::Result<()> {
         let snapshot = ScanSnapshot {
             id: "test-scan-001".into(),
             pending_targets: vec!["https://example.com".into(), "https://test.com".into()],
             completed_targets: vec!["https://done.com".into()],
             timestamp: 1700000000,
         };
-        let json = serde_json::to_string(&snapshot).unwrap();
-        let back: ScanSnapshot = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&snapshot)?;
+        let back: ScanSnapshot = serde_json::from_str(&json)?;
         assert_eq!(back.id, "test-scan-001");
         assert_eq!(back.pending_targets.len(), 2);
         assert_eq!(back.timestamp, 1700000000);
+        Ok(())
     }
 
     #[test]
-    fn test_scan_snapshot_empty_lists() {
+    fn test_scan_snapshot_empty_lists() -> anyhow::Result<()> {
         let snapshot = ScanSnapshot {
             id: "empty-scan".into(),
             pending_targets: vec![],
             completed_targets: vec![],
             timestamp: 1700000000,
         };
-        let json = serde_json::to_string(&snapshot).unwrap();
+        let json = serde_json::to_string(&snapshot)?;
         assert!(json.contains("empty-scan"));
+        Ok(())
     }
 
     #[test]
-    fn test_state_db_creates_dir() {
-        let dir = tempfile::tempdir().unwrap();
+    fn test_state_db_creates_dir() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
         let nested = dir.path().join("sub").join("state");
-        let db = StateDB::new(&nested).unwrap();
+        let db = StateDB::new(&nested)?;
         assert!(nested.exists());
         drop(db);
+        Ok(())
     }
 
     #[test]
-    fn test_state_save_and_load() {
-        let dir = tempfile::tempdir().unwrap();
-        let db = StateDB::new(dir.path()).unwrap();
-        db.save_state("scan-1", &["https://target.com".into()], &[]).unwrap();
-        let loaded = db.load_state("scan-1").unwrap();
+    fn test_state_save_and_load() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let db = StateDB::new(dir.path())?;
+        db.save_state("scan-1", &["https://target.com".into()], &[])?;
+        let loaded = db.load_state("scan-1")?;
         assert!(loaded.is_some());
         let (pending, completed) = loaded.unwrap();
         assert_eq!(pending, vec!["https://target.com"]);
         assert!(completed.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_state_load_nonexistent() {
-        let dir = tempfile::tempdir().unwrap();
-        let db = StateDB::new(dir.path()).unwrap();
-        let loaded = db.load_state("nonexistent").unwrap();
+    fn test_state_load_nonexistent() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let db = StateDB::new(dir.path())?;
+        let loaded = db.load_state("nonexistent")?;
         assert!(loaded.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_state_overwrite() {
-        let dir = tempfile::tempdir().unwrap();
-        let db = StateDB::new(dir.path()).unwrap();
-        db.save_state("s", &["https://old.com".into()], &[]).unwrap();
-        db.save_state("s", &["https://new.com".into()], &["https://old.com".into()]).unwrap();
-        let (p, c) = db.load_state("s").unwrap().unwrap();
+    fn test_state_overwrite() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let db = StateDB::new(dir.path())?;
+        db.save_state("s", &["https://old.com".into()], &[])?;
+        db.save_state("s", &["https://new.com".into()], &["https://old.com".into()])?;
+        let (p, c) = db.load_state("s")?.unwrap();
         assert_eq!(p, vec!["https://new.com"]);
         assert_eq!(c, vec!["https://old.com"]);
+        Ok(())
     }
 }

@@ -8,5 +8,6 @@ pub mod http;
 pub mod tcp;
 pub mod tls;
 pub mod udp;
+pub mod raw;
 pub mod tor;
 pub mod resilience;

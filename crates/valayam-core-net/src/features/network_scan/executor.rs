@@ -357,11 +357,12 @@ pub async fn execute(
                 net_rule.banner_timeout_ms,
                 false,
                 net_rule.send_probe.clone(),
+                false, // stealth_syn_scan
             );
             
             let (udp_res, tcp_res) = tokio::join!(udp_future, tcp_future);
             
-            port_results.extend(udp_res.into_iter().map(|r| ScanPortResult {
+            port_results.extend(udp_res.unwrap_or_default().into_iter().map(|r| ScanPortResult {
                 port: r.port,
                 banner_text: r.response.as_ref()
                     .map(|v| String::from_utf8_lossy(v).to_string())
@@ -380,7 +381,7 @@ pub async fn execute(
                 false,
             )
             .await;
-            port_results.extend(results.into_iter().map(|r| ScanPortResult {
+            port_results.extend(results.unwrap_or_default().into_iter().map(|r| ScanPortResult {
                 port: r.port,
                 banner_text: r.response.as_ref()
                     .map(|v| String::from_utf8_lossy(v).to_string())
@@ -393,6 +394,7 @@ pub async fn execute(
                 net_rule.banner_timeout_ms,
                 false,
                 net_rule.send_probe.clone(), // Pass send_probe here
+                false, // stealth_syn_scan
             )
             .await;
             port_results.extend(results.into_iter().map(|r| ScanPortResult {

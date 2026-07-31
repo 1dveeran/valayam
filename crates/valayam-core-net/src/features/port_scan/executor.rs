@@ -296,6 +296,7 @@ pub async fn execute(
             Some(2000), // 2 second timeout for banner grabbing
             true,       // Enable service detection
             None,       // send_probe
+            false,      // stealth_syn_scan
         ).await;
 
         if port_results.is_empty() {

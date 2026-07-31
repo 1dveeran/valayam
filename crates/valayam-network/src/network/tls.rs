@@ -250,6 +250,10 @@ pub async fn test_protocol_versions(host: &str, port: u16) -> Vec<String> {
 
 /// Check if a specific TLS/SSL version is supported by attempting a raw ClientHello
 pub async fn is_version_supported(host: &str, port: u16, version: u16) -> bool {
+    // Redirect SSLv2 to the legacy probe
+    if version == 0x0002 {
+        return test_legacy_protocols(host, port).await;
+    }
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let address = format!("{}:{}", host, port);
     let mut stream = match tokio::time::timeout(Duration::from_secs(3), tokio::net::TcpStream::connect(&address)).await {
@@ -349,6 +353,67 @@ pub async fn is_version_supported(host: &str, port: u16, version: u16) -> bool {
     }
 }
 
+/// Implement raw SSLv2/SSLv3/TLS1.0 ClientHello probes
+pub async fn test_legacy_protocols(host: &str, port: u16) -> bool {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let address = format!("{}:{}", host, port);
+    let mut stream = match tokio::time::timeout(Duration::from_secs(3), tokio::net::TcpStream::connect(&address)).await {
+        Ok(Ok(s)) => s,
+        _ => return false,
+    };
+
+    // SSLv2 ClientHello payload structure
+    let mut hello = Vec::new();
+    // Length: 2 bytes, 0x80 means no padding, length follows (0x1C = 28 bytes)
+    hello.push(0x80);
+    hello.push(0x1C);
+    // Message Type: 1 (ClientHello)
+    hello.push(0x01);
+    // Version: SSLv2 (0x00, 0x02)
+    hello.push(0x00);
+    hello.push(0x02);
+    // Cipher Spec Length (3 bytes per spec)
+    hello.push(0x00);
+    hello.push(0x03);
+    // Session ID Length (0)
+    hello.push(0x00);
+    hello.push(0x00);
+    // Challenge Length (16 bytes)
+    hello.push(0x00);
+    hello.push(0x10);
+    // Cipher Specs (e.g., SSL_CK_DES_192_EDE3_CBC_WITH_MD5 -> 0x0700c0)
+    hello.extend_from_slice(&[0x07, 0x00, 0xc0]);
+    // Challenge data (16 random bytes)
+    hello.extend_from_slice(&[0x11; 16]);
+
+    if stream.write_all(&hello).await.is_err() {
+        return false;
+    }
+
+    let mut buf = [0u8; 1];
+    match tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut buf)).await {
+        Ok(Ok(_)) => {
+            // A response indicating an SSLv2 ServerHello (typically starts with length bit set)
+            (buf[0] & 0x80) != 0
+        }
+        _ => false,
+    }
+}
+
+/// Analyze a list of cipher suites
+pub fn analyze_cipher_suites(suites: &[String]) -> Vec<CipherSuiteInfo> {
+    suites.iter().map(|suite| {
+        let is_weak = WEAK_CIPHERS.contains(&suite.as_str()) || suite.contains("RC4") || suite.contains("DES") || suite.contains("EXPORT");
+        let weakness = if is_weak { Some("Known weak or obsolete cipher".to_string()) } else { None };
+        CipherSuiteInfo {
+            suite: suite.clone(),
+            is_strong: !is_weak,
+            weakness,
+            recommended_alternative: if is_weak { Some("TLS_AES_128_GCM_SHA256 or TLS_CHACHA20_POLY1305_SHA256".to_string()) } else { None },
+        }
+    }).collect()
+}
+
 /// Get connection details including negotiated version and cipher suite
 async fn get_connection_details(host: &str, port: u16) -> (Option<String>, Option<String>, Option<ValidationResult>) {
     let address = format!("{}:{}", host, port);
@@ -392,6 +457,37 @@ async fn get_connection_details(host: &str, port: u16) -> (Option<String>, Optio
     let validation_result = validate_connection(server_conn).await;
 
     (tls_version, cipher_suite, validation_result)
+}
+
+/// STARTTLS wrapper for plaintext protocols
+pub async fn negotiate_starttls(stream: &mut tokio::net::TcpStream, protocol: &str) -> bool {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    match protocol.to_lowercase().as_str() {
+        "smtp" => {
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf).await; // Consume banner
+            let _ = stream.write_all(b"EHLO valayam.local\r\n").await;
+            let _ = stream.read(&mut buf).await;
+            let _ = stream.write_all(b"STARTTLS\r\n").await;
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            String::from_utf8_lossy(&buf[..n]).contains("220")
+        }
+        "ftp" => {
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf).await; // Consume banner
+            let _ = stream.write_all(b"AUTH TLS\r\n").await;
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            String::from_utf8_lossy(&buf[..n]).contains("234")
+        }
+        "imap" => {
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf).await; // Consume banner
+            let _ = stream.write_all(b"a001 STARTTLS\r\n").await;
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            String::from_utf8_lossy(&buf[..n]).contains("OK")
+        }
+        _ => false,
+    }
 }
 
 /// Validate a TLS connection for security issues

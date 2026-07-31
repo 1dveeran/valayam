@@ -40,7 +40,7 @@ fn evaluate_stream(body_bytes: &[u8], customized_patterns: &[String]) -> bool {
 }
 
 fn resolve_all(template_str: &str, context: &HashMap<String, String>) -> String {
-    let with_vars = resolve_variables(template_str, context);
+    let with_vars = resolve_variables(template_str, context).unwrap();
     evaluate_helpers(&with_vars)
 }
 
@@ -209,10 +209,6 @@ pub async fn execute(
 
             tracing::debug!(target = %target_url, method = %req_rule.method, url = %full_url, "Sending HTTP request");
 
-            // TODO: Pass follow_redirects to StealthHttpClient when it supports the option; currently ignored
-            if let Some(follow) = req_rule.follow_redirects {
-                tracing::trace!("Template specified follow_redirects: {}", follow);
-            }
 
             let resp = match client
                 .send_request(
@@ -220,6 +216,7 @@ pub async fn execute(
                     &full_url,
                     resolved_headers.as_ref(),
                     resolved_body.as_deref(),
+                    req_rule.follow_redirects,
                 )
                 .await
             {

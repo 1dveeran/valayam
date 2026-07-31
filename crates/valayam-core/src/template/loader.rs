@@ -9,6 +9,9 @@ use valayam_engine::rate_limiter::RateLimiter;
 use valayam_engine::variables::build_initial_context;
 use valayam_models::finding::FindingOwned;
 use valayam_models::TemplateMetadata;
+use valayam_models::error::ScannerError;
+use std::path::Path;
+use std::fs;
 
 /// Orchestrates the execution of a single template against a target.
 ///
@@ -160,4 +163,66 @@ pub async fn execute_template(
     }
 
     None
+}
+
+/// Loader for vulnerability templates from disk or embedded sources
+#[derive(Default, Clone)]
+pub struct TemplateLoader;
+
+impl TemplateLoader {
+    /// Create a new template loader
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Recursively load all YAML templates from a directory path
+    pub async fn load_directory(path: impl AsRef<Path>) -> Result<Vec<VulnerabilityTemplate>, ScannerError> {
+        let path = path.as_ref().to_path_buf();
+        
+        // Spawn blocking for file I/O and parsing
+        tokio::task::spawn_blocking(move || {
+            let mut templates = Vec::new();
+            Self::load_dir_recursive(&path, &mut templates)?;
+            Ok(templates)
+        })
+        .await
+        .map_err(|e| ScannerError::Other(Box::new(e)))?
+    }
+
+    /// Load a single template from a file path
+    pub fn load_file(path: impl AsRef<Path>) -> Result<VulnerabilityTemplate, ScannerError> {
+        let path = path.as_ref();
+        let content = fs::read_to_string(path).map_err(ScannerError::TemplateReadError)?;
+        
+        let template: VulnerabilityTemplate = serde_yaml::from_str(&content)?;
+        
+        Ok(template)
+    }
+
+    fn load_dir_recursive(dir: &Path, templates: &mut Vec<VulnerabilityTemplate>) -> Result<(), ScannerError> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+
+        let entries = fs::read_dir(dir).map_err(ScannerError::TemplateReadError)?;
+        for entry in entries {
+            let entry = entry.map_err(ScannerError::TemplateReadError)?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::load_dir_recursive(&path, templates)?;
+            } else if let Some(ext) = path.extension() {
+                if ext == "yaml" || ext == "yml" {
+                    match Self::load_file(&path) {
+                        Ok(t) => templates.push(t),
+                        Err(e) => {
+                            tracing::warn!(error = %e, path = %path.display(), "Failed to load template");
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }

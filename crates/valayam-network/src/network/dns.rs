@@ -1,4 +1,4 @@
-// TODO: DNS — DNSSEC validation, rate-limiting awareness, response caching.
+// TODO: DNS — more specific rate-limiting per-domain, advanced response caching metrics.
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 use reqwest::Client;
@@ -269,19 +269,30 @@ pub struct SubdomainTakeoverInfo {
     pub remediation: String,
 }
 
+lazy_static::lazy_static! {
+    static ref GLOBAL_DNS_RESOLVER: hickory_resolver::TokioAsyncResolver = {
+        let mut opts = hickory_resolver::config::ResolverOpts::default();
+        opts.cache_size = 10000; // Enable internal response caching
+        opts.use_hosts_file = true;
+        opts.validate = true; // Enable DNSSEC validation
+        opts.timeout = std::time::Duration::from_secs(3);
+        opts.attempts = 3;
+        opts.num_concurrent_reqs = 2;
+        
+        hickory_resolver::TokioAsyncResolver::tokio(
+            hickory_resolver::config::ResolverConfig::default(),
+            opts,
+        )
+    };
+}
+
 /// Resolve DNS records for a domain.
 pub async fn resolve(domain: &str, record_type: &str) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
-    // Create a resolver with system configuration
-    let resolver = hickory_resolver::TokioAsyncResolver::tokio(
-        hickory_resolver::config::ResolverConfig::default(),
-        hickory_resolver::config::ResolverOpts::default(),
-    );
-
     // Parse the record type
     let record_type_parsed = record_type.parse::<RecordType>()?;
 
     // Perform the lookup
-    let response = resolver.lookup(domain, record_type_parsed).await?;
+    let response = GLOBAL_DNS_RESOLVER.lookup(domain, record_type_parsed).await?;
 
     // Extract record data as strings
     let mut results = Vec::new();

@@ -128,7 +128,7 @@ impl Crawler {
 
                 if let Ok(resp) = self
                     .client
-                    .send_request("GET", &probe_url_str, self.crawl_headers.as_ref(), None)
+                    .send_request("GET", &probe_url_str, self.crawl_headers.as_ref(), None, None)
                     .await
                 {
                     if resp.status().is_success() {
@@ -179,7 +179,7 @@ impl Crawler {
 
         let response = match self
             .client
-            .send_request("GET", &url_str, self.crawl_headers.as_ref(), None)
+            .send_request("GET", &url_str, self.crawl_headers.as_ref(), None, None)
             .await
         {
             Ok(resp) => resp,

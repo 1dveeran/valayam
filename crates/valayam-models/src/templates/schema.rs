@@ -173,6 +173,8 @@ impl TemplateMetadata for VulnerabilityTemplate {
     fn template_name(&self) -> &str { &self.info.name }
     fn template_severity(&self) -> &str { &self.info.severity }
     fn description(&self) -> Option<&str> { self.info.description.as_deref() }
+    fn author(&self) -> Option<&str> { self.info.author.as_deref() }
+    fn tags(&self) -> &[String] { &self.info.tags }
     fn compliance(&self) -> &std::collections::HashMap<String, String> { &self.info.compliance }
 }
 
@@ -183,7 +185,9 @@ impl VulnerabilityTemplate {
             info: TemplateInfo {
                 name: String::new(),
                 severity: "info".into(),
+                author: None,
                 description: None,
+                tags: vec![],
                 compliance: Default::default(),
             },
             auth: None,
@@ -361,6 +365,31 @@ impl VulnerabilityTemplate {
 
         Ok(())
     }
+
+    /// Lints the template to check for common issues or missing metadata.
+    /// Returns a list of warning messages.
+    pub fn lint(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        if self.info.author.is_none() {
+            warnings.push("Missing 'author' in template info".into());
+        }
+
+        if self.info.description.is_none() {
+            warnings.push("Missing 'description' in template info".into());
+        }
+
+        if self.info.tags.is_empty() {
+            warnings.push("Missing 'tags' in template info".into());
+        }
+
+        // ID format check (lowercase alphanumeric and hyphens)
+        if !self.id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+            warnings.push("Template 'id' should be lowercase, alphanumeric with hyphens".into());
+        }
+
+        warnings
+    }
 }
 
 #[cfg(test)]
@@ -370,7 +399,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_valid_template_parsing() {
+    fn test_valid_template_parsing() -> anyhow::Result<()> {
         let yaml = r#"
 id: test-template
 info:
@@ -385,17 +414,18 @@ requests:
         status:
           - 200
         "#;
-        let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}", yaml).unwrap();
+        let mut file = NamedTempFile::new()?;
+        writeln!(file, "{}", yaml)?;
 
-        let template = VulnerabilityTemplate::load(file.path()).unwrap();
+        let template = VulnerabilityTemplate::load(file.path())?;
         assert_eq!(template.id, "test-template");
         assert_eq!(template.info.name, "Test");
         assert!(!template.requests.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_invalid_template_parsing() {
+    fn test_invalid_template_parsing() -> anyhow::Result<()> {
         let yaml = r#"
 id: test-template
 info:
@@ -404,15 +434,16 @@ info:
 invalid_key: true
         "#;
 
-        let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}", yaml).unwrap();
+        let mut file = NamedTempFile::new()?;
+        writeln!(file, "{}", yaml)?;
 
         let result = VulnerabilityTemplate::load(file.path());
         assert!(result.is_err(), "Serde should reject unknown fields");
+        Ok(())
     }
 
     #[test]
-    fn test_template_with_extractors() {
+    fn test_template_with_extractors() -> anyhow::Result<()> {
         let yaml = r#"
 id: extractor-test
 info:
@@ -443,17 +474,18 @@ requests:
         regex:
           - "sensitive_data"
         "#;
-        let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}", yaml).unwrap();
+        let mut file = NamedTempFile::new()?;
+        writeln!(file, "{}", yaml)?;
 
-        let template = VulnerabilityTemplate::load(file.path()).unwrap();
+        let template = VulnerabilityTemplate::load(file.path())?;
         assert_eq!(template.requests.len(), 2);
         assert!(!template.requests[0].extractors.is_empty());
         assert_eq!(template.requests[0].extractors[0].name, "auth_token");
+        Ok(())
     }
 
     #[test]
-    fn test_template_with_dns_and_tls() {
+    fn test_template_with_dns_and_tls() -> anyhow::Result<()> {
         let yaml = r#"
 id: dns-tls-test
 info:
@@ -475,12 +507,13 @@ tls:
       - type: expired
         part: body
         "#;
-        let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, "{}", yaml).unwrap();
+        let mut file = NamedTempFile::new()?;
+        writeln!(file, "{}", yaml)?;
 
-        let template = VulnerabilityTemplate::load(file.path()).unwrap();
+        let template = VulnerabilityTemplate::load(file.path())?;
         assert!(!template.dns.is_empty());
         assert!(!template.tls.is_empty());
         assert_eq!(template.tls[0].min_version.as_deref(), Some("TLSv1.2"));
+        Ok(())
     }
 }

@@ -17,7 +17,7 @@ pub async fn execute(
     let mut findings = Vec::new();
 
     for rule in dns_rules {
-        let domain = resolve_variables(&rule.domain, variables);
+        let domain = resolve_variables(&rule.domain, variables).unwrap();
         
         tracing::debug!(target = %domain, query_type = %rule.query_type, "Starting DNS resolution");
         
@@ -181,14 +181,14 @@ matchers:
     fn test_domain_variable_resolution() {
         let mut variables = HashMap::new();
         variables.insert("domain".to_string(), "example.com".to_string());
-        let resolved = resolve_variables("{{domain}}", &variables);
+        let resolved = resolve_variables("{{domain}}", &variables).unwrap();
         assert_eq!(resolved, "example.com");
     }
 
     #[test]
     fn test_domain_variable_resolution_no_variable() {
         let variables = HashMap::new();
-        let resolved = resolve_variables("example.com", &variables);
+        let resolved = resolve_variables("example.com", &variables).unwrap();
         assert_eq!(resolved, "example.com");
     }
 

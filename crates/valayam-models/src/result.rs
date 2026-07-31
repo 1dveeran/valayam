@@ -40,30 +40,6 @@ pub struct ScanResult {
 }
 
 impl ScanResult {
-    /// Convert the scan result to SARIF format for integration with security tools
-    #[cfg(feature = "sarif")]
-    pub fn to_sarif(&self) -> Result<String, Box<dyn std::error::Error>> {
-        // This would require the sarif crate feature
-        // For now, we'll return a placeholder that indicates SARIF support
-        Ok(format!(
-            "{{\"version\":\"2.1.0\",\"runs\":[{{\"tool\":{{\"driver\":{{\"name\":\"Valayam\"}}}},{\"results\":[{{\"ruleId\":\"{}\",\"message\":{{\"message\":\"{}\"}},\"level\":\"{}\",\"locations\":[{{\"physicalRegion\":{{\"artifactLocation\":{{\"uri\":\"{}\"}}}}}}]}]}}}}",
-            self.template_id,
-            self.payload.replace('\"', "\\\""),
-            self.map_severity_to_sarif_level(),
-            self.target
-        ))
-    }
-
-    /// Map internal severity to SARIF levels
-    #[cfg(feature = "sarif")]
-    fn map_severity_to_sarif_level(&self) -> &'static str {
-        match self.template_severity.to_ascii_lowercase().as_str() {
-            "critical" | "high" => "error",
-            "medium" => "warning",
-            "low" | "info" => "note",
-            _ => "note",
-        }
-    }
 
     /// Add a compliance mapping
     pub fn with_compliance(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
@@ -165,7 +141,9 @@ mod tests {
         let info = crate::templates::schema::TemplateInfo {
             name: "SQLi Test".into(),
             severity: "high".into(),
+            author: None,
             description: Some("Test for SQL injection".into()),
+            tags: vec![],
             compliance: [("owasp".into(), "A1:2017".into())].into(),
         };
         let sr = ScanResult::new("sqli-001", &info, "https://example.com/login");
@@ -264,26 +242,6 @@ mod tests {
         assert!(sr.cvss_score.is_none());
         assert!(sr.solution.is_none());
         assert!(sr.tags.is_empty());
-    }
-
-    #[cfg(feature = "sarif")]
-    #[test]
-    fn test_severity_to_sarif_level() {
-        use crate::core::result::ScanResult;
-
-        let make = |sev: &str| -> ScanResult {
-            ScanResult {
-                template_severity: sev.to_string(),
-                ..ScanResult::default()
-            }
-        };
-
-        assert_eq!(make("critical").map_severity_to_sarif_level(), "error");
-        assert_eq!(make("high").map_severity_to_sarif_level(), "error");
-        assert_eq!(make("medium").map_severity_to_sarif_level(), "warning");
-        assert_eq!(make("low").map_severity_to_sarif_level(), "note");
-        assert_eq!(make("info").map_severity_to_sarif_level(), "note");
-        assert_eq!(make("unknown").map_severity_to_sarif_level(), "note");
     }
 
     #[test]

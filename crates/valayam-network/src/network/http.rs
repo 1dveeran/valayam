@@ -5,7 +5,7 @@ use crate::stealth::proxy::ProxyRotator;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
 use crate::network_metrics;
@@ -14,7 +14,7 @@ use crate::network_metrics;
 /// Clients are created lazily and reused.
 struct ProxiedClientPool {
     /// Proxy rotator for cycling through proxies
-    rotator: Arc<Mutex<ProxyRotator>>,
+    rotator: Arc<ProxyRotator>,
     /// Pre-built reqwest clients per proxy address
     clients: Mutex<HashMap<String, Client>>,
     /// Next proxy to use (round-robin)
@@ -26,7 +26,7 @@ struct ProxiedClientPool {
 impl ProxiedClientPool {
     fn new(rotator: ProxyRotator, timeout: u32, default_headers: Option<reqwest::header::HeaderMap>) -> Self {
         Self {
-            rotator: Arc::new(Mutex::new(rotator)),
+            rotator: Arc::new(rotator),
             clients: Mutex::new(HashMap::new()),
             current_proxy: Mutex::new(None),
             timeout,
@@ -35,18 +35,15 @@ impl ProxiedClientPool {
     }
 
     /// Get a reqwest client for the next proxy in rotation.
-    fn next_client(&self) -> Option<(Client, String)> {
-        let proxy_address = {
-            let rotator = self.rotator.lock().ok()?;
-            rotator.next().map(|s| s.to_string())
-        }?;
+    async fn next_client(&self) -> Option<(Client, String)> {
+        let proxy_address = self.rotator.next().await?;
 
         // Check if we already have a client for this proxy
-        if let Ok(clients) = self.clients.lock() {
+        {
+            let clients = self.clients.lock().await;
             if let Some(client) = clients.get(&proxy_address) {
-                if let Ok(mut current) = self.current_proxy.lock() {
-                    *current = Some(proxy_address.clone());
-                }
+                let mut current = self.current_proxy.lock().await;
+                *current = Some(proxy_address.clone());
                 return Some((client.clone(), proxy_address));
             }
         }
@@ -64,7 +61,17 @@ impl ProxiedClientPool {
             .proxy(proxy)
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true)
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(self.timeout as u64));
+            
+        // Construct and attach the TLS config if we're simulating spoofing.
+        // NOTE: In the ProxiedClientPool we aren't passing the profile down currently,
+        // so we use the default permissive config. In a full implementation, the profile
+        // would be passed into the pool.
+        let tls_config = crate::stealth::tls::TlsConfig::new_with_spoofing(None).ok().and_then(|c| c.build().ok());
+        if let Some(cfg) = tls_config {
+            client_builder = client_builder.use_preconfigured_tls(cfg);
+        }
 
         if let Some(ref hdrs) = self.default_headers {
             client_builder = client_builder.default_headers(hdrs.clone());
@@ -79,10 +86,12 @@ impl ProxiedClientPool {
         };
 
         // Cache the client
-        if let Ok(mut clients) = self.clients.lock() {
+        {
+            let mut clients = self.clients.lock().await;
             clients.insert(proxy_address.clone(), client.clone());
         }
-        if let Ok(mut current) = self.current_proxy.lock() {
+        {
+            let mut current = self.current_proxy.lock().await;
             *current = Some(proxy_address.clone());
         }
 
@@ -90,24 +99,18 @@ impl ProxiedClientPool {
     }
 
     /// Report a success for the current proxy.
-    fn record_success(&self) {
-        if let Ok(current) = self.current_proxy.lock() {
-            if let Some(ref addr) = *current {
-                if let Ok(mut rotator) = self.rotator.lock() {
-                    rotator.record_success(addr);
-                }
-            }
+    async fn record_success(&self) {
+        let current = self.current_proxy.lock().await;
+        if let Some(ref addr) = *current {
+            self.rotator.record_success(addr).await;
         }
     }
 
     /// Report a failure for the current proxy.
-    fn record_failure(&self) {
-        if let Ok(current) = self.current_proxy.lock() {
-            if let Some(ref addr) = *current {
-                if let Ok(mut rotator) = self.rotator.lock() {
-                    rotator.record_failure(addr);
-                }
-            }
+    async fn record_failure(&self) {
+        let current = self.current_proxy.lock().await;
+        if let Some(ref addr) = *current {
+            self.rotator.record_failure(addr).await;
         }
     }
 }
@@ -121,7 +124,7 @@ pub struct StealthHttpClient {
     proxy_client_pool: Option<Arc<ProxiedClientPool>>,
     /// Proxy rotator for IP rotation metadata
     #[allow(dead_code)]
-    proxy_rotator: Option<Arc<Mutex<ProxyRotator>>>,
+    proxy_rotator: Option<Arc<ProxyRotator>>,
     /// User-Agent rotator for browser impersonation
     user_agent_rotator: Option<Arc<crate::stealth::user_agent::UserAgentRotator>>,
     /// JA3/JA4 spoofer for TLS fingerprint evasion
@@ -175,6 +178,7 @@ impl StealthHttpClient {
         let mut client_builder = Client::builder()
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true)
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(timeout as u64));
 
         if let Some(ref hm) = headers_map {
@@ -187,7 +191,7 @@ impl StealthHttpClient {
             let pool = ProxiedClientPool::new(rotator.clone(), timeout, headers_map);
             (
                 Some(Arc::new(pool)),
-                Some(Arc::new(Mutex::new(rotator))),
+                Some(Arc::new(rotator)),
             )
         } else {
             (None, None)
@@ -201,6 +205,10 @@ impl StealthHttpClient {
         };
 
         // Add JA3/JA4 spoofing if profile specified
+        let tls_cfg = crate::stealth::tls::TlsConfig::new_with_spoofing(ja3_ja4_profile)?;
+        let rustls_client_config = tls_cfg.build()?;
+        client_builder = client_builder.use_preconfigured_tls(rustls_client_config);
+        
         let ja3_ja4_spoofer = ja3_ja4_profile.map(Ja3Ja4Spoofer::new);
 
         let client = client_builder.build()?;
@@ -213,7 +221,7 @@ impl StealthHttpClient {
             ja3_ja4_spoofer,
             follow_meta_refresh,
             circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(50, 30000)), // 50 fails, 30s timeout
-            adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(0, 0, 5000)),
+            adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(0, 0, 5000, 50)),
         })
     }
 
@@ -224,6 +232,7 @@ impl StealthHttpClient {
         url: &str,
         headers: Option<&HashMap<String, String>>,
         body: Option<&str>,
+        follow_redirects: Option<bool>,
     ) -> Result<reqwest::Response, ScannerError> {
         let start = Instant::now();
 
@@ -237,61 +246,72 @@ impl StealthHttpClient {
             .parse()
             .map_err(|_| ScannerError::InvalidHttpMethod(method.to_string()))?;
 
-        // If proxy rotation is configured, use a proxied client from the pool.
-        if let Some(ref pool) = self.proxy_client_pool {
-            if let Some((proxied_client, proxy_addr)) = pool.next_client() {
-                debug!(proxy = %proxy_addr, "Using proxied client for request");
-                let mut proxied_req = proxied_client.request(http_method, url);
-                // Apply headers
+        let should_follow = follow_redirects.unwrap_or(false);
+        let max_redirects = if should_follow { 5 } else { 0 };
+        let mut current_url = url.to_string();
+        let mut redirect_count = 0;
+        let mut final_response = None;
+
+        while redirect_count <= max_redirects {
+            let mut proxied_used = false;
+            let mut response_result = None;
+
+            // If proxy rotation is configured, use a proxied client from the pool.
+            if let Some(ref pool) = self.proxy_client_pool {
+                if let Some((proxied_client, proxy_addr)) = pool.next_client().await {
+                    proxied_used = true;
+                    debug!(proxy = %proxy_addr, "Using proxied client for request");
+                    let mut proxied_req = proxied_client.request(http_method.clone(), &current_url);
+                    // Apply headers
+                    if let Some(hdrs) = headers {
+                        for (key, value) in hdrs {
+                            proxied_req = proxied_req.header(key, value);
+                        }
+                    }
+                    // Apply body
+                    if let Some(b) = body {
+                        proxied_req = proxied_req.body(b.to_string());
+                    }
+                    // Apply user-agent rotation
+                    if let Some(ref rotator) = self.user_agent_rotator {
+                        let ua = rotator.next().await;
+                        proxied_req = proxied_req.header(reqwest::header::USER_AGENT, ua);
+                    }
+                    response_result = Some(send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await);
+                } else {
+                    warn!("No healthy proxies available, falling back to direct connection");
+                }
+            }
+
+            if !proxied_used {
+                // Build the request on the base (direct) client
+                let mut request_builder = self.client.request(http_method.clone(), &current_url);
+
+                // Apply headers if provided
                 if let Some(hdrs) = headers {
                     for (key, value) in hdrs {
-                        proxied_req = proxied_req.header(key, value);
+                        request_builder = request_builder.header(key, value);
                     }
                 }
-                // Apply body
+
+                // Apply body if provided
                 if let Some(b) = body {
-                    proxied_req = proxied_req.body(b.to_string());
+                    request_builder = request_builder.body(b.to_string());
                 }
-                // Apply user-agent rotation
+
+                // Apply user-agent rotation if configured
                 if let Some(ref rotator) = self.user_agent_rotator {
-                    let ua = rotator.get_next_user_agent();
-                    proxied_req = proxied_req.header(reqwest::header::USER_AGENT, ua);
+                    let user_agent = rotator.next().await;
+                    request_builder = request_builder.header(reqwest::header::USER_AGENT, user_agent);
                 }
-                let proxied_result = send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await;
-                if let Ok(ref resp) = proxied_result {
-                    network_metrics::record_http_request(method, resp.status().as_u16(), true, start.elapsed().as_secs_f64());
-                }
-                return proxied_result;
-            } else {
-                warn!("No healthy proxies available, falling back to direct connection");
+
+                // Send the request
+                response_result = Some(request_builder.send().await.map_err(ScannerError::HttpClientError));
             }
-        }
 
-        // Build the request on the base (direct) client
-        let mut request_builder = self.client.request(http_method, url);
+            let response_res = response_result.unwrap();
 
-        // Apply headers if provided
-        if let Some(hdrs) = headers {
-            for (key, value) in hdrs {
-                request_builder = request_builder.header(key, value);
-            }
-        }
-
-        // Apply body if provided
-        if let Some(b) = body {
-            request_builder = request_builder.body(b.to_string());
-        }
-
-        // Apply user-agent rotation if configured
-        if let Some(ref rotator) = self.user_agent_rotator {
-            let user_agent = rotator.get_next_user_agent();
-            request_builder = request_builder.header(reqwest::header::USER_AGENT, user_agent);
-        }
-
-        // Send the request
-        let response_result = request_builder.send().await;
-
-        match &response_result {
+            match &response_res {
             Ok(resp) => {
                 if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                     self.adaptive_rate_limiter.handle_too_many_requests();
@@ -308,15 +328,39 @@ impl StealthHttpClient {
             }
         }
 
-        let response = response_result?;
-        let elapsed = start.elapsed().as_secs_f64();
-        network_metrics::record_http_request(method, response.status().as_u16(), false, elapsed);
+            let response = response_res?;
+            let elapsed = start.elapsed().as_secs_f64();
+            network_metrics::record_http_request(method, response.status().as_u16(), proxied_used, elapsed);
 
-        // Handle meta-refresh redirects if enabled
-        if self.follow_meta_refresh {
-            handle_meta_refresh(response, &self.client).await
+            // Handle meta-refresh redirects if enabled
+            let response = if self.follow_meta_refresh {
+                handle_meta_refresh(response, &self.client).await?
+            } else {
+                response
+            };
+
+            if should_follow && response.status().is_redirection() {
+                if let Some(location) = response.headers().get(reqwest::header::LOCATION) {
+                    if let Ok(loc_str) = location.to_str() {
+                        if let Ok(parsed_url) = reqwest::Url::parse(&current_url) {
+                            if let Ok(next_url) = parsed_url.join(loc_str) {
+                                current_url = next_url.to_string();
+                                redirect_count += 1;
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            final_response = Some(response);
+            break;
+        }
+
+        if let Some(resp) = final_response {
+            Ok(resp)
         } else {
-            Ok(response)
+            Err(ScannerError::TooManyRedirects)
         }
     }
 
@@ -341,16 +385,16 @@ async fn send_with_proxied_req(
 ) -> Result<reqwest::Response, ScannerError> {
     match request_builder.send().await {
         Ok(response) => {
-            pool.record_success();
+            pool.record_success().await;
             if response.status().is_server_error() {
-                pool.record_failure();
+                pool.record_failure().await;
             }
             // Meta-refresh following in proxy mode would require the base client,
             // which would bypass the proxy — skip for proxy mode.
             Ok(response)
         }
         Err(e) => {
-            pool.record_failure();
+            pool.record_failure().await;
             Err(ScannerError::HttpClientError(e))
         }
     }

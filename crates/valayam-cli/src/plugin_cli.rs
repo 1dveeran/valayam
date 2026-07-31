@@ -36,7 +36,7 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
     let mut buffer = Vec::new();
     for entry in WalkDir::new(dir_path).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        let name = path.strip_prefix(dir_path).unwrap();
+        let name = path.strip_prefix(dir_path)?;
 
         // Skip the root dir itself, the output file, and any existing signature.sig
         if name.as_os_str().is_empty() || path == out_file_path || name.to_string_lossy() == "signature.sig" {
@@ -292,10 +292,10 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn test_init_plugin_creates_directory() {
-        let dir = tempfile::tempdir().unwrap();
+    fn test_init_plugin_creates_directory() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
         let plugin_dir = dir.path().join("test-plugin");
-        let name = plugin_dir.to_str().unwrap();
+        let name = plugin_dir.to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
 
         let result = init_plugin(name, "python", "grpc");
         assert!(result.is_ok(), "init_plugin should succeed: {:?}", result.err());
@@ -304,33 +304,35 @@ mod tests {
         assert!(plugin_dir.join("plugin.py").exists());
 
         let _ = std::fs::remove_dir_all(&plugin_dir);
+        Ok(())
     }
 
     #[test]
-    fn test_init_plugin_existing_dir_fails() {
+    fn test_init_plugin_existing_dir_fails() -> anyhow::Result<()> {
         // Use a path that already exists on disk
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().to_str().unwrap();
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
         // Temp dir already exists, so init should fail
         let result = init_plugin(path, "python", "grpc");
         assert!(result.is_err(), "init on existing dir should fail");
-        let err = format!("{}", result.err().unwrap());
+        let err = format!("{}", result.unwrap_err());
         assert!(err.contains("already exists"), "Error should mention 'already exists': {}", err);
+        Ok(())
     }
 
     #[test]
     fn test_package_nonexistent_dir_fails() {
         let result = package_plugin("/nonexistent/plugin_dir", None, None);
         assert!(result.is_err());
-        let err = format!("{}", result.err().unwrap());
+        let err = format!("{}", result.unwrap_err());
         assert!(err.contains("does not exist") || err.contains("exist"));
     }
 
     #[test]
-    fn test_generate_key_creates_files() {
-        let dir = tempfile::tempdir().unwrap();
+    fn test_generate_key_creates_files() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
         let prefix = dir.path().join("test_key");
-        let prefix_str = prefix.to_str().unwrap();
+        let prefix_str = prefix.to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
         let result = generate_key(prefix_str);
         assert!(result.is_ok());
         assert!(Path::new(&format!("{}.pem", prefix_str)).exists());
@@ -338,6 +340,7 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(format!("{}.pem", prefix_str));
         let _ = std::fs::remove_file(format!("{}.pub", prefix_str));
+        Ok(())
     }
 
     #[test]

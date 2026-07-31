@@ -90,45 +90,140 @@ use serde::{Deserialize, Serialize};
 // =======================================================
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LlmConfig {
+    pub mutation_strategy: String,
+    pub max_variants: u32,
+    pub send_to_fuzzer: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WasmConfig {
+    pub decompile: bool,
+    pub export_symbols: bool,
+    pub extract_strings: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SourceMapConfig {
+    pub reconstruct: bool,
+    pub resolve_original: bool,
+    pub download_missing: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ArtifactConfig {
+    #[serde(default)]
+    pub probe_paths: Vec<String>,
+    pub max_size_bytes: u64,
+    pub extract_archives: bool,
+    pub secret_scan: bool,
+    pub pattern_file: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "analysis_type", content = "config", rename_all = "snake_case")]
+pub enum DeepAnalysisType {
+    LlmMutation(LlmConfig),
+    WasmDecompile(WasmConfig),
+    SourceMapReconstruct(SourceMapConfig),
+    ArtifactRecovery(ArtifactConfig),
+    Custom(serde_json::Value),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnalysisCondition {
+    pub metric: String,
+    pub operator: String,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeepAnalysisTemplate {
     pub target: String,
-    pub analysis_type: String, // "llm_mutation", "wasm_decompile", "source_map", "artifact_recovery"
+    
+    #[serde(flatten)]
+    pub analysis: DeepAnalysisType,
+    
     pub prompt: Option<String>,
+    
+    pub severity_override: Option<String>,
+    
+    pub tags: Option<Vec<String>>,
+    
+    pub conditions: Option<Vec<AnalysisCondition>>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_deep_analysis_template_deser() {
-        let json = r#"{"target": "example.com", "analysis_type": "llm_mutation", "prompt": "bypass waf with SQLi"}"#;
-        let tmpl: DeepAnalysisTemplate = serde_json::from_str(json).unwrap();
+        let json_str = r#"{
+            "target": "example.com",
+            "prompt": "bypass waf with SQLi",
+            "analysis_type": "llm_mutation",
+            "config": {
+                "mutation_strategy": "sql_injection",
+                "max_variants": 5,
+                "send_to_fuzzer": true
+            }
+        }"#;
+        let tmpl: DeepAnalysisTemplate = serde_json::from_str(json_str).unwrap();
         assert_eq!(tmpl.target, "example.com");
-        assert_eq!(tmpl.analysis_type, "llm_mutation");
         assert_eq!(tmpl.prompt, Some("bypass waf with SQLi".into()));
+        if let DeepAnalysisType::LlmMutation(cfg) = &tmpl.analysis {
+            assert_eq!(cfg.mutation_strategy, "sql_injection");
+            assert_eq!(cfg.max_variants, 5);
+            assert!(cfg.send_to_fuzzer);
+        } else {
+            panic!("Wrong variant");
+        }
     }
 
     #[test]
     fn test_deep_analysis_variants() {
-        let json = r#"{"target": "test.app", "analysis_type": "wasm_decompile", "prompt": null}"#;
-        let tmpl: DeepAnalysisTemplate = serde_json::from_str(json).unwrap();
+        let json_str = r#"{
+            "target": "test.app",
+            "analysis_type": "wasm_decompile",
+            "config": {
+                "decompile": true,
+                "export_symbols": false,
+                "extract_strings": true
+            }
+        }"#;
+        let tmpl: DeepAnalysisTemplate = serde_json::from_str(json_str).unwrap();
         assert_eq!(tmpl.target, "test.app");
-        assert_eq!(tmpl.analysis_type, "wasm_decompile");
         assert!(tmpl.prompt.is_none());
+        if let DeepAnalysisType::WasmDecompile(cfg) = &tmpl.analysis {
+            assert!(cfg.decompile);
+            assert!(!cfg.export_symbols);
+            assert!(cfg.extract_strings);
+        } else {
+            panic!("Wrong variant");
+        }
     }
 
     #[test]
     fn test_deep_analysis_serde_roundtrip() {
         let tmpl = DeepAnalysisTemplate {
             target: "roundtrip.dev".into(),
-            analysis_type: "artifact_recovery".into(),
             prompt: Some("recover configs".into()),
+            severity_override: None,
+            tags: None,
+            conditions: None,
+            analysis: DeepAnalysisType::ArtifactRecovery(ArtifactConfig {
+                probe_paths: vec!["/tmp".into()],
+                max_size_bytes: 1024,
+                extract_archives: true,
+                secret_scan: false,
+                pattern_file: None,
+            })
         };
         let json = serde_json::to_string(&tmpl).unwrap();
         let deser: DeepAnalysisTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(tmpl.target, deser.target);
-        assert_eq!(tmpl.analysis_type, deser.analysis_type);
         assert_eq!(tmpl.prompt, deser.prompt);
     }
 }

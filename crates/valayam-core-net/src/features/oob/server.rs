@@ -26,6 +26,8 @@ pub struct OobInteraction {
     pub raw_request: String,
     /// Extracted callback payload for correlation
     pub correlation_id: Option<String>,
+    /// Extracted blind payload (e.g. hex-encoded data exfiltrated via subdomains)
+    pub extracted_payload: Option<String>,
 }
 
 /// Configuration for the out-of-band interaction server.
@@ -41,6 +43,10 @@ pub struct OobServerConfig {
     pub retention_duration: Duration,
     /// Maximum body size to capture for HTTP interactions (default: 4096 bytes)
     pub max_body_capture: usize,
+    /// Maximum concurrent connections for the HTTP callback server (default: 1000)
+    pub max_concurrent_connections: usize,
+    /// Optional TLS configuration for HTTPS callbacks
+    pub tls_config: Option<Arc<rustls::ServerConfig>>,
 }
 
 impl Default for OobServerConfig {
@@ -51,6 +57,8 @@ impl Default for OobServerConfig {
             callback_domain: "oob.valayam.local".to_string(),
             retention_duration: Duration::from_secs(3600),
             max_body_capture: 4096,
+            max_concurrent_connections: 1000,
+            tls_config: None,
         }
     }
 }
@@ -107,13 +115,15 @@ impl OobServer {
         let max_body = self.config.max_body_capture;
         let callback_domain_http = self.config.callback_domain.clone();
         let callback_domain_dns = self.config.callback_domain.clone();
+        let max_concurrent = self.config.max_concurrent_connections;
+        let tls_config = self.config.tls_config.clone();
 
         // Start HTTP listener
         let http_handle = tokio::spawn(async move {
             match TcpListener::bind(&http_bind).await {
                 Ok(listener) => {
                     tracing::info!(bind = %http_bind, "OOB HTTP server started");
-                    Self::run_http_server(listener, hits_http, shutdown_http, max_body, &callback_domain_http).await;
+                    Self::run_http_server(listener, hits_http, shutdown_http, max_body, &callback_domain_http, max_concurrent, tls_config).await;
                 }
                 Err(e) => {
                     tracing::error!(bind = %http_bind, error = %e, "Failed to bind OOB HTTP server");
@@ -152,8 +162,18 @@ impl OobServer {
         shutdown: Arc<tokio::sync::Notify>,
         max_body: usize,
         callback_domain: &str,
+        max_concurrent: usize,
+        tls_config: Option<Arc<rustls::ServerConfig>>,
     ) {
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
+        let tls_acceptor = tls_config.map(tokio_rustls::TlsAcceptor::from);
+
         loop {
+            let permit = match semaphore.clone().acquire_owned().await {
+                Ok(p) => p,
+                Err(_) => break, // semaphore closed
+            };
+
             tokio::select! {
                 accept_result = listener.accept() => {
                     match accept_result {
@@ -161,26 +181,45 @@ impl OobServer {
                             let hits = hits.clone();
                             let domain = callback_domain.to_string();
                             let max_b = max_body;
+                            let tls_acc = tls_acceptor.clone();
+
                             tokio::spawn(async move {
+                                let _permit = permit; // drop permit when task completes
+
+                                // Apply TLS if configured
                                 let mut buf = vec![0u8; 8192];
-                                // Read HTTP request with timeout
-                                let n = match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await {
-                                    Ok(Ok(n)) if n > 0 => n,
-                                    _ => return,
-                                };
+                                let n;
+                                let raw;
 
-                                let raw = String::from_utf8_lossy(&buf[..n.min(max_b)]).to_string();
+                                if let Some(acceptor) = tls_acc {
+                                    if let Ok(Ok(mut tls_stream)) = tokio::time::timeout(Duration::from_secs(5), acceptor.accept(stream)).await {
+                                        n = match tokio::time::timeout(Duration::from_secs(5), tls_stream.read(&mut buf)).await {
+                                            Ok(Ok(n)) if n > 0 => n,
+                                            _ => return,
+                                        };
+                                        raw = String::from_utf8_lossy(&buf[..n.min(max_b)]).to_string();
+                                        
+                                        let response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                                        use tokio::io::AsyncWriteExt;
+                                        let _ = tokio::time::timeout(Duration::from_secs(2), tls_stream.write_all(response)).await;
+                                    } else {
+                                        return;
+                                    }
+                                } else {
+                                    n = match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await {
+                                        Ok(Ok(n)) if n > 0 => n,
+                                        _ => return,
+                                    };
+                                    raw = String::from_utf8_lossy(&buf[..n.min(max_b)]).to_string();
+                                    
+                                    let response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                                    use tokio::io::AsyncWriteExt;
+                                    let _ = tokio::time::timeout(Duration::from_secs(2), stream.write_all(response)).await;
+                                }
+
                                 let timestamp = chrono::Utc::now();
-
                                 // Extract correlation ID from path or Host header
                                 let correlation_id = Self::extract_http_correlation_id(&raw, &domain);
-
-                                // Send a minimal HTTP response so the client doesn't hang
-                                let response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
-                                let _ = tokio::time::timeout(Duration::from_secs(2), async {
-                                    use tokio::io::AsyncWriteExt;
-                                    let _ = stream.write_all(response).await;
-                                }).await;
 
                                 // Extract first line for a concise summary
                                 let first_line = raw.lines().next().unwrap_or("").to_string();
@@ -191,6 +230,7 @@ impl OobServer {
                                     timestamp,
                                     raw_request: format!("{}\n<{} bytes body>", first_line, n),
                                     correlation_id: correlation_id.clone(),
+                                    extracted_payload: None, // HTTP payload extraction could be added later
                                 };
 
                                 // Store the interaction
@@ -276,8 +316,8 @@ impl OobServer {
                             let query = buf[..n].to_vec();
                             let timestamp = chrono::Utc::now();
 
-                            // Parse correlation ID from DNS query
-                            let correlation_id = Self::extract_dns_correlation_id(&query, &domain);
+                            // Parse correlation ID and optional payload from DNS query
+                            let (correlation_id, payload) = Self::extract_dns_correlation_id(&query, &domain);
 
                             let raw_hex: String = query.iter().take(64).map(|b| format!("{:02x}", b)).collect();
                             let interaction = OobInteraction {
@@ -287,6 +327,7 @@ impl OobServer {
                                 timestamp,
                                 raw_request: format!("DNS query ({} bytes): {}", n, raw_hex),
                                 correlation_id: correlation_id.clone(),
+                                extracted_payload: payload,
                             };
 
                             // Store the interaction
@@ -309,10 +350,11 @@ impl OobServer {
         }
     }
 
-    /// Extract a correlation ID from a DNS query by looking for our callback domain.
-    fn extract_dns_correlation_id(query: &[u8], callback_domain: &str) -> Option<String> {
+    /// Extract a correlation ID and optional payload from a DNS query by looking for our callback domain.
+    /// Returns `(Option<CorrelationId>, Option<Payload>)`.
+    fn extract_dns_correlation_id(query: &[u8], callback_domain: &str) -> (Option<String>, Option<String>) {
         if query.len() < 12 {
-            return None; // Not a valid DNS header
+            return (None, None); // Not a valid DNS header
         }
 
         // Parse DNS question section (starts at byte 12 after header)
@@ -326,7 +368,7 @@ impl OobServer {
                 break; // End of domain name
             }
             if len > 63 || pos + len + 1 > query.len() {
-                return None; // Invalid label
+                return (None, None); // Invalid label
             }
             pos += 1;
             if let Ok(label) = std::str::from_utf8(&query[pos..pos + len]) {
@@ -336,29 +378,43 @@ impl OobServer {
         }
 
         if labels.is_empty() {
-            return None;
+            return (None, None);
         }
 
         let domain_name = labels.join(".");
 
         // The domain should end with our callback domain
-        // e.g., abc123.oob.valayam.local -> extract "abc123"
         if domain_name.ends_with(callback_domain) {
-            let prefix = domain_name.strip_suffix(callback_domain).unwrap_or("");
-            let id = prefix.trim_end_matches('.');
-            if !id.is_empty() && id != "*" && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                return Some(id.to_string());
+            let prefix = domain_name.strip_suffix(callback_domain).unwrap_or("").trim_end_matches('.');
+            
+            // Format is often [payload].[correlation_id].callback_domain
+            // or just [correlation_id].callback_domain
+            let mut parts: Vec<&str> = prefix.split('.').collect();
+            
+            if parts.is_empty() || parts == [""] || parts == ["*"] {
+                return (None, None);
+            }
+
+            let id = parts.pop().unwrap(); // The last part is usually the correlation ID
+            let payload = if !parts.is_empty() {
+                Some(parts.join("."))
+            } else {
+                None
+            };
+
+            if !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                return (Some(id.to_string()), payload);
             }
         }
 
         // Fallback: single-label name that looks like an opaque correlation ID
         if !domain_name.contains('.') && domain_name.len() >= 8 && domain_name.len() <= 64 {
             if domain_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                return Some(domain_name);
+                return (Some(domain_name), None);
             }
         }
 
-        None
+        (None, None)
     }
 
     /// Check if a correlation ID received any hits.
@@ -480,8 +536,26 @@ mod tests {
         // QTYPE + QCLASS (2+2 bytes)
         query.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]);
 
-        let id = OobServer::extract_dns_correlation_id(&query, "oob.valayam.local");
+        let (id, payload) = OobServer::extract_dns_correlation_id(&query, "oob.valayam.local");
         assert_eq!(id, Some("abc123".to_string()));
+        assert_eq!(payload, None);
+    }
+
+    #[test]
+    fn test_extract_dns_correlation_id_with_payload() {
+        let mut query = vec![0u8; 12];
+        // data.abc123.oob.valayam.local
+        let labels = ["deadbeef", "abc123", "oob", "valayam", "local"];
+        for label in &labels {
+            query.push(label.len() as u8);
+            query.extend_from_slice(label.as_bytes());
+        }
+        query.push(0x00);
+        query.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]);
+
+        let (id, payload) = OobServer::extract_dns_correlation_id(&query, "oob.valayam.local");
+        assert_eq!(id, Some("abc123".to_string()));
+        assert_eq!(payload, Some("deadbeef".to_string()));
     }
 
     #[test]
@@ -495,8 +569,9 @@ mod tests {
         query.push(0x00);
         query.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]);
 
-        let id = OobServer::extract_dns_correlation_id(&query, "oob.valayam.local");
+        let (id, payload) = OobServer::extract_dns_correlation_id(&query, "oob.valayam.local");
         assert_eq!(id, None);
+        assert_eq!(payload, None);
     }
 
     #[tokio::test]

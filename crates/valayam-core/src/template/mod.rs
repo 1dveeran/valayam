@@ -5,3 +5,4 @@
 //! context flows correctly through all stages.
 pub use valayam_models::templates::schema;
 pub mod loader;
+pub use loader::TemplateLoader;

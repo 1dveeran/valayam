@@ -16,6 +16,9 @@ pub struct GrpcPluginBridge {
     /// Shared tonic Channel (Arc internally — clone is cheap).
     channel: tokio::sync::RwLock<Option<Channel>>,
     child_process: tokio::sync::Mutex<Option<Child>>,
+    supported_protocols: tokio::sync::RwLock<Vec<String>>,
+    supported_template_ids: tokio::sync::RwLock<Vec<String>>,
+    supported_tags: tokio::sync::RwLock<Vec<String>>,
 }
 
 impl GrpcPluginBridge {
@@ -25,6 +28,9 @@ impl GrpcPluginBridge {
             exe_path,
             channel: tokio::sync::RwLock::new(None),
             child_process: tokio::sync::Mutex::new(None),
+            supported_protocols: tokio::sync::RwLock::new(Vec::new()),
+            supported_template_ids: tokio::sync::RwLock::new(Vec::new()),
+            supported_tags: tokio::sync::RwLock::new(Vec::new()),
         }
     }
 }
@@ -35,12 +41,36 @@ impl ScanPlugin for GrpcPluginBridge {
         &self.name
     }
 
-    fn is_applicable(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
-        // gRPC plugins are external processes — we can't know applicability
-        // without calling them. Assume applicable and let the plugin return
-        // NoMatch/Failed during execute if it cannot handle the template.
-        // TODO(future): Add bidirectional handshake to negotiate plugin capabilities at startup
-        true
+    fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
+        // Attempt to read capabilities synchronously
+        let Ok(protocols) = self.supported_protocols.try_read() else { return true; };
+        let Ok(ids) = self.supported_template_ids.try_read() else { return true; };
+        let Ok(tags) = self.supported_tags.try_read() else { return true; };
+
+        // If capabilities haven't been populated yet (e.g. init still running), assume applicable
+        if protocols.is_empty() && ids.is_empty() && tags.is_empty() {
+            return true;
+        }
+
+        // Check template ID match
+        if ids.contains(&template.id) {
+            return true;
+        }
+
+        // Check protocol match
+        if !template.requests.is_empty() && (protocols.contains(&"http".to_string()) || protocols.contains(&"https".to_string())) {
+            return true;
+        }
+        if !template.network.is_empty() && (protocols.contains(&"tcp".to_string()) || protocols.contains(&"udp".to_string())) {
+            return true;
+        }
+        if !template.grpc_audit.is_empty() && protocols.contains(&"grpc".to_string()) {
+            return true;
+        }
+
+        // Tags are not currently implemented on TemplateInfo, skipping tag check
+
+        false
     }
 
     async fn init(&self) -> Result<(), ScannerError> {
@@ -104,12 +134,20 @@ impl ScanPlugin for GrpcPluginBridge {
 
         // Verify plugin with Init RPC
         let mut client = PluginServiceClient::new(channel.clone());
-        let res = client.init(InitRequest {}).await
+        let res = client.init(InitRequest {
+            engine_version: env!("CARGO_PKG_VERSION").to_string(),
+        }).await
             .map_err(|e| ScannerError::PluginInitializationError(format!("RPC Init failed: {}", e)))?;
 
-        if !res.into_inner().success {
-            return Err(ScannerError::PluginInitializationError("Plugin rejected init".into()));
+        let response = res.into_inner();
+        if !response.success {
+            return Err(ScannerError::PluginInitializationError(format!("Plugin rejected init: {}", response.error_message)));
         }
+
+        // Store capabilities
+        *self.supported_protocols.write().await = response.supported_protocols;
+        *self.supported_template_ids.write().await = response.supported_template_ids;
+        *self.supported_tags.write().await = response.supported_tags;
 
         // Store child process and shared channel
         *self.child_process.lock().await = Some(child);

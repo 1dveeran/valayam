@@ -14,7 +14,7 @@ fn bench_resolve_variables_basic(c: &mut Criterion) {
 
     c.bench_function("variables_resolve_basic", |b| {
         b.iter(|| {
-            black_box(resolve_variables(black_box(input), black_box(&ctx)));
+            black_box(resolve_variables(black_box(input).unwrap(), black_box(&ctx)));
         });
     });
 }
@@ -31,7 +31,7 @@ fn bench_resolve_variables_large_context(c: &mut Criterion) {
 
     c.bench_function("variables_resolve_large_context", |b| {
         b.iter(|| {
-            black_box(resolve_variables(black_box(&input), black_box(&ctx)));
+            black_box(resolve_variables(black_box(&input).unwrap(), black_box(&ctx)));
         });
     });
 }
@@ -41,7 +41,7 @@ fn bench_resolve_variables_no_match(c: &mut Criterion) {
     c.bench_function("variables_resolve_no_placeholders", |b| {
         b.iter(|| {
             black_box(resolve_variables(
-                black_box("plain string without variables"),
+                black_box("plain string without variables").unwrap(),
                 black_box(&ctx),
             ));
         });
@@ -54,7 +54,7 @@ fn bench_resolve_variables_missing(c: &mut Criterion) {
 
     c.bench_function("variables_resolve_all_missing", |b| {
         b.iter(|| {
-            black_box(resolve_variables(black_box(input), black_box(&ctx)));
+            black_box(resolve_variables(black_box(input).unwrap(), black_box(&ctx)));
         });
     });
 }
@@ -67,7 +67,7 @@ fn bench_resolve_advanced(c: &mut Criterion) {
     c.bench_function("variables_resolve_advanced_upper", |b| {
         b.iter(|| {
             black_box(resolve_variables_advanced(
-                black_box("{{name|upper}}@{{domain}}"),
+                black_box("{{name|upper}}@{{domain}}").unwrap(),
                 black_box(&ctx),
             ));
         });
@@ -76,7 +76,7 @@ fn bench_resolve_advanced(c: &mut Criterion) {
     c.bench_function("variables_resolve_advanced_default", |b| {
         b.iter(|| {
             black_box(resolve_variables_advanced(
-                black_box("Hello {{missing|default:\"Guest\"}}!"),
+                black_box("Hello {{missing|default:\"Guest\"}}!").unwrap(),
                 black_box(&ctx),
             ));
         });
@@ -85,7 +85,7 @@ fn bench_resolve_advanced(c: &mut Criterion) {
     c.bench_function("variables_resolve_advanced_chained", |b| {
         b.iter(|| {
             black_box(resolve_variables_advanced(
-                black_box("{{name|upper|reverse|trim}}"),
+                black_box("{{name|upper|reverse|trim}}").unwrap(),
                 black_box(&ctx),
             ));
         });

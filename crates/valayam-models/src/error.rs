@@ -17,6 +17,9 @@ pub enum ScannerError {
     #[error("Template validation failed: {0}")]
     TemplateValidationError(String),
 
+    #[error("Variable resolution error: {0}")]
+    VariableResolutionError(String),
+
     // ── HTTP Client ──
     #[error("Failed to build HTTP client: {0}")]
     HttpClientError(#[from] reqwest::Error),
@@ -26,6 +29,9 @@ pub enum ScannerError {
 
     #[error("HTTP scan execution failed: {0}")]
     HttpScanError(String),
+
+    #[error("Too many redirects followed")]
+    TooManyRedirects,
 
     // ── Script Engine ──
     #[error("Failed to initialize script engine: {0}")]
@@ -147,6 +153,17 @@ pub enum ScannerError {
     #[error("Report generation failed: {0}")]
     ReportError(String),
 
+    // ── eBPF/Kernel ──
+    #[error("eBPF agent error: {0}")]
+    EbpfError(String),
+
+    // ── CLI/State ──
+    #[error("CLI operation failed: {0}")]
+    CliError(String),
+
+    #[error("Database error: {0}")]
+    DatabaseError(String),
+
     // ── Fallback ──
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
@@ -182,6 +199,8 @@ impl ScannerError {
             | ScannerError::UdpError { .. }
             | ScannerError::ProxyError(_)
             | ScannerError::HttpScanError(_)
+            | ScannerError::DatabaseError(_)
+            | ScannerError::TooManyRedirects
             | ScannerError::OobError(_) => true,
             _ => false,
         }
@@ -193,9 +212,11 @@ impl ScannerError {
             ScannerError::TemplateReadError(_) => "TEMPLATE_READ_ERROR",
             ScannerError::TemplateParseError(_) => "TEMPLATE_PARSE_ERROR",
             ScannerError::TemplateValidationError(_) => "TEMPLATE_VALIDATION_ERROR",
+            ScannerError::VariableResolutionError(_) => "VARIABLE_RESOLUTION_ERROR",
             ScannerError::HttpClientError(_) => "HTTP_CLIENT_ERROR",
             ScannerError::InvalidHttpMethod(_) => "INVALID_HTTP_METHOD",
             ScannerError::HttpScanError(_) => "HTTP_SCAN_ERROR",
+            ScannerError::TooManyRedirects => "TOO_MANY_REDIRECTS",
             ScannerError::ScriptEngineInitError(_) => "SCRIPT_INIT_ERROR",
             ScannerError::ScriptExecutionError(_) => "SCRIPT_EXECUTION_ERROR",
             ScannerError::NetworkError(_) => "NETWORK_ERROR",
@@ -227,6 +248,9 @@ impl ScannerError {
             ScannerError::PluginExecutionError(_) => "PLUGIN_EXECUTION_ERROR",
             ScannerError::AuditError(_) => "AUDIT_ERROR",
             ScannerError::ReportError(_) => "REPORT_ERROR",
+            ScannerError::EbpfError(_) => "EBPF_ERROR",
+            ScannerError::CliError(_) => "CLI_ERROR",
+            ScannerError::DatabaseError(_) => "DATABASE_ERROR",
             ScannerError::Other(_) => "OTHER_ERROR",
         }
     }
@@ -531,6 +555,7 @@ mod tests {
             ScannerError::TemplateValidationError("".into()),
             ScannerError::InvalidHttpMethod("".into()),
             ScannerError::HttpScanError("".into()),
+            ScannerError::TooManyRedirects,
             ScannerError::CrawlerError("".into()),
             ScannerError::ExtractorError("".into()),
             ScannerError::SchemaDriftError("".into()),
@@ -538,6 +563,9 @@ mod tests {
             ScannerError::OobError("".into()),
             ScannerError::AuditError("".into()),
             ScannerError::ReportError("".into()),
+            ScannerError::EbpfError("".into()),
+            ScannerError::CliError("".into()),
+            ScannerError::DatabaseError("".into()),
         ];
         for e in &errs {
             assert!(
@@ -616,6 +644,8 @@ mod tests {
             ScannerError::UiProxyError("".into()),
             ScannerError::AuditError("".into()),
             ScannerError::ReportError("".into()),
+            ScannerError::EbpfError("".into()),
+            ScannerError::CliError("".into()),
         ];
         for err in &non_retryable {
             assert!(

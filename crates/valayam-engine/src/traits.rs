@@ -231,60 +231,66 @@ mod tests {
     // ── VariableScope tests ────────────────────────────────────────────────
 
     #[test]
-    fn test_variable_scope_new() {
+    fn test_variable_scope_new() -> anyhow::Result<()> {
         let mut globals = HashMap::new();
         globals.insert("BaseURL".into(), "https://example.com".into());
         let scope = VariableScope::new(globals);
-        assert_eq!(scope.get("BaseURL").unwrap(), "https://example.com");
+        assert_eq!(scope.get("BaseURL").map(|s| s.as_str()), Some("https://example.com"));
         assert!(scope.get("missing").is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_set_global() {
+    fn test_variable_scope_set_global() -> anyhow::Result<()> {
         let mut scope = VariableScope::new(HashMap::new());
         scope.set_global("Hostname", "example.com");
-        assert_eq!(scope.get("Hostname").unwrap(), "example.com");
+        assert_eq!(scope.get("Hostname").map(|s| s.as_str()), Some("example.com"));
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_set_scoped() {
+    fn test_variable_scope_set_scoped() -> anyhow::Result<()> {
         let mut scope = VariableScope::new(HashMap::new());
         scope.set("http_plugin", "response_body", "data");
-        assert_eq!(scope.get("response_body").unwrap(), "data");
+        assert_eq!(scope.get("response_body").map(|s| s.as_str()), Some("data"));
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_global_takes_precedence() {
+    fn test_variable_scope_global_takes_precedence() -> anyhow::Result<()> {
         let mut scope = VariableScope::new(HashMap::new());
         scope.set_global("key", "global_val");
         scope.set("plugin_a", "key", "scoped_val");
         // Global takes priority since it's checked first
-        assert_eq!(scope.get("key").unwrap(), "global_val");
+        assert_eq!(scope.get("key").map(|s| s.as_str()), Some("global_val"));
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_scoped_isolation() {
+    fn test_variable_scope_scoped_isolation() -> anyhow::Result<()> {
         let mut scope = VariableScope::new(HashMap::new());
         scope.set("plugin_a", "key_a", "value_a");
         scope.set("plugin_b", "key_b", "value_b");
         // Each key only exists in one scope, so get() returns the correct value
         // regardless of HashMap iteration order
-        assert_eq!(scope.get("key_a").unwrap(), "value_a");
-        assert_eq!(scope.get("key_b").unwrap(), "value_b");
+        assert_eq!(scope.get("key_a").map(|s| s.as_str()), Some("value_a"));
+        assert_eq!(scope.get("key_b").map(|s| s.as_str()), Some("value_b"));
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_to_flat_map() {
+    fn test_variable_scope_to_flat_map() -> anyhow::Result<()> {
         let mut scope = VariableScope::new(HashMap::new());
         scope.set_global("g1", "global1");
         scope.set("p1", "s1", "scoped1");
         let flat = scope.to_flat_map();
-        assert_eq!(flat.get("g1").unwrap(), "global1");
-        assert_eq!(flat.get("s1").unwrap(), "scoped1");
+        assert_eq!(flat.get("g1").map(|s| s.as_str()), Some("global1"));
+        assert_eq!(flat.get("s1").map(|s| s.as_str()), Some("scoped1"));
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_merge_from() {
+    fn test_variable_scope_merge_from() -> anyhow::Result<()> {
         let mut scope_a = VariableScope::new(HashMap::new());
         scope_a.set_global("key_a", "val_a");
         scope_a.set("p1", "key_b", "val_b");
@@ -294,13 +300,14 @@ mod tests {
         scope_b.set("p1", "key_d", "val_d");
 
         scope_a.merge_from(&scope_b);
-        assert_eq!(scope_a.get("key_a").unwrap(), "val_a");
-        assert_eq!(scope_a.get("key_c").unwrap(), "val_c");
-        assert_eq!(scope_a.get("key_d").unwrap(), "val_d");
+        assert_eq!(scope_a.get("key_a").map(|s| s.as_str()), Some("val_a"));
+        assert_eq!(scope_a.get("key_c").map(|s| s.as_str()), Some("val_c"));
+        assert_eq!(scope_a.get("key_d").map(|s| s.as_str()), Some("val_d"));
+        Ok(())
     }
 
     #[test]
-    fn test_variable_scope_merge_overwrites_global() {
+    fn test_variable_scope_merge_overwrites_global() -> anyhow::Result<()> {
         let mut scope_a = VariableScope::new(HashMap::new());
         scope_a.set_global("key", "old");
 
@@ -308,13 +315,14 @@ mod tests {
         scope_b.set_global("key", "new");
 
         scope_a.merge_from(&scope_b);
-        assert_eq!(scope_a.get("key").unwrap(), "new");
+        assert_eq!(scope_a.get("key").map(|s| s.as_str()), Some("new"));
+        Ok(())
     }
 
     // ── ScanContext tests ──────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_scan_context_snapshot_variables() {
+    async fn test_scan_context_snapshot_variables() -> anyhow::Result<()> {
         let vars = Arc::new(RwLock::new(VariableScope::new({
             let mut m = HashMap::new();
             m.insert("BaseURL".into(), "https://example.com".into());
@@ -332,11 +340,12 @@ mod tests {
         };
 
         let snapshot = ctx.snapshot_variables().await;
-        assert_eq!(snapshot.get("BaseURL").unwrap(), "https://example.com");
+        assert_eq!(snapshot.get("BaseURL").map(|s| s.as_str()), Some("https://example.com"));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_scan_context_set_variable() {
+    async fn test_scan_context_set_variable() -> anyhow::Result<()> {
         let vars = Arc::new(RwLock::new(VariableScope::new(HashMap::new())));
         let ctx = ScanContext {
             scan_id: uuid::Uuid::default(),
@@ -350,7 +359,8 @@ mod tests {
 
         ctx.set_variable("test_plugin", "extracted", "secret_value".to_string()).await;
         let snapshot = ctx.snapshot_variables().await;
-        assert_eq!(snapshot.get("extracted").unwrap(), "secret_value");
+        assert_eq!(snapshot.get("extracted").map(|s| s.as_str()), Some("secret_value"));
+        Ok(())
     }
 
     #[tokio::test]
@@ -371,7 +381,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_scan_context_emit_finding() {
+    async fn test_scan_context_emit_finding() -> anyhow::Result<()> {
         let (tx, mut rx) = mpsc::channel(10);
         let ctx = ScanContext {
             scan_id: uuid::Uuid::default(),
@@ -404,11 +414,12 @@ mod tests {
             metadata: Default::default(),
         };
 
-        ctx.emit_finding(finding).await.unwrap();
-        let received = rx.recv().await.unwrap();
+        ctx.emit_finding(finding).await?;
+        let received = rx.recv().await.unwrap(); // MPSC channel recv is fine to unwrap in tests if we want, but better use ok_or
         assert_eq!(received.template_id, "test-001");
         // Description should be auto-injected from template
-        assert_eq!(received.description.unwrap(), "desc");
+        assert_eq!(received.description.as_deref(), Some("desc"));
+        Ok(())
     }
 
     // ── PluginOutcomeKind tests ────────────────────────────────────────────
@@ -424,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn test_plugin_outcome_kind_serde_round_trip() {
+    fn test_plugin_outcome_kind_serde_round_trip() -> anyhow::Result<()> {
         let cases = vec![
             PluginOutcomeKind::NoMatch,
             PluginOutcomeKind::Matched,
@@ -432,16 +443,17 @@ mod tests {
             PluginOutcomeKind::Crashed,
         ];
         for kind in cases {
-            let json = serde_json::to_string(&kind).unwrap();
-            let back: PluginOutcomeKind = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(&kind)?;
+            let back: PluginOutcomeKind = serde_json::from_str(&json)?;
             assert_eq!(kind, back);
         }
+        Ok(())
     }
 
     // ── PluginMetrics tests ────────────────────────────────────────────────
 
     #[test]
-    fn test_plugin_metrics_serde() {
+    fn test_plugin_metrics_serde() -> anyhow::Result<()> {
         let m = PluginMetrics {
             plugin_name: "http_scan".into(),
             target: "https://example.com".into(),
@@ -449,12 +461,13 @@ mod tests {
             duration: Duration::from_millis(150),
             finding_count: 3,
         };
-        let json = serde_json::to_string(&m).unwrap();
-        let back: PluginMetrics = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&m)?;
+        let back: PluginMetrics = serde_json::from_str(&json)?;
         assert_eq!(back.plugin_name, "http_scan");
         assert_eq!(back.outcome, PluginOutcomeKind::Matched);
         assert_eq!(back.finding_count, 3);
         assert_eq!(back.duration.as_millis(), 150);
+        Ok(())
     }
 
     // ── PluginHealth tests ─────────────────────────────────────────────────
@@ -472,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn test_plugin_health_unhealthy() {
+    fn test_plugin_health_unhealthy() -> anyhow::Result<()> {
         let h = PluginHealth {
             plugin_name: "broken_plugin".into(),
             is_healthy: false,
@@ -480,7 +493,8 @@ mod tests {
             last_checked_ms: 7,
         };
         assert!(!h.is_healthy);
-        assert_eq!(h.error.unwrap(), "out of memory");
+        assert_eq!(h.error.as_deref(), Some("out of memory"));
+        Ok(())
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
