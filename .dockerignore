@@ -1,0 +1,25 @@
+# Git
+.git/
+.gitignore
+
+# Rust
+target/
+**/*.rs.bk
+
+# Agent / AI artifacts
+.agents/
+.claude/
+.gemini/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+.DS_Store
+
+# Environments
+.env
+.env.*
+!.env.example

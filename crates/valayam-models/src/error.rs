@@ -1,15 +1,15 @@
-// TODO: ScannerError — add error variants for all feature modules, ensure clean SIEM serialization.
 use thiserror::Error;
 use std::io;
 use std::net::AddrParseError;
 
 /// Unified error enum for all scanner operations.
-/// Designed for consistent error handling and SIEM-friendly serialization.
+/// Production-grade error handling with fine-grained variants for every
+/// feature module. All variants serialise cleanly for SIEM consumption.
 #[derive(Error, Debug)]
 pub enum ScannerError {
-    // Template/I/O Errors
+    // ── Template/I/O ──
     #[error("Failed to read template file: {0}")]
-    TemplateReadError(io::Error),
+    TemplateReadError(#[source] io::Error),
 
     #[error("Failed to parse YAML template: {0}")]
     TemplateParseError(#[from] serde_yaml::Error),
@@ -17,29 +17,29 @@ pub enum ScannerError {
     #[error("Template validation failed: {0}")]
     TemplateValidationError(String),
 
-    // HTTP Client Errors
+    // ── HTTP Client ──
     #[error("Failed to build HTTP client: {0}")]
     HttpClientError(#[from] reqwest::Error),
 
     #[error("Invalid HTTP Method defined in template: {0}")]
     InvalidHttpMethod(String),
 
-    // Script Engine Errors
+    #[error("HTTP scan execution failed: {0}")]
+    HttpScanError(String),
+
+    // ── Script Engine ──
     #[error("Failed to initialize script engine: {0}")]
     ScriptEngineInitError(String),
 
     #[error("Failed to execute script: {0}")]
     ScriptExecutionError(String),
 
-    // Network Errors
+    // ── Network ──
     #[error("Network connection failed: {0}")]
     NetworkError(#[from] tokio::io::Error),
 
     #[error("DNS resolution failed for {host}: {error}")]
-    DnsResolutionError {
-        host: String,
-        error: String,
-    },
+    DnsResolutionError { host: String, error: String },
 
     #[error("TCP connection failed to {host}:{port}: {error}")]
     TcpConnectionError {
@@ -55,7 +55,7 @@ pub enum ScannerError {
         error: String,
     },
 
-    // TLS Errors
+    // ‾─ TLS ──
     #[error("TLS handshake failed for {host}:{port}: {error}")]
     TlsHandshakeError {
         host: String,
@@ -66,7 +66,7 @@ pub enum ScannerError {
     #[error("TLS certificate parsing failed: {0}")]
     TlsCertParseError(String),
 
-    // Input/Validation Errors
+    // Input/Validation
     #[error("Invalid target specification: {0}")]
     InvalidTarget(String),
 
@@ -79,42 +79,58 @@ pub enum ScannerError {
     #[error("Circuit breaker is open")]
     CircuitBreakerOpen,
 
-    // Configuration Errors
+    // Configuration
     #[error("Invalid configuration: {0}")]
     ConfigurationError(String),
 
-    // Resource Errors
+    // Resource
     #[error("Resource exhausted: {0}")]
     ResourceExhausted(String),
 
-    // Timeout Errors
+    // Timeout
     #[error("Operation timed out: {0}")]
     TimeoutError(String),
 
-    // Parsing Errors
+    // Parsing
     #[error("Failed to parse response data: {0}")]
     ParseError(String),
 
-    // Crypto/TLS Specific Errors
+    //──── Crypto/TLS ──
     #[error("Certificate validation failed: {0}")]
     CertificateValidationError(String),
 
     #[error("Invalid cipher suite: {0}")]
     InvalidCipherSuite(String),
 
-    // Proxy/Network Errors
+    // ── Proxy santé ──
     #[error("Proxy connection failed: {0}")]
     ProxyError(String),
 
-    // Data Conversion Errors
+    // ── Data Conversion ──
     #[error("Failed to parse address: {0}")]
     AddressParseError(#[from] AddrParseError),
 
-    // General/Parsing
+    // ── Encoding ──
     #[error("Invalid UTF-8 data: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
 
-    // Registry/Plugin Errors
+    // ── Feature-Module Specific ──
+    #[error("Crawler operation failed: {0}")]
+    CrawlerError(String),
+
+    #[error("Data extraction failed: {0}")]
+    ExtractorError(String),
+
+    #[error("Schema drift detection failed: {0}")]
+    SchemaDriftError(String),
+
+    #[error("UI proxy / MITM operation failed: {0}")]
+    UiProxyError(String),
+
+    #[error("OOB interaction verification failed: {0}")]
+    OobError(String),
+
+    // ── Registry/Plugin ──
     #[error("Plugin not found: {0}")]
     PluginNotFound(String),
 
@@ -124,7 +140,14 @@ pub enum ScannerError {
     #[error("Plugin execution failed: {0}")]
     PluginExecutionError(String),
 
-    // Capture the original error for debugging while maintaining type safety
+    // ── Audit/Report ──
+    #[error("Audit logging failed: {0}")]
+    AuditError(String),
+
+    #[error("Report generation failed: {0}")]
+    ReportError(String),
+
+    // ── Fallback ──
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -149,15 +172,17 @@ impl ScannerError {
     /// Determine if an error is retryable (useful for resilient scanning)
     pub fn is_retryable(&self) -> bool {
         match self {
-            ScannerError::NetworkError(_) |
-            ScannerError::TimeoutError(_) |
-            ScannerError::RateLimitExceeded |
-            ScannerError::CircuitBreakerOpen |
-            ScannerError::TlsHandshakeError { .. } |
-            ScannerError::DnsResolutionError { .. } |
-            ScannerError::TcpConnectionError { .. } |
-            ScannerError::UdpError { .. } |
-            ScannerError::ProxyError(_) => true,
+            ScannerError::NetworkError(_)
+            | ScannerError::TimeoutError(_)
+            | ScannerError::RateLimitExceeded
+            | ScannerError::CircuitBreakerOpen
+            | ScannerError::TlsHandshakeError { .. }
+            | ScannerError::DnsResolutionError { .. }
+            | ScannerError::TcpConnectionError { .. }
+            | ScannerError::UdpError { .. }
+            | ScannerError::ProxyError(_)
+            | ScannerError::HttpScanError(_)
+            | ScannerError::OobError(_) => true,
             _ => false,
         }
     }
@@ -170,6 +195,7 @@ impl ScannerError {
             ScannerError::TemplateValidationError(_) => "TEMPLATE_VALIDATION_ERROR",
             ScannerError::HttpClientError(_) => "HTTP_CLIENT_ERROR",
             ScannerError::InvalidHttpMethod(_) => "INVALID_HTTP_METHOD",
+            ScannerError::HttpScanError(_) => "HTTP_SCAN_ERROR",
             ScannerError::ScriptEngineInitError(_) => "SCRIPT_INIT_ERROR",
             ScannerError::ScriptExecutionError(_) => "SCRIPT_EXECUTION_ERROR",
             ScannerError::NetworkError(_) => "NETWORK_ERROR",
@@ -191,9 +217,16 @@ impl ScannerError {
             ScannerError::ProxyError(_) => "PROXY_ERROR",
             ScannerError::AddressParseError(_) => "ADDRESS_PARSE_ERROR",
             ScannerError::Utf8Error(_) => "UTF8_ERROR",
+            ScannerError::CrawlerError(_) => "CRAWLER_ERROR",
+            ScannerError::ExtractorError(_) => "EXTRACTOR_ERROR",
+            ScannerError::SchemaDriftError(_) => "SCHEMA_DRIFT_ERROR",
+            ScannerError::UiProxyError(_) => "UI_PROXY_ERROR",
+            ScannerError::OobError(_) => "OOB_ERROR",
             ScannerError::PluginNotFound(_) => "PLUGIN_NOT_FOUND",
             ScannerError::PluginInitializationError(_) => "PLUGIN_INITIALIZATION_ERROR",
             ScannerError::PluginExecutionError(_) => "PLUGIN_EXECUTION_ERROR",
+            ScannerError::AuditError(_) => "AUDIT_ERROR",
+            ScannerError::ReportError(_) => "REPORT_ERROR",
             ScannerError::Other(_) => "OTHER_ERROR",
         }
     }
@@ -493,14 +526,103 @@ mod tests {
         use std::collections::HashSet;
         let mut codes = HashSet::new();
 
-        // Collect all error codes
         let errs: Vec<ScannerError> = vec![
             ScannerError::TemplateReadError(io::Error::new(io::ErrorKind::NotFound, "")),
             ScannerError::TemplateValidationError("".into()),
             ScannerError::InvalidHttpMethod("".into()),
+            ScannerError::HttpScanError("".into()),
+            ScannerError::CrawlerError("".into()),
+            ScannerError::ExtractorError("".into()),
+            ScannerError::SchemaDriftError("".into()),
+            ScannerError::UiProxyError("".into()),
+            ScannerError::OobError("".into()),
+            ScannerError::AuditError("".into()),
+            ScannerError::ReportError("".into()),
         ];
         for e in &errs {
-            assert!(codes.insert(e.error_code()), "Duplicate error code: {}", e.error_code());
+            assert!(
+                codes.insert(e.error_code()),
+                "Duplicate error code: {}",
+                e.error_code()
+            );
+        }
+    }
+
+    // ── New module-specific variant tests ──
+
+    #[test]
+    fn test_http_scan_error() {
+        let err = ScannerError::HttpScanError("request timed out".into());
+        assert_eq!(err.error_code(), "HTTP_SCAN_ERROR");
+        assert!(err.is_retryable());
+        assert!(err.to_string().contains("request timed out"));
+    }
+
+    #[test]
+    fn test_crawler_error() {
+        let err = ScannerError::CrawlerError("spider loop detected".into());
+        assert_eq!(err.error_code(), "CRAWLER_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_extractor_error() {
+        let err = ScannerError::ExtractorError("regex compilation failed".into());
+        assert_eq!(err.error_code(), "EXTRACTOR_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_schema_drift_error() {
+        let err = ScannerError::SchemaDriftError("openapi parse error".into());
+        assert_eq!(err.error_code(), "SCHEMA_DRIFT_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_ui_proxy_error() {
+        let err = ScannerError::UiProxyError("certificate authority unavailable".into());
+        assert_eq!(err.error_code(), "UI_PROXY_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_oob_error_retryable() {
+        let err = ScannerError::OobError("DNS callback not received".into());
+        assert_eq!(err.error_code(), "OOB_ERROR");
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_audit_error() {
+        let err = ScannerError::AuditError("write-ahead-log full".into());
+        assert_eq!(err.error_code(), "AUDIT_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_report_error() {
+        let err = ScannerError::ReportError("PDF render engine unavailable".into());
+        assert_eq!(err.error_code(), "REPORT_ERROR");
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_non_retryable_includes_new_variants() {
+        let non_retryable: Vec<ScannerError> = vec![
+            ScannerError::CrawlerError("".into()),
+            ScannerError::ExtractorError("".into()),
+            ScannerError::SchemaDriftError("".into()),
+            ScannerError::UiProxyError("".into()),
+            ScannerError::AuditError("".into()),
+            ScannerError::ReportError("".into()),
+        ];
+        for err in &non_retryable {
+            assert!(
+                !err.is_retryable(),
+                "Expected non-retryable: {:?}",
+                err.error_code()
+            );
         }
     }
 }
