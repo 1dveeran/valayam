@@ -1,4 +1,3 @@
-// TODO(perf): Optimize Template Orchestration Pipeline.
 // - Benchmark `{{variable}}` context propagation under 1000+ concurrent templates.
 // - Add telemetry spans for per-phase execution timing.
 use super::schema::VulnerabilityTemplate;

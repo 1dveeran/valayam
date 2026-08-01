@@ -1,4 +1,3 @@
-// TODO: UDP scanning — protocol-specific probes (DNS, SNMP), response parsing.
 use futures::future::join_all;
 use std::collections::HashSet;
 use tokio::net::UdpSocket;

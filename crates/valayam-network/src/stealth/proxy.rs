@@ -1,4 +1,3 @@
-// TODO(enterprise): Dynamic proxy rotation — cloud provider API integration, proxy scoring, auth.
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;

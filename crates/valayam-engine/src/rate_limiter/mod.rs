@@ -1,4 +1,13 @@
-// TODO(perf): Optimize RateLimiter for enterprise batch processing.
+//! Module: rate_limiter
+//!
+//! Automatically added module documentation.
+
+pub mod config;
+pub mod tracker;
+
+pub use config::RateLimiterConfig;
+use tracker::BackoffTracker;
+
 // - Benchmark `governor` under 10k+ concurrent async tasks.
 // - Implement dynamic backoff integration for 429 Too Many Requests.
 use std::num::NonZeroU32;
@@ -14,50 +23,15 @@ type GovernorLimiter = GovLimiter<
     middleware::NoOpMiddleware<clock::QuantaInstant>,
 >;
 
-/// Configuration for rate limiter behavior
-#[derive(Debug, Clone)]
-pub struct RateLimiterConfig {
-    /// Base requests per second
-    pub base_rps: u32,
-    /// Maximum burst size
-    pub burst_size: Option<u32>,
-    /// Enable adaptive backoff factor for 429 responses (1.0 = no backoff, 2.0 = double delay, etc.)
-    pub backoff_factor: f32,
-    /// Maximum backoff multiplier
-    pub max_backoff: u32,
-    /// Whether to respect Retry-After header
-    pub respect_retry_after: bool,
-}
 
-impl Default for RateLimiterConfig {
-    fn default() -> Self {
-        Self {
-            base_rps: 10,
-            burst_size: None,
-            backoff_factor: 1.5,
-            max_backoff: 60,
-            respect_retry_after: true,
-        }
-    }
-}
+
+
 
 /// Tracks 429 responses for dynamic backoff
 #[derive(Debug)]
-struct BackoffTracker {
-    consecutive_429s: usize,
-    last_429: Option<Instant>,
-    backoff_multiplier: u32,
-}
 
-impl Default for BackoffTracker {
-    fn default() -> Self {
-        Self {
-            consecutive_429s: 0,
-            last_429: None,
-            backoff_multiplier: 1, // Start at 1 (no backoff), avoids division-by-zero
-        }
-    }
-}
+
+
 
 /// Thread-safe, global request rate limiter using the Token Bucket algorithm.
 ///

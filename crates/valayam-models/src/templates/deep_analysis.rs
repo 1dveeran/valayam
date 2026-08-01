@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-// TODO: Deep Analysis template — structured enum for analysis_type with per-type config fields.
 //
 // Required Crates:
 //   - serde / serde_yaml (template loading)

@@ -178,7 +178,7 @@ pub async fn run_scan(
     http_client: Arc<valayam_core::network::http::StealthHttpClient>,
     rate_limiter: Option<Arc<RateLimiter>>,
     grpc_client: Option<ScannerClient<tonic::transport::Channel>>,
-    state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::executor::ScanState>>,
+    state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::scan_state::ScanState>>,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
     run_scan_with_job_id(args, template_files, is_nuclei, targets, http_client, rate_limiter, grpc_client, state_rx, cancel, None).await
@@ -196,7 +196,7 @@ pub async fn run_scan_with_job_id(
     http_client: Arc<valayam_core::network::http::StealthHttpClient>,
     rate_limiter: Option<Arc<RateLimiter>>,
     grpc_client: Option<ScannerClient<tonic::transport::Channel>>,
-    state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::executor::ScanState>>,
+    state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::scan_state::ScanState>>,
     cancel: CancellationToken,
     job_id: Option<String>,
 ) -> anyhow::Result<()> {

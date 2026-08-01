@@ -30,7 +30,7 @@ pub struct ScanSetup {
     /// Optional gRPC worker client.
     pub grpc_client: Option<ScannerClient<tonic::transport::Channel>>,
     /// State watcher receiver for scan control.
-    pub state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::executor::ScanState>>,
+    pub state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::scan_state::ScanState>>,
     /// Global cancellation token.
     pub cancel: tokio_util::sync::CancellationToken,
 }

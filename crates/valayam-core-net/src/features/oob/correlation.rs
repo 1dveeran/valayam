@@ -1,6 +1,7 @@
 use rand::{distributions::Alphanumeric, Rng};
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::LazyLock;
+use parking_lot::Mutex;
 
 /// Correlation engine for generating short-lived OOB IDs.
 pub struct CorrelationEngine;
@@ -20,7 +21,7 @@ impl CorrelationEngine {
                 .map(char::from)
                 .collect::<String>()
                 .to_lowercase();
-            let mut seen = GENERATED_IDS.lock().unwrap();
+            let mut seen = GENERATED_IDS.lock();
             if seen.insert(id.clone()) {
                 break;
             }

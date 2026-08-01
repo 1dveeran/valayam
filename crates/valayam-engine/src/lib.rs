@@ -11,6 +11,7 @@ pub mod plugin_macro;
 pub mod rate_limiter;
 pub mod reflection;
 pub mod registry;
+pub mod scan_state;
 pub mod traits;
 pub mod unwind_safe;
 pub mod variables;

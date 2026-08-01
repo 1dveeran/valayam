@@ -10,11 +10,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScanState {
-    Running,
-    Paused,
-}
+use crate::scan_state::ScanState;
 
 #[derive(Clone)]
 pub struct ScanExecutor {

@@ -1,4 +1,3 @@
-// TODO: User-Agent rotation — add TLS fingerprint sync.
 use rand::seq::SliceRandom;
 use rand::Rng;
 

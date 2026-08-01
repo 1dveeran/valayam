@@ -1,4 +1,3 @@
-// TODO: DNS — more specific rate-limiting per-domain, advanced response caching metrics.
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 use reqwest::Client;

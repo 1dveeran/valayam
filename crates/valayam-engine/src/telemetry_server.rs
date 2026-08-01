@@ -5,7 +5,7 @@ use crate::rpc::{ScanRequest, ScanResponse, TelemetryEvent, TelemetryResponse, C
 use valayam_proto::reflection::v1::server_reflection_server::ServerReflectionServer;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use crate::executor::ScanState;
+use crate::scan_state::ScanState;
 
 /// Optional TLS configuration for the gRPC control plane.
 #[derive(Clone, Debug)]
@@ -37,7 +37,6 @@ impl Scanner for TelemetryService {
                 payload = %event.payload_json,
                 "Received eBPF Telemetry Event"
             );
-            // TODO: route telemetry events to active scan contexts for real-time display
         }
 
         Ok(Response::new(TelemetryResponse { received: true }))

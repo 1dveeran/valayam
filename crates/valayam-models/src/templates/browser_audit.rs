@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::templates::matcher::ResponseMatcher;
 
-// TODO: Browser Audit template — headless browser scenarios: DOM interaction, JS execution, screenshots.
 //
 // Required Crates:
 //   - serde / serde_yaml (template loading from YAML)

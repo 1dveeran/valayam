@@ -1,4 +1,3 @@
-// TODO: ScanResult — add compliance mapping fields and native JSON/SARIF output support.
 use crate::template_info::TemplateMetadata;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

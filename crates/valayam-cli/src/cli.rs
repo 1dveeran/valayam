@@ -1,4 +1,3 @@
-// TODO(enterprise): CLI refactor — standard subcommands, batch execution, AI loop, reporting.
 use clap::Parser;
 
 #[derive(Parser, Debug, Clone)]

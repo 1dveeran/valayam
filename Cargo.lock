@@ -6494,6 +6494,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "hickory-resolver",
+ "parking_lot",
  "rand 0.8.7",
  "regex",
  "rustls 0.23.41",

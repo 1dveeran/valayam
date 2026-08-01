@@ -1,4 +1,3 @@
-// TODO: VulnerabilityTemplate schema — field validation, linting, expand for Crawler/WAF modules.
 use crate::templates::dns_audit::DnsRequestTemplate;
 use crate::templates::http_scan::HttpRequestTemplate;
 use crate::templates::network_scan::NetworkRequestTemplate;

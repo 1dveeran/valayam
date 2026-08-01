@@ -1,4 +1,3 @@
-// TODO: Harden Variable Substitution — circular-dep detection already implemented, add cycle reporting
 // - Implement strict circular-dependency detection during resolution.
 // - Optimize Regex substitutions for zero-copy where possible.
 use lazy_static::lazy_static;

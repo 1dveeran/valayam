@@ -1,4 +1,3 @@
-// TODO: TCP scanning — advanced banner grabbing, raw SYN scan support.
 use futures::future::join_all;
 use std::collections::HashSet;
 use std::time::Duration;

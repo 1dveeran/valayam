@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
     ensure_demo_template(&template_path);
 
     // ── Scan state channels ────────────────────────────────────────────────
-    let (state_tx, state_rx) = tokio::sync::watch::channel(valayam_engine::executor::ScanState::Running);
+    let (state_tx, state_rx) = tokio::sync::watch::channel(valayam_engine::scan_state::ScanState::Running);
     let cancel_token = CancellationToken::new();
 
     // ── TLS config + Telemetry server ──────────────────────────────────────
@@ -176,7 +176,7 @@ async fn main() -> anyhow::Result<()> {
 fn spawn_telemetry_server(
     control_port: Option<u16>,
     tls_config: Option<valayam_engine::telemetry_server::TlsConfig>,
-    state_tx: tokio::sync::watch::Sender<valayam_engine::executor::ScanState>,
+    state_tx: tokio::sync::watch::Sender<valayam_engine::scan_state::ScanState>,
     cancel_token: CancellationToken,
 ) {
     tokio::spawn(async move {

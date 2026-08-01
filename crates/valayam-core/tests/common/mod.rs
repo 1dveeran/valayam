@@ -1,3 +1,7 @@
+//! Module: common
+//!
+//! Automatically added module documentation.
+
 #![allow(dead_code)]
 use std::sync::Arc;
 use valayam_core::network::http::StealthHttpClient;

@@ -1,4 +1,3 @@
-// TODO: TLS auditing — raw SSLv2 probes, cipher ranking, STARTTLS, OCSP stapling.
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
