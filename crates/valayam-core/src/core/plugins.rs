@@ -206,7 +206,9 @@ mod tests {
             info: valayam_models::templates::schema::TemplateInfo {
                 name: "Test".to_string(),
                 severity: "Info".to_string(),
+                author: None,
                 description: None,
+                tags: vec![],
                 compliance: Default::default(),
             },
             ..VulnerabilityTemplate::empty()

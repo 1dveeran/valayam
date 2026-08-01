@@ -75,6 +75,8 @@ pub fn generate_template_from_openapi(
             severity: "Info".to_string(),
             description,
             compliance: Default::default(),
+            author: None,
+            tags: vec![],
         },
         requests,
         ..Default::default()

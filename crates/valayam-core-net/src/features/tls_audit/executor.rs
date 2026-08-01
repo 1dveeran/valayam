@@ -16,7 +16,13 @@ pub async fn execute(
     let mut findings = Vec::new();
 
     for rule in tls_rules {
-        let host = resolve_variables(&rule.host, variables).unwrap();
+        let host = match resolve_variables(&rule.host, variables) {
+            Ok(h) => h,
+            Err(e) => {
+                tracing::warn!(template_id, rule = %rule.host, "Variable resolution failed: {}", e);
+                continue;
+            }
+        };
 
         tracing::debug!(target = %host, port = %rule.port, "Starting TLS certificate inspection");
 

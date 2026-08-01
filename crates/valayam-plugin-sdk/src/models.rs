@@ -1,6 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// Error type: real extism_pdk::Error on wasm32, stub on host builds.
+#[cfg(target_arch = "wasm32")]
+pub type PluginError = extism_pdk::Error;
+#[cfg(not(target_arch = "wasm32"))]
+pub type PluginError = Box<dyn std::error::Error + Send + Sync>;
+
+// Result type matching extism_pdk::FnResult on wasm32.
+#[cfg(target_arch = "wasm32")]
+pub type PluginResult<T> = extism_pdk::FnResult<T>;
+#[cfg(not(target_arch = "wasm32"))]
+pub type PluginResult<T> = Result<T, PluginError>;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WasmInput {
     pub template: serde_json::Value,
@@ -34,5 +46,5 @@ pub struct WasmOutput {
 }
 
 pub trait WasmScanner {
-    fn scan(&self, input: WasmInput) -> Result<WasmOutput, extism_pdk::Error>;
+    fn scan(&self, input: WasmInput) -> PluginResult<WasmOutput>;
 }

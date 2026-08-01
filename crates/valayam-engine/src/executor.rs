@@ -121,7 +121,9 @@ mod tests {
             info: TemplateInfo {
                 name: "Test".into(),
                 severity: "info".into(),
+                author: None,
                 description: None,
+                tags: vec![],
                 compliance: Default::default(),
             },
             ..VulnerabilityTemplate::default()

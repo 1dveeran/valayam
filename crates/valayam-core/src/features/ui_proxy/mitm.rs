@@ -215,6 +215,8 @@ async fn generate_template(uri: &str, method: &str, body: &str) -> std::io::Resu
             severity: "Info".to_string(),
             description: Some("Automatically captured via proxy".to_string()),
             compliance: Default::default(),
+            author: None,
+            tags: vec![],
         },
         auth: None,
         requests: vec![http_req],

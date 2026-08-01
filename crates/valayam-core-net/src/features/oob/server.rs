@@ -1,12 +1,6 @@
-// TODO(enterprise): Enhance OOB server for production deployments.
-// - Add TLS termination for HTTPS callbacks.
-// - Implement DNS query payload extraction for blind vulnerabilities (XXE, SSRF).
-// - Add real-time WebSocket notifications for detected interactions.
-// - Support multiple concurrent callback domains for correlation.
-
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::Mutex;
@@ -45,6 +39,10 @@ pub struct OobServerConfig {
     pub max_body_capture: usize,
     /// Maximum concurrent connections for the HTTP callback server (default: 1000)
     pub max_concurrent_connections: usize,
+    /// Max requests per second per source IP (0 = unlimited)
+    pub per_ip_rate_limit: u32,
+    /// Interval to sweep stale interactions (default: 5 min)
+    pub cleanup_interval: Duration,
     /// Optional TLS configuration for HTTPS callbacks
     pub tls_config: Option<Arc<rustls::ServerConfig>>,
 }
@@ -58,6 +56,8 @@ impl Default for OobServerConfig {
             retention_duration: Duration::from_secs(3600),
             max_body_capture: 4096,
             max_concurrent_connections: 1000,
+            per_ip_rate_limit: 50,
+            cleanup_interval: Duration::from_secs(300),
             tls_config: None,
         }
     }
@@ -89,6 +89,8 @@ pub struct OobServer {
     hits: Arc<Mutex<HashMap<String, Vec<OobInteraction>>>>,
     /// Shutdown signal for the server
     shutdown: Arc<tokio::sync::Notify>,
+    /// Per-IP rate limiter: IP -> next allowed Instant
+    ip_limits: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 impl OobServer {
@@ -98,6 +100,26 @@ impl OobServer {
             config,
             hits: Arc::new(Mutex::new(HashMap::new())),
             shutdown: Arc::new(tokio::sync::Notify::new()),
+            ip_limits: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// Build config from environment variables with sensible defaults.
+    pub fn config_from_env() -> OobServerConfig {
+        OobServerConfig {
+            http_bind: std::env::var("OOB_HTTP_BIND").unwrap_or_else(|_| "0.0.0.0:8080".into()),
+            dns_bind: std::env::var("OOB_DNS_BIND").unwrap_or_else(|_| "0.0.0.0:5353".into()),
+            callback_domain: std::env::var("OOB_CALLBACK_DOMAIN").unwrap_or_else(|_| "oob.valayam.local".into()),
+            retention_duration: Duration::from_secs(
+                std::env::var("OOB_RETENTION_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(3600)
+            ),
+            max_body_capture: std::env::var("OOB_MAX_BODY").ok().and_then(|v| v.parse().ok()).unwrap_or(4096),
+            max_concurrent_connections: std::env::var("OOB_MAX_CONCURRENT").ok().and_then(|v| v.parse().ok()).unwrap_or(1000),
+            per_ip_rate_limit: std::env::var("OOB_RATE_LIMIT").ok().and_then(|v| v.parse().ok()).unwrap_or(50),
+            cleanup_interval: Duration::from_secs(
+                std::env::var("OOB_CLEANUP_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(300)
+            ),
+            tls_config: None,
         }
     }
 
@@ -117,13 +139,19 @@ impl OobServer {
         let callback_domain_dns = self.config.callback_domain.clone();
         let max_concurrent = self.config.max_concurrent_connections;
         let tls_config = self.config.tls_config.clone();
+        let ip_limits_http = self.ip_limits.clone();
+        let rate_limit_per_sec = self.config.per_ip_rate_limit;
+        let retention = self.config.retention_duration;
+        let cleanup_interval = self.config.cleanup_interval;
+        let hits_cleanup = self.hits.clone();
+        let shutdown_cleanup = self.shutdown.clone();
 
         // Start HTTP listener
         let http_handle = tokio::spawn(async move {
             match TcpListener::bind(&http_bind).await {
                 Ok(listener) => {
                     tracing::info!(bind = %http_bind, "OOB HTTP server started");
-                    Self::run_http_server(listener, hits_http, shutdown_http, max_body, &callback_domain_http, max_concurrent, tls_config).await;
+                    Self::run_http_server(listener, hits_http, shutdown_http, max_body, &callback_domain_http, max_concurrent, tls_config, ip_limits_http, rate_limit_per_sec).await;
                 }
                 Err(e) => {
                     tracing::error!(bind = %http_bind, error = %e, "Failed to bind OOB HTTP server");
@@ -144,10 +172,32 @@ impl OobServer {
             }
         });
 
+        // Start background retention cleanup
+        let cleanup_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(cleanup_interval) => {
+                        let mut lock = hits_cleanup.lock().await;
+                        let cutoff = chrono::Utc::now() - chrono::Duration::from_std(retention).unwrap_or_else(|_| chrono::Duration::hours(1));
+                        let before = lock.len();
+                        lock.retain(|_, interactions| {
+                            interactions.retain(|i| i.timestamp > cutoff);
+                            !interactions.is_empty()
+                        });
+                        let after = lock.len();
+                        if before != after {
+                            tracing::debug!(cleaned = before - after, "OOB interaction retention cleanup");
+                        }
+                    }
+                    _ = shutdown_cleanup.notified() => break,
+                }
+            }
+        });
+
         // Give listeners a moment to bind, then report status
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        if http_handle.is_finished() || dns_handle.is_finished() {
+        if http_handle.is_finished() || dns_handle.is_finished() || cleanup_handle.is_finished() {
             return Err("OOB server failed to start — check bind addresses and permissions".to_string());
         }
 
@@ -156,6 +206,7 @@ impl OobServer {
     }
 
     /// Run the HTTP listener loop.
+    #[allow(clippy::too_many_arguments)]
     async fn run_http_server(
         listener: TcpListener,
         hits: Arc<Mutex<HashMap<String, Vec<OobInteraction>>>>,
@@ -164,9 +215,16 @@ impl OobServer {
         callback_domain: &str,
         max_concurrent: usize,
         tls_config: Option<Arc<rustls::ServerConfig>>,
+        ip_limits: Arc<Mutex<HashMap<String, Instant>>>,
+        rate_limit_per_sec: u32,
     ) {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
         let tls_acceptor = tls_config.map(tokio_rustls::TlsAcceptor::from);
+        let rate_interval = if rate_limit_per_sec > 0 {
+            Duration::from_secs_f64(1.0 / rate_limit_per_sec as f64)
+        } else {
+            Duration::ZERO
+        };
 
         loop {
             let permit = match semaphore.clone().acquire_owned().await {
@@ -182,9 +240,23 @@ impl OobServer {
                             let domain = callback_domain.to_string();
                             let max_b = max_body;
                             let tls_acc = tls_acceptor.clone();
+                            let ip_limits_clone = ip_limits.clone();
 
                             tokio::spawn(async move {
                                 let _permit = permit; // drop permit when task completes
+
+                                // Per-IP rate limiting
+                                if rate_interval > Duration::ZERO {
+                                    let ip_key = addr.ip().to_string();
+                                    let mut limits = ip_limits_clone.lock().await;
+                                    let now = Instant::now();
+                                    let next_allowed = limits.entry(ip_key).or_insert(Instant::now());
+                                    if now < *next_allowed {
+                                        return; // rate-limited, drop connection silently
+                                    }
+                                    *next_allowed = now + rate_interval;
+                                    drop(limits);
+                                }
 
                                 // Apply TLS if configured
                                 let mut buf = vec![0u8; 8192];
@@ -364,7 +436,6 @@ impl OobServer {
         while pos < query.len() {
             let len = query[pos] as usize;
             if len == 0 {
-                // pos += 1; — no-op; loop breaks immediately
                 break; // End of domain name
             }
             if len > 63 || pos + len + 1 > query.len() {
@@ -385,7 +456,7 @@ impl OobServer {
 
         // The domain should end with our callback domain
         if domain_name.ends_with(callback_domain) {
-            let prefix = domain_name.strip_suffix(callback_domain).unwrap_or("").trim_end_matches('.');
+            let prefix = domain_name.strip_suffix(callback_domain).unwrap_or_default().trim_end_matches('.');
             
             // Format is often [payload].[correlation_id].callback_domain
             // or just [correlation_id].callback_domain
@@ -395,7 +466,10 @@ impl OobServer {
                 return (None, None);
             }
 
-            let id = parts.pop().unwrap(); // The last part is usually the correlation ID
+            let id = match parts.pop() {
+                Some(id) => id,
+                None => return (None, None),
+            };
             let payload = if !parts.is_empty() {
                 Some(parts.join("."))
             } else {

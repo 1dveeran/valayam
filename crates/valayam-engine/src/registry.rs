@@ -797,7 +797,9 @@ mod tests {
             info: TemplateInfo {
                 name: "Test Template".to_string(),
                 severity: "medium".to_string(),
+                author: None,
                 description: None,
+                tags: vec![],
                 compliance: Default::default(),
             },
             ..VulnerabilityTemplate::empty()

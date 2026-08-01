@@ -2,9 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
-
+use hmac::Hmac;
 use crate::agent_config::*;
 use colored::*;
 

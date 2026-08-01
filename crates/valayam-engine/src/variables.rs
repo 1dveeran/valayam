@@ -3,7 +3,6 @@
 // - Optimize Regex substitutions for zero-copy where possible.
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use valayam_models::error::ScannerError;
 

@@ -392,7 +392,9 @@ mod tests {
                 info: valayam_models::templates::schema::TemplateInfo {
                     name: "Test".into(),
                     severity: "info".into(),
+                    author: None,
                     description: Some("desc".into()),
+                    tags: vec![],
                     compliance: Default::default(),
                 },
                 ..valayam_models::templates::schema::VulnerabilityTemplate::default()
