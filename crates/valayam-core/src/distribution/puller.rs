@@ -40,7 +40,7 @@ impl PluginPuller {
 
         let bytes = if url.starts_with("oci://") {
             tracing::info!(url = %url, plugin = %plugin_name, "Downloading plugin from OCI registry");
-            let url_no_scheme = &url[6..];
+            let url_no_scheme = url.strip_prefix("oci://").unwrap_or(url);
             // Format: registry.com/repo/name:tag
             let parts: Vec<&str> = url_no_scheme.splitn(2, '/').collect();
             if parts.len() != 2 {
@@ -88,7 +88,7 @@ impl PluginPuller {
             let signature_header = response
                 .headers()
                 .get("x-plugin-signature")
-                .map(|v| v.clone());
+                .cloned();
             let bytes = response.bytes().await?;
             (bytes.to_vec(), signature_header)
         };

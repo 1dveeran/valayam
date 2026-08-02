@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default, clippy::same_item_push, clippy::redundant_field_names)]
 use futures::future::join_all;
 use std::collections::HashSet;
 use tokio::net::UdpSocket;
@@ -437,7 +438,7 @@ pub async fn scan_ports(
 
             Some(UdpPortResult {
                 port,
-                response: response,
+                response,
                 service_info,
             })
         })

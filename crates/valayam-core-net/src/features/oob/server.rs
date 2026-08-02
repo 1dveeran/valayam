@@ -482,10 +482,9 @@ impl OobServer {
         }
 
         // Fallback: single-label name that looks like an opaque correlation ID
-        if !domain_name.contains('.') && domain_name.len() >= 8 && domain_name.len() <= 64 {
-            if domain_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        if !domain_name.contains('.') && domain_name.len() >= 8 && domain_name.len() <= 64
+            && domain_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
                 return (Some(domain_name), None);
-            }
         }
 
         (None, None)

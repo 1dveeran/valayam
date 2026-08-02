@@ -221,14 +221,9 @@ fn extract_version_from_ftp_banner(banner: &str) -> Option<String> {
     // Examples: "220 vsFTPd 3.0.5", "220 Microsoft FTP Service"
     let re = regex::Regex::new(r"(?i)v[0-9]+\.[0-9]+\.[0-9]+|\d+\.\d+\.\d+").ok()?;
     re.find(banner).map(|m| {
-        let ver = m.as_str().to_string();
-        if ver.starts_with('v') {
-            // Remove the 'v' prefix
-            Some(ver[1..].to_string())
-        } else {
-            Some(ver)
-        }
-    }).flatten()
+        let ver = m.as_str();
+        ver.strip_prefix('v').unwrap_or(ver).to_string()
+    })
 }
 
 /// Extract version from SMTP banner
@@ -269,10 +264,7 @@ fn extract_mssql_version(_banner: &str) -> Option<String> {
 fn extract_redis_version(banner: &str) -> Option<String> {
     // Redis typically sends something like "redis_version:6.2.6\r\n"
     let re = regex::Regex::new(r"redis_version:?(\d+\.\d+\.\d+)").ok()?;
-    re.find(banner).and_then(|m| {
-        let ver = m.as_str().split(':').nth(1).unwrap_or(m.as_str()).to_string();
-        Some(ver)
-    })
+    re.find(banner).map(|m| m.as_str().split(':').nth(1).unwrap_or(m.as_str()).to_string())
 }
 
 /// Extract MongoDB version

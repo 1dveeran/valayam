@@ -146,27 +146,13 @@ async fn service_claim_check(domain: &str, pattern: &str) -> bool {
 
     // For demonstration, we'll do a simple HTTP check for some services
     match pattern {
-        "github.io" | "gitlab.io" => {
-            // Check if GitHub/GitLab page exists
-            check_http_endpoint(&format!("https://{domain}")).await
-        }
-        "herokuapp.com" | "heroku.com" => {
-            // Check if Heroku app exists
-            check_http_endpoint(&format!("https://{domain}")).await
-        }
         "s3.amazonaws.com" => {
-            // Check if S3 bucket exists
             check_http_endpoint(&format!("http://{domain}.s3.amazonaws.com")).await
         }
-        "azurewebsites.net" => {
-            // Check if Azure Web App exists
+        _ => {
+            // All other known services use standard HTTPS check
             check_http_endpoint(&format!("https://{domain}")).await
         }
-        "shopify.com" => {
-            // Check if Shopify store exists
-            check_http_endpoint(&format!("https://{domain}")).await
-        }
-        _ => false, // Unknown pattern
     }
 }
 
@@ -228,12 +214,9 @@ async fn identify_vulnerable_service(target: &str) -> String {
 async fn calculate_takeover_confidence(target: &str) -> String {
     // In a real implementation, this would check multiple factors
     // For now, return a fixed value based on service type
-    if target.ends_with("github.io") || target.ends_with("gitlab.io") {
+    if target.ends_with("github.io") || target.ends_with("gitlab.io")
+        || target.ends_with("herokuapp.com") || target.ends_with("heroku.com") {
         "High".to_string()
-    } else if target.ends_with("herokuapp.com") || target.ends_with("heroku.com") {
-        "High".to_string()
-    } else if target.ends_with("s3.amazonaws.com") {
-        "Medium".to_string() // S3 buckets can be tricky to detect
     } else {
         "Medium".to_string()
     }

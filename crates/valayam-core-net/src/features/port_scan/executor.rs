@@ -112,9 +112,7 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             }
         }
         139 | 445 => {
-            if banner.contains("Samba") {
-                ("SMB".to_string(), extract_version_from_banner(banner))
-            } else if banner.contains("Microsoft") || banner.contains("Windows") {
+            if banner.contains("Samba") || banner.contains("Microsoft") || banner.contains("Windows") {
                 ("SMB".to_string(), extract_version_from_banner(banner))
             } else {
                 ("SMB".to_string(), None)
@@ -150,13 +148,7 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
                 ("MySQL".to_string(), None)
             }
         }
-        3389 => {
-            if banner.contains("Remote Desktop") || banner.contains("Terminal Services") {
-                ("RDP".to_string(), None) // RDP doesn't usually give version in banner
-            } else {
-                ("RDP".to_string(), None)
-            }
-        }
+        3389 => ("RDP".to_string(), None),
         5432 => {
             if banner.contains("PostgreSQL") {
                 ("PostgreSQL".to_string(), extract_version_from_banner(banner))
@@ -175,14 +167,12 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             if banner.contains("Redis") {
                 let version = extract_version_from_banner(banner);
                 // Redis often sends just "Redis" followed by version on newline
-                if version.is_none() {
-                    if banner.lines().count() > 1 {
-                        // Try to get version from second line
+                if version.is_none()
+                    && banner.lines().count() > 1 {
                         let lines: Vec<&str> = banner.lines().collect();
                         if lines.len() > 1 {
                             return ( "Redis".to_string(), extract_version_from_banner(lines[1]) );
                         }
-                    }
                 }
                 ("Redis".to_string(), version)
             } else {
@@ -234,9 +224,7 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
 
 /// Check if service version appears to be potentially vulnerable
 fn check_vulnerability(service: &str, version: &Option<String>) -> Option<String> {
-    let Some(ref version_str) = *version else {
-        return None;
-    };
+    let version_str = version.as_ref()?;
 
     // Define version patterns that might indicate vulnerable versions
     let vuln_patterns: Vec<(&str, Vec<&str>)> = vec![

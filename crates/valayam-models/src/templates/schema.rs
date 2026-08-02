@@ -318,9 +318,8 @@ impl VulnerabilityTemplate {
 
     pub fn load_from_str(content: &str) -> Result<Self, crate::error::ScannerError> {
         // Detect and convert OpenAPI/Swagger JSON specifications dynamically
-        if content.trim().starts_with('{') && (content.contains("\"openapi\"") || content.contains("\"swagger\"")) {
-
-        }
+        // OpenAPI/Swagger detected — would convert to template in future
+        let _is_openapi = content.trim().starts_with('{') && (content.contains("\"openapi\"") || content.contains("\"swagger\""));
 
         let template: VulnerabilityTemplate = serde_yaml::from_str(content)?;
         template.validate()?;

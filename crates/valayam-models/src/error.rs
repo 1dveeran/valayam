@@ -188,22 +188,22 @@ impl serde::Serialize for ScannerError {
 impl ScannerError {
     /// Determine if an error is retryable (useful for resilient scanning)
     pub fn is_retryable(&self) -> bool {
-        match self {
+        matches!(
+            self,
             ScannerError::NetworkError(_)
-            | ScannerError::TimeoutError(_)
-            | ScannerError::RateLimitExceeded
-            | ScannerError::CircuitBreakerOpen
-            | ScannerError::TlsHandshakeError { .. }
-            | ScannerError::DnsResolutionError { .. }
-            | ScannerError::TcpConnectionError { .. }
-            | ScannerError::UdpError { .. }
-            | ScannerError::ProxyError(_)
-            | ScannerError::HttpScanError(_)
-            | ScannerError::DatabaseError(_)
-            | ScannerError::TooManyRedirects
-            | ScannerError::OobError(_) => true,
-            _ => false,
-        }
+                | ScannerError::TimeoutError(_)
+                | ScannerError::RateLimitExceeded
+                | ScannerError::CircuitBreakerOpen
+                | ScannerError::TlsHandshakeError { .. }
+                | ScannerError::DnsResolutionError { .. }
+                | ScannerError::TcpConnectionError { .. }
+                | ScannerError::UdpError { .. }
+                | ScannerError::ProxyError(_)
+                | ScannerError::HttpScanError(_)
+                | ScannerError::DatabaseError(_)
+                | ScannerError::TooManyRedirects
+                | ScannerError::OobError(_)
+        )
     }
 
     /// Get a standardized error code for categorization

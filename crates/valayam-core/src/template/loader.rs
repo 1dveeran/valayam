@@ -91,7 +91,8 @@ pub async fn execute_template_inner(
     // Phase 21: Client-Side Security Auditing
 
     // Phase 14: Browser Exploitation
-    if !template.browser_audit.is_empty() {}
+    // Browser audit templates deferred to WASM plugin
+        let _ = template.browser_audit.is_empty();
 
     // Phase 15: Hardware & IoT Protocol Security (Moved to Wasm plugin)
 
@@ -100,14 +101,9 @@ pub async fn execute_template_inner(
 
     // Phase 21: Client-Side Security Auditing
     // Moved to Wasm plugin
-    if !template.dom_redirect_audit.is_empty() {}
-
-    // Phase 22: Content Security Policy & CORS
-    if !template.csp_audit.is_empty() {}
-
-    // Phase 23: WAF Rule Validation
-    // Moved to Wasm plugin
-    if !template.header_scorecard.is_empty() {}
+    // Phase 21: dom_redirect_audit — deferred to WASM plugin
+    // Phase 22: csp_audit — deferred to WASM plugin
+    // Phase 23: header_scorecard — deferred to WASM plugin
 
     // Phase 24: Threat Intelligence & IP Reputation
     // Moved to Wasm plugin

@@ -1,6 +1,7 @@
 use dashmap::DashSet;
 
 /// Matches extracted indicators against known threat feeds concurrently.
+#[derive(Default)]
 pub struct IocMatcher {
     pub malicious_ips: DashSet<String>,
     pub malicious_domains: DashSet<String>,

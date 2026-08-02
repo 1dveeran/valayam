@@ -54,7 +54,7 @@ fn load_schema_state(template_id: &str) -> Result<Option<SchemaDriftState>, Scan
         return Ok(None);
     }
     let contents =
-        std::fs::read_to_string(&path).map_err(|e| ScannerError::TemplateReadError(e))?;
+        std::fs::read_to_string(&path).map_err(ScannerError::TemplateReadError)?;
     match serde_json::from_str(&contents) {
         Ok(state) => Ok(Some(state)),
         Err(e) => {

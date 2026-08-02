@@ -1,3 +1,4 @@
+#![allow(clippy::if_same_then_else)]
 use valayam_network::network::tcp;
 use valayam_network::network::udp;
 use valayam_models::finding::FindingOwned;
@@ -146,13 +147,12 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         6379 => {
             if banner.contains("Redis") {
                 let version = extract_version_from_banner(banner);
-                if version.is_none() {
-                    if banner.lines().count() > 1 {
+                if version.is_none()
+                    && banner.lines().count() > 1 {
                         let lines: Vec<&str> = banner.lines().collect();
                         if lines.len() > 1 {
                             return ( "Redis".to_string(), extract_version_from_banner(lines[1]) );
                         }
-                    }
                 }
                 ("Redis".to_string(), version)
             } else {
@@ -225,9 +225,7 @@ fn extract_version_from_banner(banner: &str) -> Option<String> {
 }
 
 fn check_vulnerability(service: &str, version: &Option<String>) -> Option<String> {
-    let Some(ref version_str) = *version else {
-        return None;
-    };
+    let version_str = version.as_ref()?;
 
     let vuln_patterns: Vec<(&str, Vec<&str>)> = vec![
         ("SSH", vec!["OpenSSH_5", "OpenSSH_6", "OpenSSH_7.0", "OpenSSH_7.1", "OpenSSH_7.2"]),

@@ -362,10 +362,8 @@ pub async fn test_legacy_protocols(host: &str, port: u16) -> bool {
     };
 
     // SSLv2 ClientHello payload structure
-    let mut hello = Vec::new();
     // Length: 2 bytes, 0x80 means no padding, length follows (0x1C = 28 bytes)
-    hello.push(0x80);
-    hello.push(0x1C);
+    let mut hello = vec![0x80, 0x1C];
     // Message Type: 1 (ClientHello)
     hello.push(0x01);
     // Version: SSLv2 (0x00, 0x02)

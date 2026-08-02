@@ -466,17 +466,15 @@ pub fn list_plugins() -> anyhow::Result<()> {
     let mut count = 0;
     
     println!("Installed plugins:");
-    for entry in entries {
-        if let Ok(entry) = entry {
+    for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |e| e == "wasm") {
+            if path.is_file() && path.extension().is_some_and(|e| e == "wasm") {
                 if let Some(stem) = path.file_stem() {
                     println!("- {}", stem.to_string_lossy());
                     count += 1;
                 }
             }
         }
-    }
     
     if count == 0 {
         println!("No plugins installed.");

@@ -22,6 +22,12 @@ pub struct ProxyState {
     pub pending_requests: Arc<DashMap<String, InterceptedRequest>>,
 }
 
+impl Default for ProxyState {
+    fn default() -> Self {
+        Self { pending_requests: Arc::new(DashMap::new()) }
+    }
+}
+
 impl ProxyState {
     pub fn new() -> Self {
         Self {

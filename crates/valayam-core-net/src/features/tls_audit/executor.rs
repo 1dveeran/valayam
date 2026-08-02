@@ -1,3 +1,4 @@
+#![allow(clippy::regex_creation_in_loops)]
 use valayam_models::finding::FindingOwned;
 use valayam_engine::variables::resolve_variables;
 use valayam_network::network::tls;

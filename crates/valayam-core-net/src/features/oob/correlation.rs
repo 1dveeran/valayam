@@ -1,6 +1,5 @@
 use rand::{distributions::Alphanumeric, Rng};
 use std::collections::HashSet;
-use std::sync::LazyLock;
 use parking_lot::Mutex;
 
 /// Correlation engine for generating short-lived OOB IDs.

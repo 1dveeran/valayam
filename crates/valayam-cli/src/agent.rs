@@ -304,7 +304,7 @@ fn verify_job_token(secret: &str, job_id: &str, token: &str) -> bool {
     };
     mac.update(job_id.as_bytes());
     let expected = mac.finalize().into_bytes();
-    let expected_hex = hex::encode(&expected);
+    let expected_hex = hex::encode(expected);
 
     // Constant-time comparison
     token.len() == expected_hex.len()

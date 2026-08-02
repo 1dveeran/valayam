@@ -184,7 +184,7 @@ pub async fn start_telemetry_server_tls(
 
     tracing::info!("Starting Valayam Telemetry Server on {}", addr);
     Server::builder()
-        .add_service(ServerReflectionServer::new(ValayamReflection::default()))
+        .add_service(ServerReflectionServer::new(ValayamReflection))
         .add_service(ScannerServer::new(service))
         .serve(addr)
         .await?;

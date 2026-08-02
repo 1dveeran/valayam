@@ -169,6 +169,7 @@ fn print_summary(
     println!();
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(http_client, rate_limiter, grpc_client, state_rx, cancel))]
 pub async fn run_scan(
     args: Args,
@@ -187,6 +188,7 @@ pub async fn run_scan(
 /// Extended entrypoint that accepts a platform-assigned `job_id`.
 /// When provided, it is written into the JSON output envelope so the
 /// platform can correlate results with the dispatched job.
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(http_client, rate_limiter, grpc_client, state_rx, cancel))]
 pub async fn run_scan_with_job_id(
     args: Args,
@@ -248,7 +250,7 @@ pub async fn run_scan_with_job_id(
     
     let pending_for_shutdown = actual_targets.clone();
     tokio::spawn(async move {
-        if let Ok(_) = tokio::signal::ctrl_c().await {
+        if tokio::signal::ctrl_c().await.is_ok() {
             tracing::warn!("received Ctrl+C, initiating graceful shutdown...");
             let _ = db.save_state(&state_id, &pending_for_shutdown, &[]);
             cancel_for_handler.cancel();
@@ -370,7 +372,7 @@ pub async fn run_scan_with_job_id(
         let templates = template_files.iter().map(|p| p.to_string_lossy().into_owned()).collect();
         let scan_id = job_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let start_time = chrono::Utc::now().to_rfc3339();
-        let targets: Vec<String> = actual_targets.iter().cloned().collect();
+        let targets: Vec<String> = actual_targets.to_vec();
         let scanner_version = env!("CARGO_PKG_VERSION").to_string();
         let mut json_reporter = JsonReporter::new(
             path.to_string(),
