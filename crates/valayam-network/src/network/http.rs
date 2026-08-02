@@ -87,6 +87,9 @@ impl ProxiedClientPool {
         // Cache the client
         {
             let mut clients = self.clients.lock().await;
+            if clients.len() >= 1000 {
+                clients.clear(); // Evict to prevent memory leak
+            }
             clients.insert(proxy_address.clone(), client.clone());
         }
         {
@@ -247,8 +250,10 @@ impl StealthHttpClient {
 
         let should_follow = follow_redirects.unwrap_or(false);
         let max_redirects = if should_follow { 5 } else { 0 };
+        let max_retries = 3;
         let mut current_url = url.to_string();
         let mut redirect_count = 0;
+        let mut retry_count = 0;
         let mut final_response = None;
 
         while redirect_count <= max_redirects {
@@ -311,23 +316,33 @@ impl StealthHttpClient {
             let response_res = response_result.unwrap();
 
             match &response_res {
-            Ok(resp) => {
-                if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    self.adaptive_rate_limiter.handle_too_many_requests();
+                Ok(resp) => {
+                    if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        self.adaptive_rate_limiter.handle_too_many_requests();
+                        self.circuit_breaker.record_failure();
+                    } else if resp.status().is_server_error() {
+                        self.circuit_breaker.record_failure();
+                    } else {
+                        self.adaptive_rate_limiter.handle_success();
+                        self.circuit_breaker.record_success();
+                    }
+                }
+                Err(_) => {
                     self.circuit_breaker.record_failure();
-                } else if resp.status().is_server_error() {
-                    self.circuit_breaker.record_failure();
-                } else {
-                    self.adaptive_rate_limiter.handle_success();
-                    self.circuit_breaker.record_success();
                 }
             }
-            Err(_) => {
-                self.circuit_breaker.record_failure();
-            }
-        }
 
-            let response = response_res?;
+            let response = match response_res {
+                Ok(r) => r,
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count <= max_retries {
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        continue;
+                    }
+                    return Err(e);
+                }
+            };
             let elapsed = start.elapsed().as_secs_f64();
             network_metrics::record_http_request(method, response.status().as_u16(), proxied_used, elapsed);
 
@@ -415,6 +430,12 @@ async fn handle_meta_refresh(
 
     if !should_check {
         return Ok(response);
+    }
+
+    if let Some(len) = response.content_length() {
+        if len > 5 * 1024 * 1024 { // 5 MB limit
+            return Ok(response);
+        }
     }
 
     // Consume the body to check for meta-refresh
