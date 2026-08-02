@@ -210,7 +210,7 @@ impl Ja3Ja4Spoofer {
         ];
 
         let mut rng = thread_rng();
-        let chosen = profiles.choose(&mut rng).unwrap();
+        let chosen = profiles.choose(&mut rng).unwrap_or(&Ja3Ja4Profile::Chrome);
         
         match chosen {
             Ja3Ja4Profile::Chrome => self.chrome_provider(),

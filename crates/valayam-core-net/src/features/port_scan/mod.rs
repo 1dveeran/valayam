@@ -5,3 +5,4 @@
 //! Cross-references discovered versions with the offline vulnerability database.
 
 pub mod executor;
+pub mod ports;

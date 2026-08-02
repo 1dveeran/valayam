@@ -85,7 +85,12 @@ impl ScanPlugin for GrpcPluginBridge {
                 cmd.arg(&self.exe_path);
             } else if ext == "bat" || ext == "cmd" {
                 cmd = Command::new("cmd");
-                cmd.args(["/C", self.exe_path.to_str().unwrap()]);
+                let exe_str = self.exe_path.to_str().ok_or_else(|| {
+                ScannerError::PluginInitializationError(
+                    format!("plugin path is not valid UTF-8: {:?}", self.exe_path)
+                )
+            })?;
+            cmd.args(["/C", exe_str]);
             } else {
                 cmd = Command::new(&self.exe_path);
             }
@@ -100,7 +105,11 @@ impl ScanPlugin for GrpcPluginBridge {
             .spawn()
             .map_err(|e| ScannerError::PluginInitializationError(format!("Failed to spawn plugin: {}", e)))?;
 
-        let stdout = child.stdout.take().unwrap();
+        let stdout = child.stdout.take().ok_or_else(|| {
+                ScannerError::PluginInitializationError(
+                    "failed to capture plugin stdout — stdio was not piped".into()
+                )
+            })?;
         let mut reader = BufReader::new(stdout).lines();
 
         // Wait for the HashiCorp-style handshake line

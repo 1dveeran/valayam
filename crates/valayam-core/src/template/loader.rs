@@ -56,9 +56,9 @@ pub async fn execute_template_inner(
             &mut variables,
         )
         .await;
-        if !results.is_empty() {
-            return Some(results.into_iter().next().unwrap());
-        }
+            if let Some(finding) = results.into_iter().next() {
+                return Some(finding);
+            }
     }
 
     // Phase 5: Script Execution & Fuzzing (Moved to Wasm plugin)

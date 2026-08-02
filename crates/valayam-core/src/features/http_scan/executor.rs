@@ -12,13 +12,13 @@ use valayam_models::TemplateMetadata;
 // ── Built-in Sensitive Patterns ─────────────────────────────────────────
 static SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r"root:x:[0-9]+:[0-9]+:").unwrap(),
-        Regex::new(r"(?i)DB_PASSWORD=").unwrap(),
-        Regex::new(r#"\"args\":\s*\{"#).unwrap(),
-        Regex::new(r"(?i)AKIA[0-9A-Z]{16}").unwrap(), // AWS Access Key
-        Regex::new(r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*").unwrap(), // JWT Token
-        Regex::new(r#"(?i)api[_-]?key[\s=:"']+[A-Za-z0-9_=-]+"#).unwrap(), // Generic API Key
-        Regex::new(r"(?i)BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY").unwrap(), // Private Keys
+        Regex::new(r"root:x:[0-9]+:[0-9]+:").expect("static regex: passwd pattern"),
+        Regex::new(r"(?i)DB_PASSWORD=").expect("static regex: db password"),
+        Regex::new(r#"\"args\":\s*\{"#).expect("static regex: json args"),
+        Regex::new(r"(?i)AKIA[0-9A-Z]{16}").expect("static regex: aws access key"), // AWS Access Key
+        Regex::new(r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*").expect("static regex: jwt token"), // JWT Token
+        Regex::new(r#"(?i)api[_-]?key[\s=:"']+[A-Za-z0-9_=-]+"#).expect("static regex: api key"), // Generic API Key
+        Regex::new(r"(?i)BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY").expect("static regex: private key"), // Private Keys
     ]
 });
 
@@ -40,7 +40,10 @@ fn evaluate_stream(body_bytes: &[u8], customized_patterns: &[String]) -> bool {
 }
 
 fn resolve_all(template_str: &str, context: &HashMap<String, String>) -> String {
-    let with_vars = resolve_variables(template_str, context).unwrap();
+    let with_vars = resolve_variables(template_str, context).unwrap_or_else(|e| {
+        tracing::warn!("Variable resolution failed: {}", e);
+        template_str.to_string()
+    });
     evaluate_helpers(&with_vars)
 }
 
@@ -217,6 +220,7 @@ pub async fn execute(
                     resolved_headers.as_ref(),
                     resolved_body.as_deref(),
                     req_rule.follow_redirects,
+                    None,
                 )
                 .await
             {

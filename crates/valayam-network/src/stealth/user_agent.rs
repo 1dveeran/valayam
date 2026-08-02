@@ -28,13 +28,13 @@ impl UserAgentRotator {
             "Windows NT 10.0; Win64; x64"
         } else if platform_roll < 85 {
             let mac_versions = ["14_5", "14_4_1", "14_4", "13_6", "12_7"];
-            let version = mac_versions.choose(&mut rng).unwrap();
+            let version = mac_versions.choose(&mut rng).expect("mac_versions is non-empty");
             return format!("Mozilla/5.0 (Macintosh; Intel Mac OS X {}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Safari/537.36", version, rng.gen_range(120..=128));
         } else if platform_roll < 90 {
             "X11; Linux x86_64"
         } else {
             let ios_versions = ["17_5_1", "17_4", "16_7"];
-            let version = ios_versions.choose(&mut rng).unwrap();
+            let version = ios_versions.choose(&mut rng).expect("ios_versions is non-empty");
             return format!("Mozilla/5.0 (iPhone; CPU iPhone OS {} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", version);
         };
 

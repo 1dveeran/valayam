@@ -181,7 +181,7 @@ fn spawn_telemetry_server(
 ) {
     tokio::spawn(async move {
         let port = control_port.unwrap_or(50051);
-        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
+        let addr = format!("127.0.0.1:{}", port).parse().expect("valid socket addr");
         if let Some(tls) = tls_config {
             if let Err(e) = valayam_engine::telemetry_server::start_telemetry_server_tls(
                 addr, Some(state_tx), Some(cancel_token), Some(tls),

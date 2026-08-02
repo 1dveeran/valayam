@@ -10,10 +10,10 @@ pub fn extract_js_endpoints(js_content: &str) -> HashSet<String> {
     // Regex to match relative endpoints like /api/v1/... or /users/...
     // Also matches websocket schemas
     let path_regex =
-        Regex::new(r#"(?:"|')((?:/[a-zA-Z0-9_\-\.\?\,\'\/\+&\$#\=~\|\!]*){2,})(?:"|')"#).unwrap();
+        Regex::new(r#"(?:"|')((?:/[a-zA-Z0-9_\-\.\?\,\'\/\+&\$#\=~\|\!]*){2,})(?:"|')"#).expect("static regex: relative paths");
 
     // Regex to match full URL patterns including ws/wss
-    let url_regex = Regex::new(r#"(https?|wss?|grpc)://[a-zA-Z0-9_\-\.:/\?&\$#\=~\|]+"#).unwrap();
+    let url_regex = Regex::new(r#"(https?|wss?|grpc)://[a-zA-Z0-9_\-\.:/\?&\$#\=~\|]+"#).expect("static regex: absolute urls");
 
     // Extract relative paths
     for cap in path_regex.captures_iter(js_content) {
@@ -46,7 +46,7 @@ pub fn extract_js_parameters(js_content: &str) -> HashSet<String> {
     let mut params = HashSet::new();
 
     // 1. Match query parameter names (e.g. ?limit=10, &page=2)
-    let query_param_regex = Regex::new(r#"[?&]([a-zA-Z0-9_\-]+)="#).unwrap();
+    let query_param_regex = Regex::new(r#"[?&]([a-zA-Z0-9_\-]+)="#).expect("static regex: query params");
     for cap in query_param_regex.captures_iter(js_content) {
         if let Some(matched) = cap.get(1) {
             params.insert(matched.as_str().to_string());
@@ -54,7 +54,7 @@ pub fn extract_js_parameters(js_content: &str) -> HashSet<String> {
     }
 
     // 2. Match JSON keys or object properties (e.g. "username": or 'password': )
-    let object_key_regex = Regex::new(r#"(?:"|')([a-zA-Z0-9_\-]+)(?:"|')\s*:"#).unwrap();
+    let object_key_regex = Regex::new(r#"(?:"|')([a-zA-Z0-9_\-]+)(?:"|')\s*:"#).expect("static regex: object keys");
     for cap in object_key_regex.captures_iter(js_content) {
         if let Some(matched) = cap.get(1) {
             params.insert(matched.as_str().to_string());

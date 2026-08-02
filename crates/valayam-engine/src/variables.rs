@@ -81,7 +81,7 @@ fn is_valid_var_name(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    let first = s.chars().next().unwrap();
+    let first = s.chars().next().expect("s is non-empty after is_empty check");
     if !first.is_ascii_alphabetic() && first != '_' {
         return false;
     }

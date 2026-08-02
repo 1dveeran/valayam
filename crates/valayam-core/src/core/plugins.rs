@@ -42,6 +42,15 @@ impl ScanPlugin for HttpScanPlugin {
         .await;
 
         if !results.is_empty() {
+            // [STUB] Synergistic Execution: Hand-off to Wasm Plugin for Deep Analysis and it should be given as a option so that all the results are not shared with wasm plugin for deep analysis as the wasm plugin must support the deep analysis
+            if !template.deep_analysis.is_empty() {
+                tracing::info!(
+                    "Synergistic Execution (Stub): Passing {} finding(s) to Wasm Plugin for Deep Analysis ({} rules)",
+                    results.len(),
+                    template.deep_analysis.len()
+                );
+            }
+
             for res in results {
                 let _ = ctx.finding_tx.send(res).await;
             }

@@ -225,7 +225,13 @@ pub async fn run_scan_with_job_id(
     
     // We will still handle ctrl-c to save state
     let db = crate::state::StateDB::new(".valayam_state").expect("Failed to initialize state DB");
-    let state_id = args.resume.unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs().to_string());
+    let state_id = args.resume.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string()
+    });
     
     let mut actual_targets = targets.clone();
     if let Some((pending, _completed)) = db.load_state(&state_id).unwrap_or(None) {

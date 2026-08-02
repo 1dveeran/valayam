@@ -30,8 +30,8 @@ pub fn extract_wasm_endpoints(wasm_bytes: &[u8]) -> HashSet<String> {
     }
 
     // 2. Scan extracted strings for paths/URLs
-    let path_regex = Regex::new(r#"^/[a-zA-Z0-9_\-\./\?&\$#\=~\|]+$"#).unwrap();
-    let url_regex = Regex::new(r#"^(https?|wss?|grpc)://[a-zA-Z0-9_\-\./\?&\$#\=~\|]+$"#).unwrap();
+    let path_regex = Regex::new(r#"^/[a-zA-Z0-9_\-\./\?&\$#\=~\|]+$"#).expect("static regex: wasm paths");
+    let url_regex = Regex::new(r#"^(https?|wss?|grpc)://[a-zA-Z0-9_\-\./\?&\$#\=~\|]+$"#).expect("static regex: wasm urls");
 
     for s in strings {
         let trimmed = s.trim();

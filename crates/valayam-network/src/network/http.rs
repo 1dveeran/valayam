@@ -88,7 +88,11 @@ impl ProxiedClientPool {
         {
             let mut clients = self.clients.lock().await;
             if clients.len() >= 1000 {
-                clients.clear(); // Evict to prevent memory leak
+                // Random/pseudo-LRU eviction: remove one arbitrary entry to prevent memory spike
+                let key_to_remove = clients.keys().next().cloned();
+                if let Some(k) = key_to_remove {
+                    clients.remove(&k);
+                }
             }
             clients.insert(proxy_address.clone(), client.clone());
         }
@@ -147,7 +151,7 @@ impl StealthHttpClient {
         ja3_ja4_profile: Option<Ja3Ja4Profile>,
         follow_meta_refresh: bool,
     ) -> Result<Self, ScannerError> {
-        Self::new_with_options(use_proxy_rotation, use_user_agent_rotation, ja3_ja4_profile, follow_meta_refresh, None, None)
+        Self::new_with_options(use_proxy_rotation, use_user_agent_rotation, ja3_ja4_profile, follow_meta_refresh, None, None, None)
     }
 
     /// Create a new StealthHttpClient with stealth features and advanced options.
@@ -158,6 +162,7 @@ impl StealthHttpClient {
         follow_meta_refresh: bool,
         timeout_opt: Option<u32>,
         default_headers: Option<HashMap<String, String>>,
+        cb_config: Option<(u32, u64)>, // (max_failures, timeout_ms)
     ) -> Result<Self, ScannerError> {
         let timeout = timeout_opt.unwrap_or(30);
         
@@ -215,6 +220,9 @@ impl StealthHttpClient {
 
         let client = client_builder.build()?;
 
+        let cb_max_fails = cb_config.map(|c| c.0 as usize).unwrap_or(50);
+        let cb_timeout = cb_config.map(|c| c.1).unwrap_or(30000);
+
         Ok(Self {
             client,
             proxy_client_pool,
@@ -222,7 +230,7 @@ impl StealthHttpClient {
             user_agent_rotator,
             ja3_ja4_spoofer,
             follow_meta_refresh,
-            circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(50, 30000)), // 50 fails, 30s timeout
+            circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(cb_max_fails, cb_timeout)),
             adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(0, 0, 5000, 50)),
         })
     }
@@ -235,11 +243,21 @@ impl StealthHttpClient {
         headers: Option<&HashMap<String, String>>,
         body: Option<&str>,
         follow_redirects: Option<bool>,
+        timeout_override: Option<Duration>,
     ) -> Result<reqwest::Response, ScannerError> {
         let start = Instant::now();
 
         if self.circuit_breaker.is_open() {
             return Err(ScannerError::CircuitBreakerOpen);
+        }
+
+        // SSRF basic check
+        if let Ok(parsed) = reqwest::Url::parse(url) {
+            if let Some(host) = parsed.host_str() {
+                if host == "localhost" || host == "127.0.0.1" || host == "169.254.169.254" || host == "::1" || host.starts_with("10.") || host.starts_with("192.168.") || host.starts_with("172.") {
+                     return Err(ScannerError::InvalidTarget("SSRF attempt detected".to_string()));
+                }
+            }
         }
 
         self.adaptive_rate_limiter.wait().await;
@@ -276,6 +294,10 @@ impl StealthHttpClient {
                     if let Some(b) = body {
                         proxied_req = proxied_req.body(b.to_string());
                     }
+                    // Apply timeout
+                    if let Some(t) = timeout_override {
+                        proxied_req = proxied_req.timeout(t);
+                    }
                     // Apply user-agent rotation
                     if let Some(ref rotator) = self.user_agent_rotator {
                         let ua = rotator.next().await;
@@ -303,6 +325,11 @@ impl StealthHttpClient {
                     request_builder = request_builder.body(b.to_string());
                 }
 
+                // Apply timeout
+                if let Some(t) = timeout_override {
+                    request_builder = request_builder.timeout(t);
+                }
+
                 // Apply user-agent rotation if configured
                 if let Some(ref rotator) = self.user_agent_rotator {
                     let user_agent = rotator.next().await;
@@ -313,7 +340,11 @@ impl StealthHttpClient {
                 response_result = Some(request_builder.send().await.map_err(ScannerError::HttpClientError));
             }
 
-            let response_res = response_result.unwrap();
+            let response_res = if let Some(res) = response_result {
+                res
+            } else {
+                return Err(ScannerError::TooManyRedirects); // Fallback error if request wasn't sent
+            };
 
             match &response_res {
                 Ok(resp) => {
@@ -337,7 +368,8 @@ impl StealthHttpClient {
                 Err(e) => {
                     retry_count += 1;
                     if retry_count <= max_retries {
-                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        let delay = 500 * (1 << retry_count);
+                        tokio::time::sleep(Duration::from_millis(delay)).await;
                         continue;
                     }
                     return Err(e);
@@ -380,11 +412,6 @@ impl StealthHttpClient {
 
     /// Get the underlying reqwest client for advanced usage.
     pub fn client(&self) -> &Client {
-        &self.client
-    }
-
-    /// Alias for client() to fix compilation errors
-    pub fn inner(&self) -> &Client {
         &self.client
     }
 }
@@ -438,8 +465,21 @@ async fn handle_meta_refresh(
         }
     }
 
-    // Consume the body to check for meta-refresh
-    let body = response.text().await?;
+    // Limit body read to 5MB to prevent chunked response DOS
+    let mut bytes = Vec::new();
+    let max_bytes = 5 * 1024 * 1024;
+    
+    // We can't use `response.bytes_stream()` since `stream` feature might not be enabled.
+    // However `response.chunk()` allows reading chunks one by one.
+    let mut current_response = response;
+    while let Some(chunk) = current_response.chunk().await.map_err(ScannerError::HttpClientError)? {
+        if bytes.len() + chunk.len() > max_bytes {
+            return Err(ScannerError::ResourceExhausted("Meta-refresh body too large".to_string()));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    
+    let body = String::from_utf8_lossy(&bytes).to_string();
 
     if let Some(redirect_url) = extract_meta_refresh(&body) {
         debug!("Following meta-refresh redirect to: {}", redirect_url);
@@ -467,27 +507,25 @@ fn build_text_response(body: String) -> reqwest::Response {
     reqwest::Response::from(http_response)
 }
 
+use std::sync::OnceLock;
+static META_REFRESH_RE1: OnceLock<regex::Regex> = OnceLock::new();
+static META_REFRESH_RE2: OnceLock<regex::Regex> = OnceLock::new();
+
 /// Extract redirect URL from meta-refresh tag in HTML.
 fn extract_meta_refresh(html: &str) -> Option<String> {
-    // Match <meta http-equiv="refresh" content="5;url=https://example.com/">
-    // where the URL may or may not be quoted within the content attribute.
-    let patterns = [
-        // Pattern 1: url="..." or url='...' within content
-        regex::Regex::new(
-            r#"(?i)<meta\s+[^>]*http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["']\d+\s*;\s*url\s*=\s*["']([^"']*)["'][^>]*>"#,
-        )
-        .ok()?,
-        // Pattern 2: url=... without quotes within content
-        regex::Regex::new(
-            r#"(?i)<meta\s+[^>]*http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["']\d+\s*;\s*url\s*=\s*([^"'\s>]+)"#,
-        )
-        .ok()?,
-    ];
+    let re1 = META_REFRESH_RE1.get_or_init(|| regex::Regex::new(
+        r#"(?i)<meta\s+[^>]*http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["']\d+\s*;\s*url\s*=\s*["']([^"']*)["'][^>]*>"#
+    ).unwrap());
+    
+    let re2 = META_REFRESH_RE2.get_or_init(|| regex::Regex::new(
+        r#"(?i)<meta\s+[^>]*http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["']\d+\s*;\s*url\s*=\s*([^"'\s>]+)"#
+    ).unwrap());
 
-    for re in &patterns {
-        if let Some(cap) = re.captures(html) {
-            return Some(cap.get(1)?.as_str().to_string());
-        }
+    if let Some(cap) = re1.captures(html) {
+        return Some(cap.get(1)?.as_str().to_string());
+    }
+    if let Some(cap) = re2.captures(html) {
+        return Some(cap.get(1)?.as_str().to_string());
     }
     None
 }

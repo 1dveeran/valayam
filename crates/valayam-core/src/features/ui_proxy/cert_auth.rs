@@ -71,14 +71,14 @@ impl CertificateAuthority {
         let rustls_cert: CertificateDer<'static> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
             .filter_map(Result::ok)
             .next()
-            .unwrap()
+            .ok_or_else(|| anyhow::anyhow!("failed to parse generated leaf certificate PEM"))?
             .into_owned();
 
         let rustls_key: PrivateKeyDer<'static> =
             rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_bytes())
                 .filter_map(Result::ok)
                 .next()
-                .unwrap()
+                .ok_or_else(|| anyhow::anyhow!("failed to parse generated leaf key PEM"))?
                 .into();
 
         let server_config = ServerConfig::builder()
