@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 use valayam_engine::rate_limiter::RateLimiter;
 use valayam_engine::registry::PluginRegistry;
+use valayam_engine::wasm_plugin::PluginConfig;
 use valayam_engine::executor::ScanExecutor;
 use valayam_engine::traits::{FindingOwned, Reporter};
 use valayam_core::core::reporters::{console::ConsoleReporter, json::JsonReporter, composite::CompositeReporter};
@@ -301,7 +302,15 @@ pub async fn run_scan_with_job_id(
             println!("{} Plugin signature verification enabled", "[+]".green().bold());
         }
 
-        let reg = PluginRegistry::with_key(pub_key);
+        let mut reg = PluginRegistry::with_key(pub_key);
+
+        // Apply WASM plugin sandbox config from CLI args
+        let plugin_config = PluginConfig {
+            memory_max_pages: (args.plugin_memory_limit as u64 * 1024 * 1024 / 65536) as u32,
+            timeout_ms: args.plugin_timeout * 1000,
+            allowed_hosts: args.plugin_allow_host.clone(),
+        };
+        reg.set_plugin_config(plugin_config);
         // Core protocols
         reg.register(HttpScanPlugin::new(http_client.clone()));
     // Scripting and Fuzzer moved to Wasm

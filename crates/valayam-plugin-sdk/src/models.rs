@@ -48,3 +48,62 @@ pub struct WasmOutput {
 pub trait WasmScanner {
     fn scan(&self, input: WasmInput) -> PluginResult<WasmOutput>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wasm_input_serialization() {
+        let input = WasmInput {
+            template: serde_json::json!({"id": "test"}),
+            context: [("key".into(), "value".into())].into(),
+        };
+        let json = serde_json::to_string(&input).expect("serialize");
+        let back: WasmInput = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.template["id"], "test");
+        assert_eq!(back.context.get("key").expect("has key"), "value");
+    }
+
+    #[test]
+    fn test_finding_defaults() {
+        let f = Finding {
+            template_id: "t1".into(),
+            template_name: "Test".into(),
+            severity: "high".into(),
+            target: "example.com".into(),
+            matched_at: "path".into(),
+            description: None,
+            solution: None,
+            extracted_data: None,
+            metadata: Default::default(),
+        };
+        let json = serde_json::to_string(&f).expect("serialize");
+        assert!(!json.contains("description"), "None fields should be skipped");
+        assert!(!json.contains("solution"), "None fields should be skipped");
+        let back: Finding = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.template_id, "t1");
+    }
+
+    #[test]
+    fn test_wasm_output_defaults() {
+        let output = WasmOutput {
+            matched: true,
+            count: 2,
+            findings: vec![],
+        };
+        let json = serde_json::to_string(&output).expect("serialize");
+        assert!(json.contains("\"matched\":true"));
+        let back: WasmOutput = serde_json::from_str(&json).expect("deserialize");
+        assert!(back.matched);
+        assert!(back.findings.is_empty());
+    }
+
+    #[test]
+    fn test_plugin_result_type() {
+        let ok: PluginResult<i32> = Ok(42);
+        assert!(ok.is_ok());
+        let err: PluginResult<i32> = Err("fail".into());
+        assert!(err.is_err());
+    }
+}

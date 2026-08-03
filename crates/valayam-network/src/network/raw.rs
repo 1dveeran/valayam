@@ -35,4 +35,20 @@ mod tests {
         let result = syn_scan(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 80, Duration::from_secs(1)).await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn test_syn_scan_returns_config_error() {
+        let result = syn_scan(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 443, Duration::from_millis(500)).await;
+        assert!(result.is_err());
+        let err = result.expect_err("should error on raw socket");
+        assert!(format!("{}", err).contains("Raw SYN"), "error should mention raw SYN");
+    }
+
+    #[tokio::test]
+    async fn test_syn_scan_consistent_error() {
+        let r1 = syn_scan(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 22, Duration::from_secs(1)).await;
+        let r2 = syn_scan(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)), 53, Duration::from_millis(100)).await;
+        assert!(r1.is_err());
+        assert!(r2.is_err());
+    }
 }

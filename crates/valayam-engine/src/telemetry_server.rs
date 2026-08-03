@@ -8,10 +8,12 @@ use tokio_util::sync::CancellationToken;
 use crate::scan_state::ScanState;
 
 /// Optional TLS configuration for the gRPC control plane.
+/// When `ca_pem` is provided, the server requires client certificates signed by that CA (mTLS).
 #[derive(Clone, Debug)]
 pub struct TlsConfig {
     pub cert_pem: Vec<u8>,
     pub key_pem: Vec<u8>,
+    pub ca_pem: Option<Vec<u8>>,
 }
 
 pub struct TelemetryService {
@@ -166,26 +168,57 @@ pub async fn start_telemetry_server(
 ///
 /// When `tls_config` is `Some`, the server uses the provided PEM-encoded
 /// certificate and private key for TLS encryption.
-/// Automatically spawns a prometheus /metrics HTTP server on `metrics_port` (default 9090).
+/// If `tls_config.ca_pem` is also provided, the server enforces mTLS — clients
+/// must present a certificate signed by that CA.
+/// Automatically spawns a prometheus /metrics HTTP server on port 9090.
 pub async fn start_telemetry_server_tls(
     addr: std::net::SocketAddr,
     state_tx: Option<watch::Sender<ScanState>>,
     cancellation_token: Option<CancellationToken>,
-    _tls_config: Option<TlsConfig>,
+    tls_config: Option<TlsConfig>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Spawn the /metrics HTTP endpoint
     let metrics_addr: std::net::SocketAddr = ([0, 0, 0, 0], 9090).into();
     let _metrics_shutdown = spawn_metrics_http_server(metrics_addr);
 
-    let service = TelemetryService {
+    let telemetry = TelemetryService {
         state_tx,
         cancellation_token,
     };
 
+    let mut builder = Server::builder();
+
+    if let Some(tls) = tls_config {
+        let cert_pem_str = String::from_utf8(tls.cert_pem)
+            .map_err(|e| format!("TLS cert is not valid UTF-8: {}", e))?;
+        let key_pem_str = String::from_utf8(tls.key_pem)
+            .map_err(|e| format!("TLS key is not valid UTF-8: {}", e))?;
+
+        let identity = tonic::transport::Identity::from_pem(cert_pem_str, key_pem_str);
+
+        if let Some(ca_raw) = tls.ca_pem {
+            let ca_pem_str = String::from_utf8(ca_raw)
+                .map_err(|e| format!("TLS CA cert is not valid UTF-8: {}", e))?;
+            let ca = tonic::transport::Certificate::from_pem(ca_pem_str);
+            let server_tls = tonic::transport::ServerTlsConfig::new()
+                .identity(identity)
+                .client_ca_root(ca);
+            tracing::info!("gRPC mTLS enabled — client certificates required");
+            builder = builder.tls_config(server_tls)
+                .map_err(|e| format!("Failed to configure mTLS: {}", e))?;
+        } else {
+            let server_tls = tonic::transport::ServerTlsConfig::new()
+                .identity(identity);
+            tracing::info!("gRPC TLS enabled (server-only)");
+            builder = builder.tls_config(server_tls)
+                .map_err(|e| format!("Failed to configure TLS: {}", e))?;
+        }
+    }
+
     tracing::info!("Starting Valayam Telemetry Server on {}", addr);
-    Server::builder()
+    builder
         .add_service(ServerReflectionServer::new(ValayamReflection))
-        .add_service(ScannerServer::new(service))
+        .add_service(ScannerServer::new(telemetry))
         .serve(addr)
         .await?;
 

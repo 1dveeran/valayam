@@ -11,3 +11,4 @@ pub mod udp;
 pub mod raw;
 pub mod tor;
 pub mod resilience;
+pub mod ssrf_filter;

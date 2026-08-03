@@ -83,3 +83,49 @@ fn kv_set_fallback(_key: &str, _value: &str) -> bool {
 pub fn set_state(key: &str, value: &str) -> bool {
     kv_set_fallback(key, value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_dns_returns_some_for_loopback() {
+        let result = resolve_dns("127.0.0.1");
+        assert!(result.is_some(), "127.0.0.1 should resolve");
+    }
+
+    #[test]
+    fn test_get_state_returns_none_for_missing() {
+        let result = get_state("nonexistent_key");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_set_state_returns_false_in_stub() {
+        let result = set_state("key", "value");
+        assert!(!result, "host stub should return false");
+    }
+
+    #[test]
+    fn test_resolve_dns_returns_some_for_localhost() {
+        let result = resolve_dns("localhost");
+        assert!(result.is_some(), "localhost should resolve");
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_stub_dns_resolve_valid_domain() {
+        let json = _stubs::dns_resolve("127.0.0.1".to_string());
+        let ips: Vec<String> = serde_json::from_str(&json).expect("valid JSON array");
+        assert!(!ips.is_empty(), "127.0.0.1 should have at least one IP");
+        assert!(ips.contains(&"127.0.0.1".to_string()));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_stub_dns_resolve_invalid_domain() {
+        let json = _stubs::dns_resolve("invalid-domain-that-does-not-exist--.com".to_string());
+        let ips: Vec<String> = serde_json::from_str(&json).expect("valid JSON array");
+        assert!(ips.is_empty(), "non-existent domain should return empty array");
+    }
+}

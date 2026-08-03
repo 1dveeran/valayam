@@ -160,12 +160,17 @@ async fn execute_and_report(
         control_port: None,
         tls_cert: None,
         tls_key: None,
+        tls_ca: None,
         require_signed_plugins: false,
+        allow_internal: false,
+        plugin_memory_limit: 128,
+        plugin_timeout: 30,
+        plugin_allow_host: vec![],
         command: None,
     };
 
     // Build HTTP client for the scan
-    let http_client = crate::setup::init_http_client(&None, false)
+    let http_client = crate::setup::init_http_client(&None, false, false)
         .unwrap_or_else(|e| {
             tracing::error!("Failed to init HTTP client: {}", e);
             std::process::exit(1);

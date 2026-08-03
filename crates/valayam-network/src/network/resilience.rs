@@ -26,11 +26,12 @@ impl CircuitBreaker {
         let fails = self.failure_count.load(Ordering::Relaxed);
         if fails >= self.threshold {
             let last_fail = self.last_failure_time.load(Ordering::Relaxed);
-            let _now = Instant::now().elapsed().as_millis() as u64; // Fallback time tracking
-            // In a real implementation we'd use a better absolute time reference,
-            // but for simplicity we assume time elapsed from process start or use epoch
-            let sys_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-            
+            let _now = Instant::now().elapsed().as_millis() as u64;
+            let sys_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+
             if sys_time - last_fail < self.reset_timeout_ms {
                 return true;
             }
@@ -45,7 +46,10 @@ impl CircuitBreaker {
 
     pub fn record_failure(&self) {
         self.failure_count.fetch_add(1, Ordering::Relaxed);
-        let sys_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let sys_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
         self.last_failure_time.store(sys_time, Ordering::Relaxed);
     }
 }
@@ -101,9 +105,9 @@ impl AdaptiveRateLimiter {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as u64;
-            
+
             let time_passed = now.saturating_sub(state.last_refill_time);
-            
+
             // Refill tokens based on time passed
             let tokens_to_add = (time_passed as f64) / (delay_ms as f64);
             state.tokens = (state.tokens + tokens_to_add).min(self.max_burst as f64);
@@ -128,11 +132,11 @@ impl AdaptiveRateLimiter {
     pub fn handle_too_many_requests(&self) {
         let delay = self.current_delay_ms.load(Ordering::Relaxed);
         let doubled = (delay * 2).clamp(self.min_delay_ms.max(100), self.max_delay_ms);
-        
+
         // Add +/- 20% jitter to prevent thundering herds
         let mut rng = rand::thread_rng();
         let jitter_range = (doubled as f64 * 0.2) as u64;
-        
+
         let new_delay = if jitter_range > 0 {
             let jitter = rng.gen_range(0..=(jitter_range * 2));
             let adjusted = doubled + jitter;
@@ -140,7 +144,7 @@ impl AdaptiveRateLimiter {
         } else {
             doubled
         };
-        
+
         let clamped_delay = new_delay.clamp(self.min_delay_ms, self.max_delay_ms);
         self.current_delay_ms.store(clamped_delay, Ordering::Relaxed);
     }
@@ -151,5 +155,67 @@ impl AdaptiveRateLimiter {
             delay = (delay - (delay / 10)).max(self.min_delay_ms);
             self.current_delay_ms.store(delay, Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_circuit_breaker_initial_state() {
+        let cb = CircuitBreaker::new(5, 1000);
+        assert!(!cb.is_open(), "fresh circuit breaker should be closed");
+    }
+
+    #[test]
+    fn test_circuit_breaker_opens_after_threshold() {
+        let cb = CircuitBreaker::new(3, 60000);
+        cb.record_failure();
+        cb.record_failure();
+        assert!(!cb.is_open(), "should not open below threshold");
+        cb.record_failure();
+        assert!(cb.is_open(), "should open at threshold");
+    }
+
+    #[test]
+    fn test_circuit_breaker_success_resets_failures() {
+        let cb = CircuitBreaker::new(3, 60000);
+        cb.record_failure();
+        cb.record_failure();
+        cb.record_success();
+        assert!(!cb.is_open(), "success should reset failure count");
+    }
+
+    #[test]
+    fn test_circuit_breaker_success_count() {
+        let cb = CircuitBreaker::new(5, 1000);
+        cb.record_success();
+        cb.record_success();
+        assert_eq!(cb.success_count.load(std::sync::atomic::Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_adaptive_rate_limiter_handles_backoff() {
+        let rl = AdaptiveRateLimiter::new(10, 5, 1000, 10);
+        rl.handle_too_many_requests();
+        let delay = rl.current_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(delay >= 10, "delay should increase on 429");
+    }
+
+    #[test]
+    fn test_adaptive_rate_limiter_success_reduces_delay() {
+        let rl = AdaptiveRateLimiter::new(500, 100, 1000, 10);
+        rl.handle_success();
+        let delay = rl.current_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(delay < 500, "success should reduce delay");
+    }
+
+    #[test]
+    fn test_adaptive_rate_limiter_respects_min_delay() {
+        let rl = AdaptiveRateLimiter::new(100, 100, 1000, 5);
+        rl.handle_success();
+        let delay = rl.current_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(delay, 100, "delay should not go below min");
     }
 }

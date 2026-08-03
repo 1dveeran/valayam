@@ -1,6 +1,7 @@
 use valayam_models::error::ScannerError;
 use crate::stealth::tls::{Ja3Ja4Spoofer, Ja3Ja4Profile};
 use crate::stealth::proxy::ProxyRotator;
+use crate::network::ssrf_filter::{SsrfConfig, reject_private_ip};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -142,6 +143,8 @@ pub struct StealthHttpClient {
     circuit_breaker: Arc<crate::network::resilience::CircuitBreaker>,
     /// Global adaptive rate limiter
     adaptive_rate_limiter: Arc<crate::network::resilience::AdaptiveRateLimiter>,
+    /// SSRF protection configuration
+    ssrf_config: SsrfConfig,
 }
 
 impl StealthHttpClient {
@@ -151,10 +154,11 @@ impl StealthHttpClient {
         ja3_ja4_profile: Option<Ja3Ja4Profile>,
         follow_meta_refresh: bool,
     ) -> Result<Self, ScannerError> {
-        Self::new_with_options(use_proxy_rotation, use_user_agent_rotation, ja3_ja4_profile, follow_meta_refresh, None, None, None)
+        Self::new_with_options(use_proxy_rotation, use_user_agent_rotation, ja3_ja4_profile, follow_meta_refresh, None, None, None, None)
     }
 
     /// Create a new StealthHttpClient with stealth features and advanced options.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_options(
         use_proxy_rotation: bool,
         use_user_agent_rotation: bool,
@@ -163,6 +167,7 @@ impl StealthHttpClient {
         timeout_opt: Option<u32>,
         default_headers: Option<HashMap<String, String>>,
         cb_config: Option<(u32, u64)>, // (max_failures, timeout_ms)
+        ssrf_config: Option<SsrfConfig>,
     ) -> Result<Self, ScannerError> {
         let timeout = timeout_opt.unwrap_or(30);
         
@@ -232,6 +237,7 @@ impl StealthHttpClient {
             follow_meta_refresh,
             circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(cb_max_fails, cb_timeout)),
             adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(0, 0, 5000, 50)),
+            ssrf_config: ssrf_config.unwrap_or_default(),
         })
     }
 
@@ -251,14 +257,8 @@ impl StealthHttpClient {
             return Err(ScannerError::CircuitBreakerOpen);
         }
 
-        // SSRF basic check
-        if let Ok(parsed) = reqwest::Url::parse(url) {
-            if let Some(host) = parsed.host_str() {
-                if host == "localhost" || host == "127.0.0.1" || host == "169.254.169.254" || host == "::1" || host.starts_with("10.") || host.starts_with("192.168.") || host.starts_with("172.") {
-                     return Err(ScannerError::InvalidTarget("SSRF attempt detected".to_string()));
-                }
-            }
-        }
+        // SSRF protection — blocks private/internal IPs unless --allow-internal
+        reject_private_ip(url, &self.ssrf_config)?;
 
         self.adaptive_rate_limiter.wait().await;
         

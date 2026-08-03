@@ -10,6 +10,7 @@ use colored::*;
 use walkdir::WalkDir;
 
 use valayam_core::network::http::StealthHttpClient;
+use valayam_core::network::ssrf_filter::SsrfConfig;
 use valayam_core::stealth::proxy::ProxyRotator;
 use valayam_engine::rate_limiter::RateLimiter;
 use valayam_core::rpc::scanner_client::ScannerClient;
@@ -175,25 +176,39 @@ pub fn init_proxy_rotator(proxy_file: Option<&str>) -> Option<ProxyRotator> {
 }
 
 /// Initialize the stealth HTTP client.
-pub fn init_http_client(proxy_rotator: &Option<ProxyRotator>, random_agent: bool) -> anyhow::Result<Arc<StealthHttpClient>> {
-    Ok(Arc::new(StealthHttpClient::new(
+pub fn init_http_client(proxy_rotator: &Option<ProxyRotator>, random_agent: bool, allow_internal: bool) -> anyhow::Result<Arc<StealthHttpClient>> {
+    Ok(Arc::new(StealthHttpClient::new_with_options(
         proxy_rotator.is_some(),
         random_agent,
         None,
         true,
+        None,
+        None,
+        None,
+        Some(SsrfConfig { allow_internal }),
     )?))
 }
 
 /// Load TLS configuration from PEM files.
-pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>) -> Option<valayam_engine::telemetry_server::TlsConfig> {
+pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>, tls_ca: Option<&str>) -> Option<valayam_engine::telemetry_server::TlsConfig> {
     match (tls_cert, tls_key) {
         (Some(cert_path), Some(key_path)) => {
             let cert_pem = std::fs::read(cert_path)
                 .unwrap_or_else(|e| { eprintln!("Failed to read TLS cert: {}", e); std::process::exit(1); });
             let key_pem = std::fs::read(key_path)
                 .unwrap_or_else(|e| { eprintln!("Failed to read TLS key: {}", e); std::process::exit(1); });
-            println!("{} TLS enabled for gRPC control plane (cert: {}, key: {})", "[+]".green().bold(), cert_path, key_path);
-            Some(valayam_engine::telemetry_server::TlsConfig { cert_pem, key_pem })
+            let ca_pem = tls_ca.map(|ca_path| {
+                std::fs::read(ca_path)
+                    .unwrap_or_else(|e| { eprintln!("Failed to read TLS CA cert: {}", e); std::process::exit(1); })
+            });
+            if ca_pem.is_some() {
+                println!("{} TLS mTLS enabled for gRPC control plane (cert: {}, key: {}, ca: {})",
+                    "[+]".green().bold(), cert_path, key_path, tls_ca.unwrap());
+            } else {
+                println!("{} TLS enabled for gRPC control plane (cert: {}, key: {})",
+                    "[+]".green().bold(), cert_path, key_path);
+            }
+            Some(valayam_engine::telemetry_server::TlsConfig { cert_pem, key_pem, ca_pem })
         }
         _ => None,
     }

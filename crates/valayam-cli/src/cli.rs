@@ -101,8 +101,23 @@ pub struct Args {
     #[arg(long, help = "Path to TLS private key file (PEM) for gRPC control plane encryption")]
     pub tls_key: Option<String>,
 
+    #[arg(long, help = "Path to CA certificate (PEM) for mTLS client verification on the gRPC control plane")]
+    pub tls_ca: Option<String>,
+
     #[arg(long, help = "Enforce plugin signature verification — reject unsigned WASM/VPA plugins at load time")]
     pub require_signed_plugins: bool,
+
+    #[arg(long, help = "Allow scanning internal/private IP ranges (disabled by default for SSRF protection)")]
+    pub allow_internal: bool,
+
+    #[arg(long, default_value = "128", help = "Max memory per WASM plugin in MB (default: 128)")]
+    pub plugin_memory_limit: u32,
+
+    #[arg(long, default_value = "30", help = "Plugin execution timeout in seconds (default: 30)")]
+    pub plugin_timeout: u64,
+
+    #[arg(long, help = "Repeatable: allow plugin egress to specific host (default: deny all). Can specify multiple times.")]
+    pub plugin_allow_host: Vec<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,

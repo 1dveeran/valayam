@@ -99,12 +99,12 @@ async fn main() -> anyhow::Result<()> {
     let cancel_token = CancellationToken::new();
 
     // ── TLS config + Telemetry server ──────────────────────────────────────
-    let tls_config = load_tls_config(args.tls_cert.as_deref(), args.tls_key.as_deref());
+    let tls_config = load_tls_config(args.tls_cert.as_deref(), args.tls_key.as_deref(), args.tls_ca.as_deref());
     spawn_telemetry_server(args.control_port, tls_config.clone(), state_tx.clone(), cancel_token.clone());
 
     // ── HTTP client + Proxy ────────────────────────────────────────────────
     let proxy_rotator = init_proxy_rotator(args.proxy_file.as_deref());
-    let http_client = init_http_client(&proxy_rotator, args.random_agent)?;
+    let http_client = init_http_client(&proxy_rotator, args.random_agent, args.allow_internal)?;
 
     if args.waf_detect {
         println!("  - WAF detection moved to Wasm plugin");

@@ -10,3 +10,25 @@ impl TorRouter {
         Proxy::all(&proxy_url).map_err(|e| e.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_proxy_default_socks5_port() {
+        let _proxy = TorRouter::get_proxy(9050).expect("should create proxy for default Tor port");
+    }
+
+    #[test]
+    fn test_get_proxy_custom_port() {
+        let _proxy = TorRouter::get_proxy(9150).expect("should create proxy for Tor Browser Bundle port");
+    }
+
+    #[test]
+    fn test_get_proxy_all_common_ports() {
+        for port in [9050u16, 9150u16] {
+            let _proxy = TorRouter::get_proxy(port).expect("standard tor ports should work");
+        }
+    }
+}

@@ -60,6 +60,7 @@ pub struct PluginRegistry {
     plugins: Arc<Mutex<Vec<Arc<dyn ScanPlugin>>>>,
     pub_key: Option<[u8; 32]>,
     retry_config: RetryConfig,
+    plugin_config: crate::wasm_plugin::PluginConfig,
 }
 
 impl PluginRegistry {
@@ -69,7 +70,17 @@ impl PluginRegistry {
 
     /// Create a new PluginRegistry with an optional trusted public key for signature verification
     pub fn with_key(pub_key: Option<[u8; 32]>) -> Self {
-        Self { plugins: Arc::new(Mutex::new(Vec::new())), pub_key, retry_config: RetryConfig::default() }
+        Self {
+            plugins: Arc::new(Mutex::new(Vec::new())),
+            pub_key,
+            retry_config: RetryConfig::default(),
+            plugin_config: crate::wasm_plugin::PluginConfig::default(),
+        }
+    }
+
+    /// Set the WASM plugin sandbox configuration.
+    pub fn set_plugin_config(&mut self, config: crate::wasm_plugin::PluginConfig) {
+        self.plugin_config = config;
     }
 
     pub fn set_trusted_key(&mut self, pub_key: [u8; 32]) {
@@ -129,7 +140,10 @@ impl PluginRegistry {
                                 let entrypoint_path = extract_dir.join(&manifest.entrypoint);
                                 if manifest.runtime == "wasm" {
                                     tracing::info!(plugin = %manifest.name, "Loading VPA WASM plugin");
-                                    let plugin = crate::wasm_plugin::WasmPluginBridge::new(manifest.name.clone(), entrypoint_path);
+                                    let plugin = crate::wasm_plugin::WasmPluginBridge::new(
+                                        manifest.name.clone(), entrypoint_path,
+                                        self.plugin_config.clone(),
+                                    );
                                     self.register(plugin);
                                 } else if manifest.runtime == "grpc" {
                                     tracing::info!(plugin = %manifest.name, "Loading VPA gRPC plugin");
@@ -145,7 +159,10 @@ impl PluginRegistry {
                         }
                     } else if ext == "wasm" {
                         tracing::info!(file = %path.display(), "Loading external WASM plugin");
-                        let plugin = crate::wasm_plugin::WasmPluginBridge::new(file_name, path);
+                        let plugin = crate::wasm_plugin::WasmPluginBridge::new(
+                            file_name, path,
+                            self.plugin_config.clone(),
+                        );
                         self.register(plugin);
                     } else if ext == "exe" || ext == "sh" || ext == "bat" || ext == "cmd" || (ext == "py" && !file_name.contains("_pb2")) || (std::env::consts::FAMILY == "unix" && ext.is_empty()) {
                         tracing::info!(file = %path.display(), "Loading external gRPC plugin");

@@ -11,6 +11,7 @@ members = [
     "crates/valayam-proto",
     "crates/valayam-ebpf-agent",
     "crates/valayam-plugin-sdk",
+    "plugins-wasm/cors-audit",
 ]
 exclude = [
     "crates/valayam-ebpf-programs",

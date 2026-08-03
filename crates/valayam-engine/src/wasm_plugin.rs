@@ -3,6 +3,27 @@ use crate::traits::{FindingOwned, PluginOutcome, ScanContext, ScanPlugin};
 use std::path::PathBuf;
 use extism::{Plugin, Manifest, Wasm};
 
+/// Configuration for WASM plugin sandbox limits.
+#[derive(Clone)]
+pub struct PluginConfig {
+    /// Max WASM memory in pages (64KB per page). Default 2048 = 128 MB.
+    pub memory_max_pages: u32,
+    /// Plugin execution timeout in milliseconds. Default 30000.
+    pub timeout_ms: u64,
+    /// Allowed HTTP hosts for plugin egress. Empty = deny all.
+    pub allowed_hosts: Vec<String>,
+}
+
+impl Default for PluginConfig {
+    fn default() -> Self {
+        Self {
+            memory_max_pages: 2048,   // 128 MB
+            timeout_ms: 30000,        // 30 sec
+            allowed_hosts: Vec::new(), // deny all egress by default
+        }
+    }
+}
+
 /// WASM ABI contract for Valayam plugins via Extism.
 ///
 /// Guest modules must use the `valayam-plugin-sdk` (extism-pdk) to export
@@ -13,14 +34,32 @@ use extism::{Plugin, Manifest, Wasm};
 pub struct WasmPluginBridge {
     name: String,
     wasm_path: PathBuf,
+    config: PluginConfig,
 }
 
 impl WasmPluginBridge {
-    pub fn new(name: impl Into<String>, wasm_path: PathBuf) -> Self {
+    pub fn new(name: impl Into<String>, wasm_path: PathBuf, config: PluginConfig) -> Self {
         Self {
             name: name.into(),
             wasm_path,
+            config,
         }
+    }
+
+    fn build_manifest(&self) -> Manifest {
+        let wasm = Wasm::file(&self.wasm_path);
+        let mut manifest = Manifest::new([wasm]);
+        manifest = manifest
+            .with_timeout(std::time::Duration::from_millis(self.config.timeout_ms))
+            .with_memory_max(self.config.memory_max_pages);
+        // By default allowed_hosts is None (deny all). If config has hosts, set them.
+        if !self.config.allowed_hosts.is_empty() {
+            manifest = manifest.with_allowed_hosts(self.config.allowed_hosts.clone().into_iter());
+        } else {
+            manifest = manifest.disallow_all_hosts();
+        }
+        manifest.allowed_paths = None; // deny filesystem access by default
+        manifest
     }
 }
 
@@ -59,13 +98,7 @@ impl ScanPlugin for WasmPluginBridge {
     }
 
     async fn init(&self) -> Result<(), ScannerError> {
-        let wasm = Wasm::file(&self.wasm_path);
-        let mut manifest = Manifest::new([wasm]);
-        manifest.allowed_paths = Some(std::collections::BTreeMap::from([(
-            "/".to_string(),
-            PathBuf::from("/"),
-        )]));
-        manifest.allowed_hosts = Some(vec!["*".to_string()]);
+        let manifest = self.build_manifest();
         if let Err(e) = Plugin::new(&manifest, [], true) {
             return Err(ScannerError::PluginInitializationError(
                 format!("Failed to load Wasm via Extism '{}': {}", self.wasm_path.display(), e)
@@ -87,13 +120,7 @@ impl ScanPlugin for WasmPluginBridge {
             template_json, context_json
         );
 
-        let wasm = Wasm::file(&self.wasm_path);
-        let mut manifest = Manifest::new([wasm]);
-        manifest.allowed_paths = Some(std::collections::BTreeMap::from([(
-            "/".to_string(),
-            PathBuf::from("/"),
-        )]));
-        manifest.allowed_hosts = Some(vec!["*".to_string()]);
+        let manifest = self.build_manifest();
         let mut plugin = match extism::PluginBuilder::new(manifest)
             .with_wasi(true)
             .with_function(
