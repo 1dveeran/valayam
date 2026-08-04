@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use hmac::Hmac;
-use crate::agent_config::*;
+use valayam_config::agent::*;
 use colored::*;
 
 /// Minimum backoff between polls (when server returns 204)
@@ -33,12 +33,10 @@ pub async fn start_agent(cfg: AgentConfig, cancel: CancellationToken) -> anyhow:
                 break;
             }
             _ = sleep(Duration::from_secs(1)) => {
-                // ── Heartbeat ──────────────────────────────────────
                 if start_time.elapsed().as_secs() % cfg.heartbeat_interval_secs < 2 {
                     send_heartbeat(&client, &cfg, &current_job_id, start_time).await;
                 }
 
-                // ── Poll for job ────────────────────────────────────
                 match poll_job(&client, &cfg).await {
                     Ok(Some(job)) => {
                         println!("{} Received job: {} → {}",
@@ -49,11 +47,9 @@ pub async fn start_agent(cfg: AgentConfig, cancel: CancellationToken) -> anyhow:
                         if let Err(e) = execute_and_report(&client, &cfg, job, start_time, cancel.clone()).await {
                             tracing::error!("Job execution failed: {}", e);
                         }
-
                         current_job_id = None;
                     }
                     Ok(None) => {
-                        // 204 — no jobs, apply backoff
                         sleep(Duration::from_secs(backoff_secs)).await;
                         backoff_secs = (backoff_secs * 2).min(MAX_BACKOFF_SECS);
                     }
@@ -108,7 +104,6 @@ async fn execute_and_report(
     _start_time: Instant,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
-    // ── Verify job token (HMAC) before execution ──────────────────
     if let Some(ref auth) = job.auth {
         if !cfg.job_secret.is_empty() {
             if !verify_job_token(&cfg.job_secret, &job.job_id, &auth.job_token) {
@@ -123,7 +118,6 @@ async fn execute_and_report(
     let output_path = format!(".valayam_agent_{}.json", job.job_id);
     let started_at = chrono::Utc::now().to_rfc3339();
 
-    // Write templates to temp files for the engine to load
     let tmp_dir = std::env::temp_dir().join(format!("valayam_{}", job.job_id));
     std::fs::create_dir_all(&tmp_dir)?;
 
@@ -137,7 +131,6 @@ async fn execute_and_report(
         })
         .collect();
 
-    // Build Args from job config
     let scan_args = crate::cli::Args {
         target: job.target_url.clone(),
         template: Some(tmp_dir.to_string_lossy().to_string()),
@@ -169,18 +162,12 @@ async fn execute_and_report(
         command: None,
     };
 
-    // Build HTTP client for the scan
     let http_client = crate::setup::init_http_client(&None, false, false)
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to init HTTP client: {}", e);
-            std::process::exit(1);
-        });
+        .map_err(|e| anyhow::anyhow!("Failed to init HTTP client: {}", e))?;
     let rate_limiter = scan_args.rate_limit.map(|rps| {
         Arc::new(valayam_engine::rate_limiter::RateLimiter::new_simple(rps))
     });
-    let template_files = crate::setup::discover_templates(
-        &tmp_dir.to_string_lossy()
-    );
+    let template_files = crate::setup::discover_templates(&tmp_dir.to_string_lossy());
 
     if template_files.is_empty() {
         anyhow::bail!("No valid templates found for job {}", job.job_id);
@@ -189,23 +176,21 @@ async fn execute_and_report(
     if let Err(e) = crate::orchestrator::run_scan_with_job_id(
         scan_args,
         template_files,
-        false, // is_nuclei
+        false,
         vec![job.target_url.clone()],
         http_client,
         rate_limiter,
-        None, // grpc_client
-        None, // state_rx
+        None,
+        None,
         cancel,
         Some(job.job_id.clone()),
     ).await {
-        // Partial success — still report what we have
         tracing::error!("Scan execution error: {}", e);
     }
 
     let completed_at = chrono::Utc::now().to_rfc3339();
     let duration_secs = job_start.elapsed().as_secs_f64();
 
-    // Read output file
     let findings: Vec<serde_json::Value> = match std::fs::read_to_string(&output_path) {
         Ok(content) => {
             content.lines().filter_map(|line| {
@@ -215,11 +200,9 @@ async fn execute_and_report(
         Err(_) => vec![],
     };
 
-    // Cleanup
     let _ = std::fs::remove_file(&output_path);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 
-    // Build result — echo the job_token back for platform verification
     let token = job.auth.as_ref().map(|a| a.job_token.clone());
 
     let result = AgentJobResult {
@@ -238,7 +221,6 @@ async fn execute_and_report(
         job_token: token,
     };
 
-    // POST results back
     let url = format!(
         "{}/api/v1/jobs/{}/results",
         cfg.platform_url.trim_end_matches('/'),
@@ -311,7 +293,6 @@ fn verify_job_token(secret: &str, job_id: &str, token: &str) -> bool {
     let expected = mac.finalize().into_bytes();
     let expected_hex = hex::encode(expected);
 
-    // Constant-time comparison
     token.len() == expected_hex.len()
         && token
             .as_bytes()
@@ -356,5 +337,5 @@ fn read_proc_stats() -> (f32, f32) {
         0.0
     };
 
-    (0.0, mem_usage) // CPU left at 0.0 — full /proc/stat parsing is heavy
+    (0.0, mem_usage)
 }

@@ -9,6 +9,12 @@ valayam-network = { workspace = true }
 valayam-engine = { workspace = true }
 valayam-proto = { workspace = true }
 valayam-core-net = { path = "../valayam-core-net" }
+valayam-reporter = { path = "../valayam-reporter" }
+valayam-crawler = { path = "../valayam-crawler" }
+valayam-threatintel = { path = "../valayam-threatintel" }
+valayam-proxy = { path = "../valayam-proxy" }
+valayam-schema-drift = { path = "../valayam-schema-drift" }
+valayam-oob = { path = "../valayam-oob" }
 tokio = { workspace = true, features = ["full"] }
 async-trait = { workspace = true }
 tokio-util = { version = "0.7", features = ["rt"] }
@@ -77,3 +83,4 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 mockito = "1.7.2"
 tempfile = { workspace = true }
 wat = "1.253.0"
+valayam-crypto = { path = "../valayam-crypto" }

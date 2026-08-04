@@ -1,0 +1,12 @@
+[package]
+name = "valayam-state"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true

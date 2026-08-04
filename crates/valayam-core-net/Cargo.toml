@@ -7,6 +7,9 @@ edition = "2021"
 valayam-models = { path = "../valayam-models" }
 valayam-network = { path = "../valayam-network", version = "0.1.0" }
 valayam-engine = { path = "../valayam-engine", version = "0.1.0" }
+valayam-oob = { path = "../valayam-oob" }
+valayam-payloads = { path = "../valayam-payloads" }
+valayam-common = { path = "../valayam-common" }
 tokio = { version = "1.38", features = ["full"] }
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }

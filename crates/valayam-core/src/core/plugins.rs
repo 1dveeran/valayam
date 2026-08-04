@@ -172,7 +172,7 @@ impl ScanPlugin for ThreatIntelPlugin {
 }
 
 pub struct OobPlugin {
-    pub server: Arc<valayam_core_net::features::oob::server::OobServer>,
+    pub server: Arc<valayam_oob::server::OobServer>,
 }
 #[async_trait]
 impl ScanPlugin for OobPlugin {

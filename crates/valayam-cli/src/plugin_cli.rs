@@ -64,7 +64,7 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
         let mut priv_key = [0u8; 32];
         priv_key.copy_from_slice(&priv_key_bytes[0..32]);
         let manifest_bytes = std::fs::read(&manifest_path)?;
-        let signature = valayam_engine::crypto::PluginCrypto::sign(&priv_key, &manifest_bytes)?;
+        let signature = valayam_crypto::PluginCrypto::sign(&priv_key, &manifest_bytes)?;
         
         zip.start_file("signature.sig", options)?;
         zip.write_all(&signature)?;
@@ -376,7 +376,7 @@ mod tests {
 }
 
 pub fn generate_key(output_prefix: &str) -> anyhow::Result<()> {
-    let (priv_key, pub_key) = valayam_engine::crypto::PluginCrypto::generate_keypair();
+    let (priv_key, pub_key) = valayam_crypto::PluginCrypto::generate_keypair();
     let priv_path = format!("{}.pem", output_prefix);
     let pub_path = format!("{}.pub", output_prefix);
     std::fs::write(&priv_path, priv_key)?;

@@ -125,7 +125,7 @@ pub async fn execute_template_inner(
 
     // Phase 31: Schema Drift / Shadow API detection
     if !template.schema_drift.is_empty() {
-        if let Some(result) = crate::features::schema_drift::executor::execute(
+        if let Some(result) = valayam_schema_drift::executor::execute(
             target_url,
             client,
             &template.schema_drift,

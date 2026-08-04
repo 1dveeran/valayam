@@ -14,6 +14,9 @@
 //! - Conflicting flags (template + nuclei_template)
 //! - Invalid port ranges
 
+pub mod agent;
+pub mod cli;
+
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;

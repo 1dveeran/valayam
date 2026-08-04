@@ -1,10 +1,5 @@
-//! Enterprise web crawler — async crawling with SPA/JS route extraction.
+//! Enterprise web crawler — now served from `valayam-crawler` crate.
 //!
-//! Crawls websites to discover endpoints, forms, links, and JS routes.
-//! Supports rate limiting, domain scope control, and auth header injection.
-//! Includes JS/SPA route extraction, WASM decompilation, and OpenAPI parsing.
-pub mod parsers;
-pub mod spider;
-pub mod wordlists;
+//! Re-exports keep `valayam_core::features::crawler::*` paths working.
 
-pub use spider::Crawler;
+pub use valayam_crawler::*;

@@ -2,16 +2,10 @@ use valayam_models::error::ScannerError;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 /// Configuration for SSRF (Server-Side Request Forgery) protection.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SsrfConfig {
     /// When true, allows requests to private/internal IP ranges.
     pub allow_internal: bool,
-}
-
-impl Default for SsrfConfig {
-    fn default() -> Self {
-        Self { allow_internal: false }
-    }
 }
 
 /// Check whether a URL targets a private/internal IP address.

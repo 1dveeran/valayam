@@ -2,6 +2,47 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use crate::result::ScanResult;
+use std::str::FromStr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Critical,
+    High,
+    Medium,
+    Low,
+    Info,
+    Unknown,
+}
+
+impl FromStr for Severity {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "critical" => Ok(Severity::Critical),
+            "high" => Ok(Severity::High),
+            "medium" => Ok(Severity::Medium),
+            "low" => Ok(Severity::Low),
+            "info" => Ok(Severity::Info),
+            _ => Ok(Severity::Unknown),
+        }
+    }
+}
+
+impl std::fmt::Display for Severity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Severity::Critical => "critical",
+            Severity::High => "high",
+            Severity::Medium => "medium",
+            Severity::Low => "low",
+            Severity::Info => "info",
+            Severity::Unknown => "unknown",
+        };
+        write!(f, "{}", s)
+    }
+}
 
 /// A vulnerability finding ready for channel transport and serialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,7 +50,7 @@ pub struct FindingOwned {
     pub scan_id: uuid::Uuid,
     pub template_id: String,
     pub template_name: String,
-    pub severity: String,
+    pub severity: Severity,
     pub target: String,
     pub matched_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,7 +80,8 @@ impl FindingOwned {
 
         let template_id = metadata.get("template_id").cloned().unwrap_or_default();
         let template_name = metadata.get("template_name").cloned().unwrap_or_default();
-        let severity = metadata.get("template_severity").cloned().unwrap_or_default();
+        let severity_str = metadata.get("template_severity").map(|s| s.as_str()).unwrap_or("unknown");
+        let severity = Severity::from_str(severity_str).unwrap_or(Severity::Unknown);
 
         let mut meta = std::collections::HashMap::new();
         for (key, value) in metadata {
@@ -92,7 +134,7 @@ impl FindingOwned {
             scan_id: uuid::Uuid::default(),
             template_id: template_id.into(),
             template_name: template_meta.template_name().to_string(),
-            severity: template_meta.template_severity().to_string(),
+            severity: Severity::from_str(template_meta.template_severity()).unwrap_or(Severity::Unknown),
             target: target.into(),
             matched_at: matched_at.into(),
             description: template_meta.description().map(|s| s.to_string()),
@@ -121,7 +163,7 @@ impl FindingOwned {
             timestamp: chrono::Utc::now(),
             template_id: self.template_id,
             template_name: self.template_name,
-            template_severity: self.severity,
+            template_severity: self.severity.to_string(),
             target: self.target,
             payload: self.matched_at,
             compliance: Default::default(),

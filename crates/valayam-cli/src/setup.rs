@@ -190,17 +190,15 @@ pub fn init_http_client(proxy_rotator: &Option<ProxyRotator>, random_agent: bool
 }
 
 /// Load TLS configuration from PEM files.
-pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>, tls_ca: Option<&str>) -> Option<valayam_engine::telemetry_server::TlsConfig> {
+pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>, tls_ca: Option<&str>) -> anyhow::Result<Option<valayam_api::TlsConfig>> {
     match (tls_cert, tls_key) {
         (Some(cert_path), Some(key_path)) => {
-            let cert_pem = std::fs::read(cert_path)
-                .unwrap_or_else(|e| { eprintln!("Failed to read TLS cert: {}", e); std::process::exit(1); });
-            let key_pem = std::fs::read(key_path)
-                .unwrap_or_else(|e| { eprintln!("Failed to read TLS key: {}", e); std::process::exit(1); });
-            let ca_pem = tls_ca.map(|ca_path| {
-                std::fs::read(ca_path)
-                    .unwrap_or_else(|e| { eprintln!("Failed to read TLS CA cert: {}", e); std::process::exit(1); })
-            });
+            let cert_pem = std::fs::read(cert_path)?;
+            let key_pem = std::fs::read(key_path)?;
+            let ca_pem = match tls_ca {
+                Some(ca_path) => Some(std::fs::read(ca_path)?),
+                None => None,
+            };
             if ca_pem.is_some() {
                 println!("{} TLS mTLS enabled for gRPC control plane (cert: {}, key: {}, ca: {})",
                     "[+]".green().bold(), cert_path, key_path, tls_ca.unwrap());
@@ -208,9 +206,13 @@ pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>, tls_ca: Op
                 println!("{} TLS enabled for gRPC control plane (cert: {}, key: {})",
                     "[+]".green().bold(), cert_path, key_path);
             }
-            Some(valayam_engine::telemetry_server::TlsConfig { cert_pem, key_pem, ca_pem })
+            Ok(Some(valayam_api::TlsConfig {
+                cert_pem,
+                key_pem,
+                ca_pem,
+            }))
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 

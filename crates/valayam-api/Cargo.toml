@@ -1,0 +1,17 @@
+[package]
+name = "valayam-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+valayam-engine = { workspace = true }
+valayam-proto = { workspace = true }
+tokio = { workspace = true }
+tokio-util = "0.7"
+tonic = { workspace = true }
+tracing = "0.1"
+rustls-pemfile = { workspace = true }
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+futures = { workspace = true }
+x509-parser = { workspace = true }

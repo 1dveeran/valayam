@@ -1,8 +1,6 @@
-//! Threat intelligence ingestion and correlation.
+//! Threat intelligence ingestion and correlation — now served from `valayam-threatintel` crate.
 //!
-//! Automated CISA KEV feed parsing, IOC cross-referencing against
-//! extracted indicators, and dynamic template construction from TI data.
-//! Persists TI data locally for offline scanning environments.
+//! Re-exports keep `valayam_core::features::threat_intel::*` paths working.
 
-pub mod ingestion;
-pub mod ioc_matcher;
+pub use valayam_threatintel::ingestion;
+pub use valayam_threatintel::ioc_matcher;

@@ -6,12 +6,26 @@ members = [
     "crates/valayam-plugin-wasm-example",
     "crates/valayam-engine",
     "crates/valayam-models",
+    "crates/valayam-error",
+    "crates/valayam-telemetry",
+    "crates/valayam-crypto",
+    "crates/valayam-state",
+    "crates/valayam-reporter",
+    "crates/valayam-crawler",
+    "crates/valayam-threatintel",
+    "crates/valayam-proxy",
+    "crates/valayam-schema-drift",
+    "crates/valayam-oob",
+    "crates/valayam-payloads",
+    "crates/valayam-common",
     "crates/valayam-core-net",
     "crates/valayam-network",
     "crates/valayam-proto",
     "crates/valayam-ebpf-agent",
     "crates/valayam-plugin-sdk",
     "plugins-wasm/cors-audit",
+    "crates/valayam-api",
+    "crates/valayam-config",
 ]
 exclude = [
     "crates/valayam-ebpf-programs",
@@ -28,6 +42,12 @@ valayam-models = { path = "crates/valayam-models" }
 valayam-network = { path = "crates/valayam-network", version = "0.1.0" }
 valayam-engine = { path = "crates/valayam-engine", version = "0.1.0" }
 valayam-proto = { path = "crates/valayam-proto", version = "0.1.0" }
+valayam-proxy = { path = "crates/valayam-proxy", version = "0.1.0" }
+valayam-schema-drift = { path = "crates/valayam-schema-drift", version = "0.1.0" }
+valayam-oob = { path = "crates/valayam-oob", version = "0.1.0" }
+valayam-payloads = { path = "crates/valayam-payloads", version = "0.1.0" }
+valayam-common = { path = "crates/valayam-common", version = "0.1.0" }
+valayam-config = { path = "crates/valayam-config", version = "0.1.0" }
 lazy_static = "1.4"
 tokio = { version = "1.38", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

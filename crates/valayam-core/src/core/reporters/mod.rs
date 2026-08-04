@@ -1,8 +1,7 @@
-//! Scan result reporters — output formatting and serialization.
+//! Scan result reporters — now served from `valayam-reporter` crate.
 //!
-//! Provides composite, console (human-readable), and JSON reporters
-//! for presenting scan results in various formats.
+//! These re-exports keep existing `valayam_core::core::reporters::*` paths working.
 
-pub mod composite;
-pub mod console;
-pub mod json;
+pub use valayam_reporter::composite;
+pub use valayam_reporter::console;
+pub use valayam_reporter::json;
