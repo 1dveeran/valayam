@@ -94,6 +94,9 @@ mod tests {
     impl ScanPlugin for MockPlugin {
         fn name(&self) -> &str { "mock" }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
             let _ = ctx.finding_tx.send(FindingOwned {
             scan_id: uuid::Uuid::default(),

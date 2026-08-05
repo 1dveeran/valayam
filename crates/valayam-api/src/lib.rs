@@ -23,8 +23,34 @@ pub struct TelemetryService {
 
 #[tonic::async_trait]
 impl Scanner for TelemetryService {
-    async fn scan(&self, _request: Request<ScanRequest>) -> Result<Response<ScanResponse>, Status> {
-        Ok(Response::new(ScanResponse { findings_json: vec![] }))
+    async fn scan(&self, request: Request<ScanRequest>) -> Result<Response<ScanResponse>, Status> {
+        let req = request.into_inner();
+        let target = req.target_url;
+        let template: valayam_models::templates::schema::VulnerabilityTemplate = match serde_yaml::from_str(&req.template_yaml) {
+            Ok(t) => t,
+            Err(e) => return Err(Status::invalid_argument(format!("Invalid template YAML: {}", e))),
+        };
+        
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let registry = std::sync::Arc::new(valayam_engine::registry::PluginRegistry::new());
+        let token = tokio_util::sync::CancellationToken::new();
+        let executor = valayam_engine::executor::ScanExecutor::new(tx, registry, None, token);
+        
+        let template_arc = std::sync::Arc::new(template);
+        executor.execute(&target, template_arc).await;
+        
+        let mut findings = Vec::new();
+        // tx is dropped when executor is dropped at end of scope? Wait, executor doesn't drop tx until execute completes, wait execute consumes tx?
+        // Actually execute just takes &self, so tx is cloned. But wait, we need to drop the original tx so rx will close!
+        drop(executor); // or drop tx before creating executor? We moved tx into executor, so dropping executor drops tx.
+        
+        while let Some(finding) = rx.recv().await {
+            if let Ok(json) = serde_json::to_string(&finding) {
+                findings.push(json);
+            }
+        }
+        
+        Ok(Response::new(ScanResponse { findings_json: findings }))
     }
 
     async fn stream_telemetry(

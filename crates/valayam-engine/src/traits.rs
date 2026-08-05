@@ -115,13 +115,13 @@ pub trait ScanPlugin: Send + Sync {
     fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool;
 
     /// Validate the plugin's configuration against a template.
-    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError>;
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError>;
 
     /// Execute the plugin's scan logic.
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome;
 
-    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError>;
 
     /// Perform a health check. Returns `Ok(())` if healthy, or an error describing
     /// what is wrong. Called by `PluginRegistry::health_check_all()`.

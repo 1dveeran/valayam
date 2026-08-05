@@ -46,29 +46,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     #[cfg(not(target_os = "linux"))]
-    println!("[*] Non-Linux OS detected. eBPF framework (Aya) stub initialized. Mocking telemetry stream...");
+    {
+        eprintln!("[!] Non-Linux OS detected. eBPF framework (Aya) is only supported on Linux.");
+        eprintln!("[!] Exiting eBPF agent...");
+        std::process::exit(1);
+    }
 
-    // Mock telemetry loop (runs on all platforms as a fallback/test)
+    #[cfg(target_os = "linux")]
     loop {
-        let mock_event = TelemetryEvent::ProcessExecution {
-            pid: 1234,
-            command: "/usr/bin/bash".to_string(),
-            args: vec!["-c".to_string(), "echo 'Lateral movement detected'".to_string()],
-            user_id: 0,
-        };
-
-        println!("[TELEMETRY] Generated: {:?}", mock_event);
-        
-        let grpc_event = GrpcTelemetryEvent {
-            event_type: "ProcessExecution".to_string(),
-            payload_json: serde_json::to_string(&mock_event)?,
-        };
-
-        if tx.send(grpc_event).await.is_err() {
-            eprintln!("[!] Failed to send telemetry event. Channel closed.");
-            break;
-        }
-
+        // eBPF telemetry generation will go here.
+        // For now, keep the agent alive.
         sleep(Duration::from_secs(5)).await;
     }
 

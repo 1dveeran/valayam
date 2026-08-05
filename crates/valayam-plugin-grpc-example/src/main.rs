@@ -33,15 +33,40 @@ impl PluginService for ExamplePlugin {
         let req = request.into_inner();
         let (tx, rx) = mpsc::channel(4);
 
-        // Dummy execution logic
+        // Functional network check: DNS resolution
         tokio::spawn(async move {
+            let target = req.target.clone();
+            let host_port = if target.contains(':') && !target.starts_with("http") {
+                target.clone()
+            } else if let Ok(url) = url::Url::parse(&target) {
+                let host = url.host_str().unwrap_or(&target);
+                let port = url.port_or_known_default().unwrap_or(80);
+                format!("{}:{}", host, port)
+            } else {
+                format!("{}:80", target)
+            };
+
+            let metadata = match tokio::net::lookup_host(&host_port).await {
+                Ok(addrs) => {
+                    let ips: Vec<String> = addrs.map(|a| a.ip().to_string()).collect();
+                    serde_json::json!({
+                        "resolved_ips": ips
+                    })
+                },
+                Err(e) => {
+                    serde_json::json!({
+                        "error": e.to_string()
+                    })
+                }
+            };
+
             let finding = serde_json::json!({
                 "template_id": "grpc-example",
                 "template_name": "gRPC Example Plugin",
                 "severity": "info",
                 "target": req.target,
-                "matched_at": "example match",
-                "metadata": {}
+                "matched_at": "DNS resolution",
+                "metadata": metadata
             });
             
             let finding_json = finding.to_string();

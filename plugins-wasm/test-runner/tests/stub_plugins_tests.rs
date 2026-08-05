@@ -14,7 +14,18 @@ fn start_dummy_server() -> String {
             if let Ok(mut stream) = stream {
                 let mut buffer = [0; 1024];
                 let _ = stream.read(&mut buffer);
-                let response = "HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\n\r\n{}";
+                let req_str = String::from_utf8_lossy(&buffer);
+                
+                let mut response = "HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\n\r\n{}".to_string();
+                
+                if req_str.contains("GET /setup") || req_str.contains("GET /cgi-bin/config.exp") {
+                    response = "HTTP/1.1 200 OK\r\nServer: GoAhead-Webs\r\nContent-Length: 2\r\n\r\nOK".to_string();
+                } else if req_str.contains("GET /.well-known/apple-app-site-association") {
+                    response = "HTTP/1.1 200 OK\r\nContent-Length: 28\r\n\r\n{\"applinks\": {\"paths\": [\"*\"]}}".to_string();
+                } else if req_str.contains("GET /.well-known/openid-configuration") {
+                    response = "HTTP/1.1 200 OK\r\nContent-Length: 68\r\n\r\n{\"issuer\": \"http://example.com\", \"response_types_supported\": [\"token\"]}".to_string();
+                }
+                
                 let _ = stream.write_all(response.as_bytes());
             }
         }
@@ -48,7 +59,7 @@ fn stub_graphql_audit() {
 }
 
 #[test]
-fn stub_iot_audit() {
+fn audit_iot_audit() {
     let wasm = build_wasm("valayam-plugin-iot-audit");
     let target_url = start_dummy_server();
     let input = WasmInput {
@@ -56,11 +67,11 @@ fn stub_iot_audit() {
         context: HashMap::from([("TARGET_URL".into(), target_url)]),
     };
     let out = run_plugin(&wasm, &input);
-    assert!(!out.matched);
+    assert!(out.matched);
 }
 
 #[test]
-fn stub_mobile_audit() {
+fn audit_mobile_audit() {
     let wasm = build_wasm("valayam-plugin-mobile-audit");
     let target_url = start_dummy_server();
     let input = WasmInput {
@@ -68,11 +79,11 @@ fn stub_mobile_audit() {
         context: HashMap::from([("TARGET_URL".into(), target_url)]),
     };
     let out = run_plugin(&wasm, &input);
-    assert!(!out.matched);
+    assert!(out.matched);
 }
 
 #[test]
-fn stub_oauth_audit() {
+fn audit_oauth_audit() {
     let wasm = build_wasm("valayam-plugin-oauth-audit");
     let target_url = start_dummy_server();
     let input = WasmInput {
@@ -80,5 +91,5 @@ fn stub_oauth_audit() {
         context: HashMap::from([("TARGET_URL".into(), target_url)]),
     };
     let out = run_plugin(&wasm, &input);
-    assert!(!out.matched);
+    assert!(out.matched);
 }

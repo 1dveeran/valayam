@@ -133,7 +133,7 @@ pub struct StealthHttpClient {
     #[allow(dead_code)]
     proxy_rotator: Option<Arc<ProxyRotator>>,
     /// User-Agent rotator for browser impersonation
-    user_agent_rotator: Option<Arc<crate::stealth::user_agent::UserAgentRotator>>,
+    user_agent_rotator: Option<Arc<valayam_common::user_agent::UserAgentRotator>>,
     /// JA3/JA4 spoofer for TLS fingerprint evasion
     #[allow(dead_code)]
     ja3_ja4_spoofer: Option<Ja3Ja4Spoofer>,
@@ -211,7 +211,7 @@ impl StealthHttpClient {
 
         // Add user-agent rotation if enabled
         let user_agent_rotator = if use_user_agent_rotation {
-            Some(Arc::new(crate::stealth::user_agent::UserAgentRotator::new()?))
+            Some(Arc::new(valayam_common::user_agent::UserAgentRotator::new().map_err(|e| valayam_models::error::ScannerError::NetworkError(tokio::io::Error::new(tokio::io::ErrorKind::Other, e)))?))
         } else {
             None
         };
@@ -300,7 +300,7 @@ impl StealthHttpClient {
                     }
                     // Apply user-agent rotation
                     if let Some(ref rotator) = self.user_agent_rotator {
-                        let ua = rotator.next().await;
+                        let ua = rotator.next_ua();
                         proxied_req = proxied_req.header(reqwest::header::USER_AGENT, ua);
                     }
                     response_result = Some(send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await);
@@ -332,7 +332,7 @@ impl StealthHttpClient {
 
                 // Apply user-agent rotation if configured
                 if let Some(ref rotator) = self.user_agent_rotator {
-                    let user_agent = rotator.next().await;
+                    let user_agent = rotator.next_ua();
                     request_builder = request_builder.header(reqwest::header::USER_AGENT, user_agent);
                 }
 

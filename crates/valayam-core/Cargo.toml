@@ -69,6 +69,7 @@ dashmap = "6.2.1"
 rcgen = "0.12"
 hyper = { version = "0.14", features = ["full"] }
 time = "0.3.54"
+valayam-common = { version = "0.1.0", path = "../valayam-common" }
 [features]
 sarif = []
 

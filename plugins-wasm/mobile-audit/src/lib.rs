@@ -11,28 +11,38 @@ impl WasmScanner for WasmScannerImpl {
         let target_url = input.context.get("TARGET_URL").map(|s| s.as_str()).unwrap_or("");
         
         let mut all_findings = Vec::new();
-        
-        // Dummy audit logic
         let mut metadata = HashMap::new();
         metadata.insert("template_id".to_string(), template_id.clone());
         
-        let w_url = format!("{}?audit=1", target_url);
-        let mut req = HttpRequest::new(&w_url);
-        req.method = Some("GET".to_string());
-        
-        if let Ok(res) = extism_pdk::http::request::<()>(&req, None) {
-            if res.status_code() == 200 {
-                all_findings.push(Finding {
-                    template_id,
-                    template_name: format!("{} (Audit Match)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown")),
-                    severity: "Info".to_string(),
-                    target: target_url.to_string(),
-                    matched_at: target_url.to_string(),
-                    description: Some("Audit completed successfully via Wasm.".to_string()),
-                    solution: None,
-                    extracted_data: None,
-                    metadata,
-                });
+        let base_url = target_url.trim_end_matches('/');
+        let checks = vec![
+            ("/.well-known/apple-app-site-association", "iOS Universal Links"),
+            ("/.well-known/assetlinks.json", "Android App Links"),
+        ];
+
+        for (path, platform) in checks {
+            let w_url = format!("{}{}", base_url, path);
+            let mut req = HttpRequest::new(&w_url);
+            req.method = Some("GET".to_string());
+            
+            if let Ok(res) = extism_pdk::http::request::<()>(&req, None) {
+                if res.status_code() == 200 {
+                    let body = String::from_utf8_lossy(&res.body());
+                    // Very simple naive check for wildcard paths in JSON strings
+                    if body.contains("\"*\"") || body.contains("\"/*\"") || body.contains("\"/.+\"") {
+                        all_findings.push(Finding {
+                            template_id: template_id.clone(),
+                            template_name: format!("{} (Permissive Deep Linking)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("Mobile Audit")),
+                            severity: "Medium".to_string(),
+                            target: target_url.to_string(),
+                            matched_at: w_url.clone(),
+                            description: Some(format!("The {} configuration contains an overly permissive wildcard path.", platform)),
+                            solution: Some("Restrict the deep linking configuration to explicitly defined paths to prevent deep link hijacking.".to_string()),
+                            extracted_data: Some(format!("Found wildcard path in {}", platform)),
+                            metadata: metadata.clone(),
+                        });
+                    }
+                }
             }
         }
 

@@ -326,10 +326,7 @@ impl PluginRegistry {
         rate_limiter: Option<&crate::rate_limiter::RateLimiter>,
         cancellation: CancellationToken,
     ) -> Vec<PluginMetrics> {
-        let target_host = url::Url::parse(target)
-            .ok()
-            .and_then(|u| u.host_str().map(str::to_string))
-            .unwrap_or_else(|| target.to_string());
+        let target_host = valayam_common::url::extract_host(target);
 
         let initial_vars = build_initial_context(target, &target_host);
         let variables = Arc::new(RwLock::new(VariableScope::new(initial_vars)));
@@ -694,8 +691,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockMatchPlugin {
-        fn name(&self) -> &str { self.name }
+        fn name(&self) -> &str { &self.name }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
             for i in 0..3 {
                 let _ = ctx.finding_tx.send(FindingOwned { scan_id: uuid::Uuid::default(), 
@@ -720,8 +720,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockNoMatchPlugin {
-        fn name(&self) -> &str { self.name }
+        fn name(&self) -> &str { &self.name }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             PluginOutcome::NoMatch
         }
@@ -735,8 +738,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockRetryableFailPlugin {
-        fn name(&self) -> &str { self.name }
+        fn name(&self) -> &str { &self.name }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             let count = self.call_count.fetch_add(1, Ordering::SeqCst);
             if count + 1 >= self.succeed_on {
@@ -756,6 +762,9 @@ mod tests {
     impl ScanPlugin for MockPanicPlugin {
         fn name(&self) -> &str { "panic_plugin" }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             panic!("mock panic from plugin");
         }
@@ -767,6 +776,9 @@ mod tests {
     impl ScanPlugin for MockTimeoutPlugin {
         fn name(&self) -> &str { "timeout_plugin" }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         fn timeout(&self) -> Duration { Duration::from_millis(10) }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             tokio::time::sleep(Duration::from_secs(100)).await;
@@ -783,6 +795,9 @@ mod tests {
     impl ScanPlugin for MockDependentPlugin {
         fn name(&self) -> &str { self.name }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         fn depends_on(&self) -> &[&'static str] { self.deps }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             PluginOutcome::Matched { count: 1 }
@@ -799,6 +814,9 @@ mod tests {
     impl ScanPlugin for MockOrderPlugin {
         fn name(&self) -> &str { self.name }
         fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
+        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
         fn depends_on(&self) -> &[&'static str] { self.deps }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             self.order.lock().push(self.name);
@@ -1185,9 +1203,10 @@ mod tests {
             fn name(&self) -> &str { "old_plugin" }
             fn api_version(&self) -> &str { "0.5" } // below minimum
             fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-            async fn execute(&self, _: &ScanContext) -> PluginOutcome {
-                PluginOutcome::NoMatch
-            }
+            fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+            async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+            async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+            async fn execute(&self, _: &ScanContext) -> PluginOutcome { PluginOutcome::NoMatch }
         }
 
         let registry = PluginRegistry::new();

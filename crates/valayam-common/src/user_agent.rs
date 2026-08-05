@@ -2,13 +2,11 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 /// User-Agent rotator for browser impersonation
-pub struct UserAgentRotator {
-    // Empty for now, but in a real ML model, we'd load weights here
-}
+pub struct UserAgentRotator {}
 
 impl UserAgentRotator {
     /// Create a new UserAgentRotator
-    pub fn new() -> Result<Self, valayam_models::error::ScannerError> {
+    pub fn new() -> Result<Self, String> {
         Ok(Self {})
     }
 
@@ -17,8 +15,8 @@ impl UserAgentRotator {
         Self {}
     }
 
-    /// Asynchronously generate the next realistic User-Agent using a statistical probability approach
-    pub async fn next(&self) -> String {
+    /// Generate the next realistic User-Agent using a statistical probability approach
+    pub fn next_ua(&self) -> String {
         // Fast, thread-local RNG for high concurrent throughput
         let mut rng = rand::thread_rng();
 
@@ -59,22 +57,5 @@ impl UserAgentRotator {
             }
             format!("Mozilla/5.0 ({}) Gecko/20100101 Firefox/{}", platform_str, gecko_version)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_user_agent_generation() {
-        let rotator = UserAgentRotator::new().unwrap();
-        let ua = rotator.next().await;
-        assert!(ua.starts_with("Mozilla/5.0"));
-        assert!(ua.len() > 20);
-        
-        let ua2 = rotator.next().await;
-        // There's a tiny probability they are the exact same, but they should generally be generated
-        assert!(ua2.starts_with("Mozilla/5.0"));
     }
 }

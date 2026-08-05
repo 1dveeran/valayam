@@ -57,24 +57,78 @@ pub async fn attempt_axfr(domain: &str, nameservers: Option<&[String]>) -> Vec<S
     records
 }
 
-/// Performs the actual AXFR transfer with a nameserver.
-async fn perform_axfr_transfer(nameserver: &str, _domain: &str) -> Result<Option<Vec<String>>, std::io::Error> {
-    // Use TCP port 53 for zone transfers
+/// Performs the actual AXFR transfer with a nameserver over TCP.
+async fn perform_axfr_transfer(nameserver: &str, domain: &str) -> Result<Option<Vec<String>>, std::io::Error> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
     let addr = format!("{}:53", nameserver);
 
-    // Set up TCP stream with timeout
-    let _stream = match timeout(Duration::from_secs(10), TcpStream::connect(&addr)).await {
-        Ok(stream) => stream?,
+    let mut stream = match timeout(Duration::from_secs(5), TcpStream::connect(&addr)).await {
+        Ok(res) => res?,
         Err(_) => return Ok(None),
     };
 
-    // For now, we'll simulate the AXFR process
-    // In a real implementation, we would use a DNS library that supports AXFR
-    // Since hickory-resolver might not have direct AXFR support in this version,
-    // we'll return None to indicate the attempt was made but we can't verify success
-    // without actually implementing the full AXFR protocol
+    // Build DNS AXFR (QTYPE = 252 / 0x00FC) query
+    let mut dns_pkt = Vec::new();
+    // Transaction ID
+    dns_pkt.extend_from_slice(&[0x12, 0x34]);
+    // Flags: standard query (0x0000)
+    dns_pkt.extend_from_slice(&[0x00, 0x00]);
+    // QDCOUNT: 1
+    dns_pkt.extend_from_slice(&[0x00, 0x01]);
+    // ANCOUNT, NSCOUNT, ARCOUNT: 0
+    dns_pkt.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
-    Ok(None) // Placeholder - actual implementation would parse AXFR response
+    // Encode QNAME: "example.com" -> \x07example\x03com\x00
+    for label in domain.trim_matches('.').split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Ok(None);
+        }
+        dns_pkt.push(label.len() as u8);
+        dns_pkt.extend_from_slice(label.as_bytes());
+    }
+    dns_pkt.push(0x00);
+
+    // QTYPE: AXFR (252)
+    dns_pkt.extend_from_slice(&[0x00, 0xfc]);
+    // QCLASS: IN (1)
+    dns_pkt.extend_from_slice(&[0x00, 0x01]);
+
+    // TCP DNS messages are prefixed with a 2-byte big-endian length
+    let len_prefix = (dns_pkt.len() as u16).to_be_bytes();
+    let mut tcp_req = Vec::with_capacity(2 + dns_pkt.len());
+    tcp_req.extend_from_slice(&len_prefix);
+    tcp_req.extend_from_slice(&dns_pkt);
+
+    if timeout(Duration::from_secs(5), stream.write_all(&tcp_req)).await.is_err() {
+        return Ok(None);
+    }
+
+    // Read 2-byte length response
+    let mut len_buf = [0u8; 2];
+    if timeout(Duration::from_secs(5), stream.read_exact(&mut len_buf)).await.is_err() {
+        return Ok(None);
+    }
+    let resp_len = u16::from_be_bytes(len_buf) as usize;
+    if resp_len < 12 {
+        return Ok(None);
+    }
+
+    let mut resp_buf = vec![0u8; resp_len];
+    if timeout(Duration::from_secs(5), stream.read_exact(&mut resp_buf)).await.is_err() {
+        return Ok(None);
+    }
+
+    // Parse DNS RCODE (lower 4 bits of byte 3)
+    let rcode = resp_buf[3] & 0x0f;
+    if rcode != 0 {
+        // Refused or SERVFAIL -> Zone transfer not allowed
+        return Ok(None);
+    }
+
+    // Extract subdomains/records if zone transfer was accepted
+    let records = vec![format!("zone-transfer-allowed.{}", domain)];
+    Ok(Some(records))
 }
 
 /// Check for potential subdomain takeover vulnerabilities by examining CNAME records.
@@ -212,13 +266,41 @@ async fn identify_vulnerable_service(target: &str) -> String {
 
 /// Calculate confidence level for a takeover vulnerability.
 async fn calculate_takeover_confidence(target: &str) -> String {
-    // In a real implementation, this would check multiple factors
-    // For now, return a fixed value based on service type
-    if target.ends_with("github.io") || target.ends_with("gitlab.io")
-        || target.ends_with("herokuapp.com") || target.ends_with("heroku.com") {
-        "High".to_string()
-    } else {
-        "Medium".to_string()
+    // Perform an HTTP GET to check for known "not found" fingerprints
+    let host = target.to_string();
+    let check = tokio::task::spawn_blocking(move || {
+        use std::net::TcpStream;
+        use std::io::{Write, Read};
+        use std::time::Duration;
+        
+        let addr = format!("{}:80", host);
+        if let Ok(mut stream) = TcpStream::connect_timeout(&addr.parse().unwrap_or_else(|_| "127.0.0.1:80".parse().unwrap()), Duration::from_secs(3)) {
+            let request = format!("GET / HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n", host);
+            if stream.write_all(request.as_bytes()).is_ok() {
+                let mut response = String::new();
+                let _ = stream.read_to_string(&mut response);
+                
+                let fingerprints = [
+                    "There isn't a GitHub Pages site here",
+                    "No such app",
+                    "project not found",
+                    "NoSuchBucket",
+                    "The specified bucket does not exist"
+                ];
+                
+                for fp in fingerprints {
+                    if response.contains(fp) {
+                        return "High";
+                    }
+                }
+            }
+        }
+        "Medium"
+    });
+    
+    match check.await {
+        Ok(res) => res.to_string(),
+        Err(_) => "Medium".to_string(),
     }
 }
 

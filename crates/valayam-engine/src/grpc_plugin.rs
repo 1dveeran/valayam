@@ -41,6 +41,10 @@ impl ScanPlugin for GrpcPluginBridge {
         &self.name
     }
 
+    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
     fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
         // Attempt to read capabilities synchronously
         let Ok(protocols) = self.supported_protocols.try_read() else { return true; };

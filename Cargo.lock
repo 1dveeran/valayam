@@ -6406,12 +6406,15 @@ dependencies = [
  "futures",
  "rustls 0.23.41",
  "rustls-pemfile",
+ "serde_json",
+ "serde_yaml",
  "tokio",
  "tokio-rustls 0.26.4",
  "tokio-util",
  "tonic 0.11.0",
  "tracing",
  "valayam-engine",
+ "valayam-models",
  "valayam-proto",
  "x509-parser",
 ]
@@ -6473,6 +6476,11 @@ dependencies = [
 [[package]]
 name = "valayam-common"
 version = "0.1.0"
+dependencies = [
+ "rand 0.8.7",
+ "regex",
+ "url",
+]
 
 [[package]]
 name = "valayam-config"
@@ -6545,6 +6553,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "valayam-common",
  "valayam-core-net",
  "valayam-crawler",
  "valayam-crypto",
@@ -6671,6 +6680,7 @@ dependencies = [
  "tracing-opentelemetry",
  "url",
  "uuid",
+ "valayam-common",
  "valayam-crypto",
  "valayam-models",
  "valayam-network",
@@ -6734,6 +6744,7 @@ dependencies = [
  "tokio-rustls 0.26.4",
  "tracing",
  "url",
+ "valayam-common",
  "valayam-models",
  "x509-parser",
 ]
@@ -6769,6 +6780,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.11.0",
+ "url",
  "valayam-proto",
 ]
 
@@ -6777,6 +6789,7 @@ name = "valayam-plugin-sdk"
 version = "0.1.0"
 dependencies = [
  "extism-pdk",
+ "lazy_static",
  "serde",
  "serde_json",
 ]

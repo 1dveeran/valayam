@@ -107,7 +107,6 @@ impl Reporter for JsonReporter {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
 
     fn sample_finding() -> FindingOwned {
         FindingOwned {

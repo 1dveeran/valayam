@@ -69,6 +69,10 @@ impl ScanPlugin for WasmPluginBridge {
         &self.name
     }
 
+    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
     /// A WASM plugin is only applicable to a template if the template explicitly declares
     /// the plugin's corresponding section. This prevents plugins like `cors-audit` from
     /// running against every template and producing false/duplicate findings.
@@ -205,5 +209,9 @@ impl ScanPlugin for WasmPluginBridge {
                 PluginOutcome::NoMatch
             }
         }
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
     }
 }

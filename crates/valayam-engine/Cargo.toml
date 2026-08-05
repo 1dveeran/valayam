@@ -40,5 +40,6 @@ serde_yaml = { workspace = true }
 hickory-resolver.workspace = true
 prometheus = { workspace = true }
 parking_lot = { workspace = true }
+valayam-common = { version = "0.1.0", path = "../valayam-common" }
 
 [build-dependencies]

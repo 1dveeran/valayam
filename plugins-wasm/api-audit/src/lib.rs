@@ -213,25 +213,40 @@ fn scan_web3_audit(input: &WasmInput, target_url: &str) -> Vec<Finding> {
 // ---------------------------------------------------------------------------
 fn scan_deep_analysis(input: &WasmInput, target_url: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
-    // In the Wasm plugin, we mock LLM mutations and deeper analysis
     let analysis_type = input.template.get("analysis_type").and_then(|v| v.as_str()).unwrap_or("");
     
     if analysis_type == "llm_mutation" {
-        let mut metadata = HashMap::new();
-        let template_id = input.template.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let template_name = input.template.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        metadata.insert("template_id".to_string(), template_id.clone());
-        findings.push(Finding {
-            template_id,
-            template_name,
-            severity: "High".to_string(),
-            target: target_url.to_string(),
-            matched_at: target_url.to_string(),
-            description: Some("Deep Analysis (LLM Mutation): Found injection path in parameter.".to_string()),
-            solution: None,
-            extracted_data: None,
-            metadata,
-        });
+        // Execute active HTTP mutation probe against target_url
+        let mut test_url = target_url.to_string();
+        if !test_url.contains("?") {
+            test_url.push_str("?q=%27%22%3E%3Cscript%3Ealert(1)%3C/script%3E");
+        } else {
+            test_url.push_str("&q=%27%22%3E%3Cscript%3Ealert(1)%3C/script%3E");
+        }
+
+        let req = extism_pdk::http::HttpRequest::new(&test_url)
+            .with_method("GET");
+
+        if let Ok(res) = extism_pdk::http::request::<Vec<u8>>(&req, None) {
+            let body_str = String::from_utf8_lossy(res.body());
+            if body_str.contains("<script>alert(1)</script>") {
+                let mut metadata = HashMap::new();
+                let template_id = input.template.get("id").and_then(|v| v.as_str()).unwrap_or("api-llm-mutation").to_string();
+                let template_name = input.template.get("name").and_then(|v| v.as_str()).unwrap_or("API Deep Mutation Analysis").to_string();
+                metadata.insert("template_id".to_string(), template_id.clone());
+                findings.push(Finding {
+                    template_id,
+                    template_name,
+                    severity: "High".to_string(),
+                    target: target_url.to_string(),
+                    matched_at: test_url,
+                    description: Some("Deep Analysis (LLM Mutation): Unsanitized payload reflection detected in mutated parameter.".to_string()),
+                    solution: Some("Encode all reflected parameter values before rendering in HTML output.".to_string()),
+                    extracted_data: Some("<script>alert(1)</script>".to_string()),
+                    metadata,
+                });
+            }
+        }
     }
 
     findings

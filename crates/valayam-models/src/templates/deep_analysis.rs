@@ -155,7 +155,6 @@ pub struct DeepAnalysisTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_deep_analysis_template_deser() {

@@ -248,16 +248,17 @@ fn extract_mysql_version(banner: &str) -> Option<String> {
 }
 
 /// Extract PostgreSQL version
-fn extract_postgres_version(_banner: &str) -> Option<String> {
-    // PostgreSQL doesn't typically send a banner on connect
-    // This would be after SSL handshake or startup packet
-    None
+fn extract_postgres_version(banner: &str) -> Option<String> {
+    // Look for PostgreSQL semantic versions in the banner string
+    let re = regex::Regex::new(r"(?i)PostgreSQL\s+(\d+\.\d+(\.\d+)?)").ok()?;
+    re.captures(banner).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
 }
 
 /// Extract MSSQL version
-fn extract_mssql_version(_banner: &str) -> Option<String> {
-    // Similar to MySQL, this would be in the pre-login packet
-    None
+fn extract_mssql_version(banner: &str) -> Option<String> {
+    // Look for Microsoft SQL Server versions
+    let re = regex::Regex::new(r"(?i)Microsoft SQL Server.*?(\d+\.\d+\.\d+(\.\d+)?)").ok()?;
+    re.captures(banner).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
 }
 
 /// Extract Redis version
@@ -268,9 +269,10 @@ fn extract_redis_version(banner: &str) -> Option<String> {
 }
 
 /// Extract MongoDB version
-fn extract_mongo_version(_banner: &str) -> Option<String> {
-    // MongoDB doesn't typically send a banner on connect
-    None
+fn extract_mongo_version(banner: &str) -> Option<String> {
+    // Look for MongoDB versions
+    let re = regex::Regex::new(r"(?i)MongoDB.*?(\d+\.\d+\.\d+(\.\d+)?)").ok()?;
+    re.captures(banner).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
 }
 
 /// Generic version extractor for unknown services

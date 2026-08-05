@@ -2,31 +2,18 @@ use crate::features::extractors::engine::extract_from_response;
 use crate::network::http::StealthHttpClient;
 use regex::bytes::Regex;
 use std::collections::HashMap;
-use std::sync::LazyLock;
+
 use valayam_engine::variables::resolve_variables;
 use valayam_models::finding::FindingOwned;
 use valayam_models::templates::helpers::evaluate_helpers;
 use valayam_models::templates::http_scan::HttpRequestTemplate;
 use valayam_models::TemplateMetadata;
 
-// ── Built-in Sensitive Patterns ─────────────────────────────────────────
-static SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    vec![
-        Regex::new(r"root:x:[0-9]+:[0-9]+:").expect("static regex: passwd pattern"),
-        Regex::new(r"(?i)DB_PASSWORD=").expect("static regex: db password"),
-        Regex::new(r#"\"args\":\s*\{"#).expect("static regex: json args"),
-        Regex::new(r"(?i)AKIA[0-9A-Z]{16}").expect("static regex: aws access key"), // AWS Access Key
-        Regex::new(r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*").expect("static regex: jwt token"), // JWT Token
-        Regex::new(r#"(?i)api[_-]?key[\s=:"']+[A-Za-z0-9_=-]+"#).expect("static regex: api key"), // Generic API Key
-        Regex::new(r"(?i)BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY").expect("static regex: private key"), // Private Keys
-    ]
-});
-
 fn evaluate_stream(body_bytes: &[u8], customized_patterns: &[String]) -> bool {
-    for re in SENSITIVE_PATTERNS.iter() {
-        if re.is_match(body_bytes) {
-            return true;
-        }
+    let body_str = String::from_utf8_lossy(body_bytes);
+    let secrets = valayam_common::secrets::detect_secrets(&body_str);
+    if !secrets.is_empty() {
+        return true;
     }
     for pattern in customized_patterns {
         let Ok(re) = Regex::new(pattern) else {

@@ -176,16 +176,18 @@ async fn probe_udp_service(_socket: &UdpSocket, port: u16) -> Option<Vec<u8>> {
             pkt[0] = 0x23;
             Some(pkt)
         }
-        // TFTP - Read Request (RRQ) for a dummy file
+        // TFTP - Read Request (RRQ)
         69 => {
+            // Build dynamic RRQ for a common probe file to elicit an error or data response
+            let filename = "valayam_probe.txt";
+            let mode = "octet";
             let mut pkt = Vec::new();
-            // Opcode: 1 (Read Request)
             pkt.push(0x00);
-            pkt.push(0x01);
-            // Filename: "test"
-            pkt.extend_from_slice(b"test\x00");
-            // Mode: "octet"
-            pkt.extend_from_slice(b"octet\x00");
+            pkt.push(0x01); // Opcode 1: RRQ
+            pkt.extend_from_slice(filename.as_bytes());
+            pkt.push(0x00);
+            pkt.extend_from_slice(mode.as_bytes());
+            pkt.push(0x00);
             Some(pkt)
         }
         // SSDP (UPnP) - M-SEARCH
@@ -291,7 +293,6 @@ fn parse_ntp_response(response: &[u8]) -> service_info::ServiceInfo {
     info
 }
 
-/// Extract TFTP information from response
 fn parse_tftp_response(response: &[u8]) -> service_info::ServiceInfo {
     let mut info = service_info::ServiceInfo::default();
     info.is_tftp = true;
@@ -299,9 +300,27 @@ fn parse_tftp_response(response: &[u8]) -> service_info::ServiceInfo {
 
     if response.len() >= 4 {
         let opcode = u16::from_be_bytes([response[0], response[1]]);
-        // TFTP Server usually responds with Error (5) for dummy file, or Data (3)
-        if opcode == 5 || opcode == 3 {
-            info.version = Some("TFTP Server".to_string());
+        match opcode {
+            3 => {
+                // Opcode 3: DATA
+                let block = u16::from_be_bytes([response[2], response[3]]);
+                info.version = Some(format!("TFTP Server (Data Block {})", block));
+            }
+            5 => {
+                // Opcode 5: ERROR
+                let err_code = u16::from_be_bytes([response[2], response[3]]);
+                // Extract error message
+                let err_msg = if response.len() > 4 {
+                    let msg_bytes = &response[4..response.len().saturating_sub(1)];
+                    String::from_utf8_lossy(msg_bytes).to_string()
+                } else {
+                    "Unknown Error".to_string()
+                };
+                info.version = Some(format!("TFTP Server (Error {}: {})", err_code, err_msg));
+            }
+            _ => {
+                info.version = Some(format!("TFTP Server (Opcode {})", opcode));
+            }
         }
     }
     info
@@ -508,6 +527,6 @@ mod tests {
         let info = parse_tftp_response(&response);
         assert!(info.is_tftp);
         assert_eq!(info.service_name.as_deref(), Some("TFTP"));
-        assert_eq!(info.version.as_deref(), Some("TFTP Server"));
+        assert_eq!(info.version.as_deref(), Some("TFTP Server (Error 1: err)"));
     }
 }

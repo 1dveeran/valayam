@@ -11,28 +11,60 @@ impl WasmScanner for WasmScannerImpl {
         let target_url = input.context.get("TARGET_URL").map(|s| s.as_str()).unwrap_or("");
         
         let mut all_findings = Vec::new();
-        
-        // Dummy audit logic
         let mut metadata = HashMap::new();
         metadata.insert("template_id".to_string(), template_id.clone());
         
-        let w_url = format!("{}?audit=1", target_url);
-        let mut req = HttpRequest::new(&w_url);
-        req.method = Some("GET".to_string());
-        
-        if let Ok(res) = extism_pdk::http::request::<()>(&req, None) {
-            if res.status_code() == 200 {
-                all_findings.push(Finding {
-                    template_id,
-                    template_name: format!("{} (Audit Match)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown")),
-                    severity: "Info".to_string(),
-                    target: target_url.to_string(),
-                    matched_at: target_url.to_string(),
-                    description: Some("Audit completed successfully via Wasm.".to_string()),
-                    solution: None,
-                    extracted_data: None,
-                    metadata,
-                });
+        let base_url = target_url.trim_end_matches('/');
+        let checks = vec![
+            "/.well-known/openid-configuration",
+            "/.well-known/oauth-authorization-server",
+        ];
+
+        for path in checks {
+            let w_url = format!("{}{}", base_url, path);
+            let mut req = HttpRequest::new(&w_url);
+            req.method = Some("GET".to_string());
+            
+            if let Ok(res) = extism_pdk::http::request::<()>(&req, None) {
+                if res.status_code() == 200 {
+                    let body = String::from_utf8_lossy(&res.body());
+                    
+                    // Check for HTTP usage in issuer or endpoints
+                    if body.contains("\"http://") {
+                        all_findings.push(Finding {
+                            template_id: template_id.clone(),
+                            template_name: format!("{} (Insecure OAuth Transport)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("OAuth Audit")),
+                            severity: "High".to_string(),
+                            target: target_url.to_string(),
+                            matched_at: w_url.clone(),
+                            description: Some("The OAuth/OpenID configuration exposes non-HTTPS endpoints. This allows interception of authorization codes and tokens.".to_string()),
+                            solution: Some("Ensure all OAuth endpoints use HTTPS exclusively.".to_string()),
+                            extracted_data: Some("Found http:// endpoint in configuration".to_string()),
+                            metadata: metadata.clone(),
+                        });
+                    }
+                    
+                    // Check for Implicit Grant flow (response_types_supported containing "token")
+                    // A simple string contains is an MVP for parsing JSON
+                    if body.contains("\"token\"") && body.contains("response_types_supported") {
+                        all_findings.push(Finding {
+                            template_id: template_id.clone(),
+                            template_name: format!("{} (Implicit Grant Enabled)", input.template.get("name").and_then(|v| v.as_str()).unwrap_or("OAuth Audit")),
+                            severity: "Medium".to_string(),
+                            target: target_url.to_string(),
+                            matched_at: w_url.clone(),
+                            description: Some("The OAuth server supports the deprecated Implicit Grant flow ('token' response type).".to_string()),
+                            solution: Some("Disable Implicit Grant and use Authorization Code flow with PKCE instead.".to_string()),
+                            extracted_data: Some("response_types_supported contains 'token'".to_string()),
+                            metadata: metadata.clone(),
+                        });
+                    }
+                    
+                    // Break after finding the first valid well-known config to avoid duplicates
+                    if body.contains("\"issuer\"") {
+                        break;
+                    }
+                }
             }
         }
 

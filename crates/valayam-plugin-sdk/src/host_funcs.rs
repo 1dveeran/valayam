@@ -57,8 +57,17 @@ fn kv_get_fallback(key: &str) -> Option<String> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn kv_get_fallback(_key: &str) -> Option<String> {
-    None
+lazy_static::lazy_static! {
+    static ref KV_STORE: std::sync::Mutex<std::collections::HashMap<String, String>> = std::sync::Mutex::new(std::collections::HashMap::new());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn kv_get_fallback(key: &str) -> Option<String> {
+    if let Ok(store) = KV_STORE.lock() {
+        store.get(key).cloned()
+    } else {
+        None
+    }
 }
 
 pub fn get_state(key: &str) -> Option<String> {
@@ -76,8 +85,13 @@ fn kv_set_fallback(key: &str, value: &str) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn kv_set_fallback(_key: &str, _value: &str) -> bool {
-    false
+fn kv_set_fallback(key: &str, value: &str) -> bool {
+    if let Ok(mut store) = KV_STORE.lock() {
+        store.insert(key.to_string(), value.to_string());
+        true
+    } else {
+        false
+    }
 }
 
 pub fn set_state(key: &str, value: &str) -> bool {
@@ -101,9 +115,10 @@ mod tests {
     }
 
     #[test]
-    fn test_set_state_returns_false_in_stub() {
+    fn test_set_state_returns_true_in_stub() {
         let result = set_state("key", "value");
-        assert!(!result, "host stub should return false");
+        assert!(result, "host stub should return true after setting");
+        assert_eq!(get_state("key"), Some("value".to_string()));
     }
 
     #[test]

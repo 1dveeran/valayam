@@ -28,9 +28,38 @@ impl ScanPlugin for HttpScanPlugin {
         template.has_section("http-request")
     }
 
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
         let mut vars = ctx.snapshot_variables().await;
         let template = ctx.template.clone();
+
+        // Inject OOB variables if applicable
+        if template.oob_interaction {
+            let oob_id = valayam_oob::server::OobServer::generate_correlation_id();
+            let oob_url = format!("{}.oob.valayam.local", oob_id);
+            
+            // Set for subsequent plugins (like OobPlugin)
+            let mut ctx_vars = ctx.variables.write().await;
+            ctx_vars.set_global("oob_correlation_id", &oob_id);
+            ctx_vars.set_global("oob_url", &oob_url);
+            drop(ctx_vars);
+            
+            // Set for the current HTTP executor
+            vars.insert("oob_correlation_id".to_string(), oob_id);
+            vars.insert("oob_url".to_string(), oob_url);
+        }
+
         let results = crate::features::http_scan::executor::execute(
             &self.client,
             &ctx.target,
@@ -42,13 +71,29 @@ impl ScanPlugin for HttpScanPlugin {
         .await;
 
         if !results.is_empty() {
-            // [STUB] Synergistic Execution: Hand-off to Wasm Plugin for Deep Analysis and it should be given as a option so that all the results are not shared with wasm plugin for deep analysis as the wasm plugin must support the deep analysis
             if !template.deep_analysis.is_empty() {
-                tracing::info!(
-                    "Synergistic Execution (Stub): Passing {} finding(s) to Wasm Plugin for Deep Analysis ({} rules)",
-                    results.len(),
-                    template.deep_analysis.len()
-                );
+                // Inject HTTP results so WASM plugins can access them
+                let results_json = serde_json::to_string(&results).unwrap_or_default();
+                ctx.variables.write().await.set_global("http_results", &results_json);
+
+                for da_template in &template.deep_analysis {
+                    let wasm_name = da_template.target.clone();
+                    let path = std::path::PathBuf::from(format!("plugins-wasm/bin/{}.wasm", wasm_name));
+                    if path.exists() {
+                        let plugin = valayam_engine::wasm_plugin::WasmPluginBridge::new(
+                            wasm_name.clone(),
+                            path,
+                            valayam_engine::wasm_plugin::PluginConfig::default(),
+                        );
+                        
+                        tracing::info!("Handing off {} findings to WASM Plugin: {}", results.len(), wasm_name);
+                        
+                        let outcome = plugin.execute(ctx).await;
+                        tracing::debug!("WASM Deep Analysis ({}) outcome: {:?}", wasm_name, outcome);
+                    } else {
+                        tracing::warn!("WASM plugin {} not found at {:?}", wasm_name, path);
+                    }
+                }
             }
 
             for res in results {
@@ -81,6 +126,18 @@ impl ScanPlugin for SchemaDriftPlugin {
         template.has_section("schema-drift")
     }
 
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
         if let Some(res) = schema_drift::executor::execute(
             &ctx.target,
@@ -106,6 +163,18 @@ impl ScanPlugin for DnsAuditPlugin {
     }
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
         template.has_section("dns")
+    }
+
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
     }
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
         let vars = ctx.snapshot_variables().await;
@@ -137,6 +206,18 @@ impl ScanPlugin for PortScanPlugin {
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
         template.has_section("port-scan")
     }
+
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
         if let Some(finding) = valayam_core_net::features::port_scan::executor::execute(
             &ctx.target,
@@ -162,12 +243,44 @@ impl ScanPlugin for ThreatIntelPlugin {
     fn name(&self) -> &str {
         "threat_intel"
     }
-    fn is_applicable(&self, _template: &VulnerabilityTemplate) -> bool {
-        // Run threat intel on targets if the template has indicators (for now, run if domain matches)
-        false // Requires more complex integration with active findings
+    fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
+        template.id == "threat-intel" || template.has_section("threat-intel")
     }
-    async fn execute(&self, _ctx: &ScanContext) -> PluginOutcome {
-        PluginOutcome::NoMatch
+
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+    async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
+        let host = valayam_common::url::extract_host(&ctx.target);
+            
+        let is_malicious = self.matcher.is_malicious_domain(&host) || self.matcher.is_malicious_ip(&host);
+        
+        if is_malicious {
+            let finding = valayam_models::finding::FindingOwned {
+                scan_id: ctx.scan_id,
+                template_id: ctx.template.id.clone(),
+                template_name: ctx.template.info.name.clone(),
+                severity: valayam_models::finding::Severity::High,
+                target: ctx.target.clone(),
+                matched_at: host.clone(),
+                description: Some("The target is communicating with or hosted on a known malicious infrastructure.".to_string()),
+                solution: Some("Block traffic to this indicator and investigate internal systems communicating with it.".to_string()),
+                extracted_data: Some(format!("Target host '{}' matched known threat intel indicators.", host)),
+                metadata: std::collections::HashMap::new(),
+            };
+            let _ = ctx.finding_tx.send(finding).await;
+            PluginOutcome::Matched { count: 1 }
+        } else {
+            PluginOutcome::NoMatch
+        }
     }
 }
 
@@ -182,9 +295,48 @@ impl ScanPlugin for OobPlugin {
     fn is_applicable(&self, template: &VulnerabilityTemplate) -> bool {
         template.oob_interaction
     }
-    async fn execute(&self, _ctx: &ScanContext) -> PluginOutcome {
-        // In a real scan, OOB polling happens continuously or after requests.
-        // We defer full execution logic to the orchestrator for OOB correlation.
+
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        let _ = self.server.start().await; // Non-fatal if ports are occupied in testing
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
+        let vars = ctx.snapshot_variables().await;
+        let correlation_id = match vars.get("oob_correlation_id") {
+            Some(id) => id.clone(),
+            None => return PluginOutcome::NoMatch,
+        };
+
+        // Sleep to allow asynchronous network callbacks (DNS/HTTP) to arrive
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        if let Some(hits) = self.server.check_hits(&correlation_id).await {
+            if !hits.is_empty() {
+                let finding = valayam_models::finding::FindingOwned {
+                    scan_id: ctx.scan_id,
+                    template_id: ctx.template.id.clone(),
+                    template_name: ctx.template.info.name.clone(),
+                    severity: valayam_models::finding::Severity::Critical,
+                    target: ctx.target.clone(),
+                    matched_at: "Out-of-Band Callback".to_string(),
+                    description: Some("The target triggered an out-of-band network interaction (DNS/HTTP) to our server, indicating a potential injection vulnerability (e.g., SSRF, RCE, or blind SQLi).".to_string()),
+                    solution: Some("Validate and sanitize all inputs to prevent unintended network requests.".to_string()),
+                    extracted_data: Some(format!("Received {} OOB interactions. First raw payload: {}", hits.len(), hits[0].raw_request)),
+                    metadata: std::collections::HashMap::new(),
+                };
+                let _ = ctx.finding_tx.send(finding).await;
+                return PluginOutcome::Matched { count: 1 };
+            }
+        }
+        
         PluginOutcome::NoMatch
     }
 }
@@ -195,10 +347,44 @@ impl ScanPlugin for ShellsPlugin {
     fn name(&self) -> &str {
         "shells"
     }
-    fn is_applicable(&self, _template: &VulnerabilityTemplate) -> bool {
-        false // Usually triggered manually or by specific exploits
+    fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
+        template.has_section("shells") || template.id == "shells"
     }
-    async fn execute(&self, _ctx: &ScanContext) -> PluginOutcome {
+
+    fn validate_config(&self, _template: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
+    async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
+        let host = valayam_common::url::extract_host(&ctx.target);
+        
+        let ports = [4444, 31337];
+        for port in ports {
+            let addr = format!("{}:{}", host, port);
+            if let Ok(Ok(_stream)) = tokio::time::timeout(std::time::Duration::from_secs(2), tokio::net::TcpStream::connect(&addr)).await {
+                let finding = valayam_models::finding::FindingOwned {
+                    scan_id: ctx.scan_id,
+                    template_id: ctx.template.id.clone(),
+                    template_name: ctx.template.info.name.clone(),
+                    severity: valayam_models::finding::Severity::Critical,
+                    target: ctx.target.clone(),
+                    matched_at: addr.clone(),
+                    description: Some(format!("Discovered an open port ({}) commonly used by reverse shells and malware.", port)),
+                    solution: Some("Investigate the host for compromise immediately and block the port.".to_string()),
+                    extracted_data: Some(format!("Successfully established TCP connection to {}", addr)),
+                    metadata: std::collections::HashMap::new(),
+                };
+                let _ = ctx.finding_tx.send(finding).await;
+                return PluginOutcome::Matched { count: 1 };
+            }
+        }
         PluginOutcome::NoMatch
     }
 }

@@ -3,7 +3,7 @@
 use super::schema::VulnerabilityTemplate;
 use crate::features::http_scan;
 use crate::network::http::StealthHttpClient;
-use url::Url;
+
 use valayam_engine::rate_limiter::RateLimiter;
 use valayam_engine::variables::build_initial_context;
 use valayam_models::finding::FindingOwned;
@@ -31,10 +31,7 @@ pub async fn execute_template_inner(
     rate_limiter: Option<&RateLimiter>,
 ) -> Option<FindingOwned> {
     // Derive the bare hostname once for slices that need it
-    let target_host = Url::parse(target_url)
-        .ok()
-        .and_then(|u| u.host_str().map(str::to_string))
-        .unwrap_or_else(|| target_url.to_string());
+    let target_host = valayam_common::url::extract_host(target_url);
 
     // Build the shared variable context seeded with built-in variables
     let mut variables = build_initial_context(target_url, &target_host);

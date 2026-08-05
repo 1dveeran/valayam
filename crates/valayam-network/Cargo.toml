@@ -22,3 +22,4 @@ tokio-rustls = { workspace = true }
 x509-parser = { workspace = true }
 prometheus = { workspace = true }
 lazy_static = "1"
+valayam-common = { version = "0.1.0", path = "../valayam-common" }
