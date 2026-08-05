@@ -7,22 +7,32 @@ use url::Url;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OciManifest {
     #[serde(rename = "schemaVersion")]
+    /// Documentation for this item.
     pub schema_version: u32,
     #[serde(rename = "mediaType", skip_serializing_if = "Option::is_none")]
+    /// Documentation for this item.
     pub media_type: Option<String>,
+    /// Documentation for this item.
     pub config: OciDescriptor,
+    /// Documentation for this item.
     pub layers: Vec<OciDescriptor>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Documentation for this item.
     pub annotations: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+/// Documentation for this item.
 pub struct OciDescriptor {
     #[serde(rename = "mediaType")]
+    /// Documentation for this item.
     pub media_type: String,
+    /// Documentation for this item.
     pub digest: String,
+    /// Documentation for this item.
     pub size: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Documentation for this item.
     pub annotations: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -34,6 +44,7 @@ pub struct OciClient {
 }
 
 impl OciClient {
+    /// Documentation for this item.
     pub fn new(registry: &str, username: Option<&str>, password: Option<&str>) -> Result<Self> {
         let mut headers = header::HeaderMap::new();
         // Set standard OCI accepts

@@ -10,6 +10,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tonic::transport::Channel;
 
+/// Documentation for this item.
 pub struct GrpcPluginBridge {
     name: String,
     exe_path: PathBuf,
@@ -22,6 +23,7 @@ pub struct GrpcPluginBridge {
 }
 
 impl GrpcPluginBridge {
+    /// Documentation for this item.
     pub fn new(name: impl Into<String>, exe_path: PathBuf) -> Self {
         Self {
             name: name.into(),

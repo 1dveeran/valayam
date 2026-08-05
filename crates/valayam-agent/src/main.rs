@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
     println!("{} Poll interval: {}s", "[+]".green().bold(), cfg.poll_interval_secs);
 
     let mut backoff_secs = MIN_BACKOFF_SECS;
-    let mut current_job_id: Option<String> = None;
+    let current_job_id: Option<String> = None;
 
     loop {
         tokio::select! {
@@ -71,12 +71,10 @@ async fn main() -> anyhow::Result<()> {
                         println!("{} Received job: {} → {}",
                             "[→]".cyan().bold(), job.job_id, job.target_url);
                         backoff_secs = MIN_BACKOFF_SECS;
-                        current_job_id = Some(job.job_id.clone());
 
                         if let Err(e) = execute_and_report(&client, &cfg, job, start_time, cancel.clone()).await {
                             tracing::error!("Job execution failed: {}", e);
                         }
-                        current_job_id = None;
                     }
                     Ok(None) => {
                         sleep(Duration::from_secs(backoff_secs)).await;

@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::scan_state::ScanState;
 
 #[derive(Clone)]
+/// Documentation for this item.
 pub struct ScanExecutor {
     finding_tx: mpsc::Sender<FindingOwned>,
     registry: Arc<PluginRegistry>,
@@ -22,6 +23,7 @@ pub struct ScanExecutor {
 }
 
 impl ScanExecutor {
+    /// Documentation for this item.
     pub fn new(
         finding_tx: mpsc::Sender<FindingOwned>,
         registry: Arc<PluginRegistry>,
@@ -31,6 +33,7 @@ impl ScanExecutor {
         Self { finding_tx, registry, rate_limiter, cancellation, state_rx: None }
     }
 
+    /// Documentation for this item.
     pub fn with_state_rx(mut self, rx: tokio::sync::watch::Receiver<ScanState>) -> Self {
         self.state_rx = Some(rx);
         self

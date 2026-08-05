@@ -1,85 +1,140 @@
-# Valayam Plugin Development Guide
+# Valayam Plugin Authoring Guide
 
-Valayam supports plugins in any language using **WASM** or **gRPC** backends. To simplify plugin distribution, Valayam uses the **Valayam Plugin Archive (`.vpa`)** standard.
+Valayam features a polyglot plugin architecture supporting **WebAssembly (WASM)** modules via Extism and out-of-process **gRPC** daemons.
 
-## 1. The Valayam Plugin Archive (`.vpa`)
+---
 
-A `.vpa` file is a ZIP archive containing a `plugin.yaml` manifest and your plugin code/executables. The engine automatically extracts and runs the entrypoint specified in the manifest.
+## 1. Plugin Types & Runtimes
 
-### `plugin.yaml` Specification
+| Type | Runtime | Best Suited For | Sandboxing |
+|---|---|---|---|
+| **WASM Plugins** | Extism / Wasmtime | Lightweight, high-speed security checks (CORS, CSP, header inspection, API fuzzing) | Strong memory & capability isolation |
+| **gRPC Plugins** | Out-of-process process / container | Heavyweight analysis, native OS bindings, or non-WASM languages (Go, Python, Java) | Process-level isolation |
 
-```yaml
-name: "valayam-advanced-sqli"
-version: "1.0.0"
-author: "SecurityTeam"
-runtime: "grpc" # Can be "grpc" or "wasm"
-language: "python"
-entrypoint: "run.bat" # The executable/script to run
-capabilities:
-  - "network_scan"
-```
+---
 
-## 2. Developing with the Python SDK
+## 2. Developing WASM Plugins (Rust)
 
-We provide the `valayam-sdk` for Python to eliminate boilerplate. 
+WASM plugins are compiled with `wasm32-unknown-unknown` and interact with the host through `valayam-plugin-sdk`.
 
-### Installation
+### Step 1: Scaffold Plugin
 ```bash
-pip install valayam-sdk
+cargo run --bin valayam-cli -- plugin init my-audit-plugin --lang rust --runtime wasm
 ```
 
-### Quickstart
+### Step 2: Configure `Cargo.toml`
+```toml
+[package]
+name = "my-audit-plugin"
+version = "0.1.0"
+edition = "2021"
 
-The easiest way to start is by using the CLI to scaffold a new plugin:
+[lib]
+crate-type = ["cdylib"]
 
+[dependencies]
+valayam-plugin-sdk = { path = "../../crates/valayam-plugin-sdk" }
+extism-pdk = "1.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+```
+
+### Step 3: Implement Scan Logic (`src/lib.rs`)
+```rust
+use extism_pdk::*;
+use valayam_plugin_sdk::prelude::*;
+
+#[plugin_fn]
+pub fn scan(input: Json<WasmInput>) -> FnResult<Json<WasmOutput>> {
+    let target = input.context.get("TARGET_URL").cloned().unwrap_or_default();
+
+    // Call host-provided HTTP function
+    let response = host_http_get(&format!("{}/api/v1/health", target))?;
+    
+    let mut findings = Vec::new();
+    let mut matched = false;
+
+    if response.status_code == 200 && response.body.contains("internal_debug_key") {
+        matched = true;
+        findings.push(Finding {
+            id: "debug-endpoint-exposed".to_string(),
+            name: "Internal Debug Key Exposed in API".to_string(),
+            severity: Severity::High,
+            description: format!("Endpoint {} leaked internal debug key.", target),
+            matched_at: target,
+        });
+    }
+
+    Ok(Json(WasmOutput { matched, findings }))
+}
+```
+
+### Step 4: Host Functions
+The following host functions are exposed to the WASM sandbox:
+- `host_http_get(url)`: Perform HTTP GET through host's stealth connection pool.
+- `host_dns_resolve(domain)`: Query host DNS resolver.
+- `host_kv_get(key)` / `host_kv_set(key, value)`: Access scan-scoped key-value state.
+
+---
+
+## 3. Developing gRPC Plugins (Python / Go)
+
+### Scaffold gRPC Plugin
 ```bash
-valayam plugin init my-custom-scanner --lang python --runtime grpc
+cargo run --bin valayam-cli -- plugin init my-python-scanner --lang python --runtime grpc
 ```
 
-This will automatically create a new directory with `plugin.py`, `plugin.yaml`, `requirements.txt`, and `run.bat` (all the boilerplate you need!).
-
-### Example: Custom Scanner Plugin
-
-If you chose python, your `plugin.py` will look like this:
-
+### Python Implementation (`plugin.py`)
 ```python
-from valayam_sdk import PluginServer, ScannerPlugin, Finding
+from valayam_sdk import PluginServer, ScannerPlugin, Finding, Severity
 
-class AdvancedSQLiScanner(ScannerPlugin):
+class MySecurityScanner(ScannerPlugin):
     def execute(self, template, context):
-        target = context.get("target_url", "")
-        # Run custom security checks here...
-        
+        target = context.get("TARGET_URL", "")
+        # Custom scanning logic
         return [
-            Finding(title="SQL Injection Detected", severity="CRITICAL", description=f"Found SQLi in {target}")
+            Finding(
+                id="custom-auth-bypass",
+                title="Authentication Bypass Identified",
+                severity=Severity.CRITICAL,
+                description=f"Identified authentication bypass at {target}",
+                matched_at=target
+            )
         ]
 
 if __name__ == "__main__":
-    PluginServer(AdvancedSQLiScanner()).serve()
+    PluginServer(MySecurityScanner()).serve(port=50052)
 ```
 
-### Packaging your Python Plugin
+---
 
-For Python, you usually want to bundle a virtual environment or rely on the host's Python. A robust way is to use a `.bat` or `.sh` wrapper as your `entrypoint`.
+## 4. Packaging, Signing & Distribution (`.vpa`)
 
-Create `run.bat`:
-```bat
-@echo off
-python plugin.py
-```
+Valayam uses **Valayam Plugin Archives (`.vpa`)** — signed zip packages containing:
+1. `plugin.yaml` manifest.
+2. Compiled `.wasm` binary or executable entrypoint.
+3. `signature.sig` (cryptographic ED25519 signature).
 
-Create `plugin.yaml`:
+### Manifest Format (`plugin.yaml`)
 ```yaml
-name: "advanced-sqli-python"
+name: "my-audit-plugin"
 version: "1.0.0"
-runtime: "grpc"
-language: "python"
-entrypoint: "run.bat"
+runtime: "wasm" # or "grpc"
+entrypoint: "my_audit_plugin.wasm"
+author: "Security Team"
+capabilities:
+  - "http_scan"
+  - "dns_audit"
 ```
 
-Then package it using the Valayam CLI:
+### Package and Sign
 ```bash
-valayam plugin package ./my-plugin-dir --output advanced-sqli-python.vpa
-```
+# 1. Generate keypair
+valayam plugin generate-key -o release_key
 
-Drop `advanced-sqli-python.vpa` into your `plugins/` directory, and Valayam will automatically load it!
+# 2. Package into .vpa with signature
+valayam plugin package ./my-audit-plugin -o my-audit.vpa --sign release_key.pem
+
+# 3. Push to OCI registry
+valayam plugin push ./my-audit.vpa --repo registry.valayam.io/plugins/my-audit --tag 1.0.0
+```

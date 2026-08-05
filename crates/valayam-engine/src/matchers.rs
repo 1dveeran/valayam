@@ -36,7 +36,9 @@ pub struct StatusMatcher {
 }
 
 impl StatusMatcher {
+    /// Documentation for this item.
     pub fn new(statuses: Vec<u16>) -> Self { Self { allowed: statuses } }
+    /// Documentation for this item.
     pub fn matches_status(&self, status: u16) -> bool { self.allowed.contains(&status) }
 }
 
@@ -51,6 +53,7 @@ pub struct WordMatcher {
 }
 
 impl WordMatcher {
+    /// Documentation for this item.
     pub fn new(words: Vec<String>) -> Self {
         Self { words: words.into_iter().map(|w| w.into_bytes()).collect() }
     }
@@ -64,14 +67,17 @@ impl Matcher for WordMatcher {
 }
 
 /// AND/OR combinator.
+/// Documentation for this item.
 pub enum MatchCondition { And, Or }
 
+/// Documentation for this item.
 pub struct CompositeMatcher {
     matchers: Vec<Box<dyn Matcher>>,
     condition: MatchCondition,
 }
 
 impl CompositeMatcher {
+    /// Documentation for this item.
     pub fn new(matchers: Vec<Box<dyn Matcher>>, condition: MatchCondition) -> Self {
         Self { matchers, condition }
     }

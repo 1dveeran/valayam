@@ -211,7 +211,7 @@ impl StealthHttpClient {
 
         // Add user-agent rotation if enabled
         let user_agent_rotator = if use_user_agent_rotation {
-            Some(Arc::new(valayam_common::user_agent::UserAgentRotator::new().map_err(|e| valayam_models::error::ScannerError::NetworkError(tokio::io::Error::new(tokio::io::ErrorKind::Other, e)))?))
+            Some(Arc::new(valayam_common::user_agent::UserAgentRotator::new().map_err(|e| valayam_models::error::ScannerError::NetworkError(tokio::io::Error::other(e)))?))
         } else {
             None
         };

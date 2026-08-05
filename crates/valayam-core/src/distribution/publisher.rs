@@ -5,11 +5,13 @@ use std::collections::HashMap;
 use serde_json::json;
 use std::path::Path;
 
+/// Documentation for this item.
 pub struct PluginPublisher {
     client: OciClient,
 }
 
 impl PluginPublisher {
+    /// Documentation for this item.
     pub fn new(registry: &str, username: Option<&str>, password: Option<&str>) -> Result<Self> {
         let client = OciClient::new(registry, username, password)?;
         Ok(Self { client })

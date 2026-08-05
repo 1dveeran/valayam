@@ -38,6 +38,7 @@ pub struct WasmPluginBridge {
 }
 
 impl WasmPluginBridge {
+    /// Documentation for this item.
     pub fn new(name: impl Into<String>, wasm_path: PathBuf, config: PluginConfig) -> Self {
         Self {
             name: name.into(),

@@ -4,22 +4,36 @@ use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Documentation for this item.
 pub struct PluginManifest {
+    /// Documentation for this item.
     pub name: String,
+    /// Documentation for this item.
     pub version: String,
+    /// Documentation for this item.
     pub author: Option<String>,
+    /// Documentation for this item.
     pub runtime: String, // "grpc", "wasm"
+    /// Documentation for this item.
     pub language: String,
+    /// Documentation for this item.
     pub entrypoint: String,
+    /// Documentation for this item.
     pub capabilities: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
+/// Documentation for this item.
 pub enum VpaError {
+    /// Documentation for this item.
     IoError(std::io::Error),
+    /// Documentation for this item.
     ZipError(zip::result::ZipError),
+    /// Documentation for this item.
     YamlError(serde_yaml::Error),
+    /// Documentation for this item.
     InvalidManifest(String),
+    /// Documentation for this item.
     ExtractionError(String),
 }
 

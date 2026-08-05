@@ -4,4 +4,5 @@
 //! and response matching for vulnerability detection.
 //! Integrates variables.rs for dynamic `{{placeholder}}` substitutions.
 
+/// Documentation for this item.
 pub mod executor;

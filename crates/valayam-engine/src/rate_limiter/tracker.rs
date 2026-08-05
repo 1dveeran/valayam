@@ -1,9 +1,13 @@
 use std::time::Instant;
 
 #[derive(Debug)]
+/// Documentation for this item.
 pub struct BackoffTracker {
+    /// Documentation for this item.
     pub consecutive_429s: usize,
+    /// Documentation for this item.
     pub last_429: Option<Instant>,
+    /// Documentation for this item.
     pub backoff_multiplier: u32,
 }
 

@@ -1,11 +1,7 @@
 pub mod telemetry;
 pub mod grpc;
 
-use std::time::Duration;
-use tokio::time::sleep;
-use crate::telemetry::TelemetryEvent;
 use crate::grpc::valayam::scanner_client::ScannerClient;
-use crate::grpc::valayam::TelemetryEvent as GrpcTelemetryEvent;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio::sync::mpsc;
 
@@ -22,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = ScannerClient::connect("http://127.0.0.1:50051").await?;
     println!("[*] Connected to Valayam Engine gRPC server.");
 
-    let (tx, rx) = mpsc::channel(100);
+    let (_tx, rx) = mpsc::channel(100);
 
     // Spawn a task to send the stream
     tokio::spawn(async move {

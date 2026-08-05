@@ -8,11 +8,13 @@ use valayam_models::templates::schema::{TemplateMetadata, VulnerabilityTemplate}
 
 // ─── Native Plugins ─────────────────────────────────────────────────────────────
 
+/// Documentation for this item.
 pub struct HttpScanPlugin {
     client: Arc<StealthHttpClient>,
 }
 
 impl HttpScanPlugin {
+    /// Documentation for this item.
     pub fn new(client: Arc<StealthHttpClient>) -> Self {
         Self { client }
     }
@@ -106,11 +108,13 @@ impl ScanPlugin for HttpScanPlugin {
     }
 }
 
+/// Documentation for this item.
 pub struct SchemaDriftPlugin {
     client: Arc<StealthHttpClient>,
 }
 
 impl SchemaDriftPlugin {
+    /// Documentation for this item.
     pub fn new(client: Arc<StealthHttpClient>) -> Self {
         Self { client }
     }
@@ -155,6 +159,7 @@ impl ScanPlugin for SchemaDriftPlugin {
     }
 }
 
+/// Documentation for this item.
 pub struct DnsAuditPlugin;
 #[async_trait]
 impl ScanPlugin for DnsAuditPlugin {
@@ -197,6 +202,7 @@ impl ScanPlugin for DnsAuditPlugin {
     }
 }
 
+/// Documentation for this item.
 pub struct PortScanPlugin;
 #[async_trait]
 impl ScanPlugin for PortScanPlugin {
@@ -235,7 +241,9 @@ impl ScanPlugin for PortScanPlugin {
     }
 }
 
+/// Documentation for this item.
 pub struct ThreatIntelPlugin {
+    /// Documentation for this item.
     pub matcher: Arc<crate::features::threat_intel::ioc_matcher::IocMatcher>,
 }
 #[async_trait]
@@ -284,7 +292,9 @@ impl ScanPlugin for ThreatIntelPlugin {
     }
 }
 
+/// Documentation for this item.
 pub struct OobPlugin {
+    /// Documentation for this item.
     pub server: Arc<valayam_oob::server::OobServer>,
 }
 #[async_trait]
@@ -341,6 +351,7 @@ impl ScanPlugin for OobPlugin {
     }
 }
 
+/// Documentation for this item.
 pub struct ShellsPlugin;
 #[async_trait]
 impl ScanPlugin for ShellsPlugin {

@@ -2,7 +2,9 @@
 //!
 //! Automatically added module documentation.
 
+/// Documentation for this item.
 pub mod config;
+/// Documentation for this item.
 pub mod tracker;
 
 pub use config::RateLimiterConfig;

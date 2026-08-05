@@ -1,197 +1,102 @@
-# Valayam Architecture
+# Valayam Architecture Specification
 
-This document describes the **vertical slice architecture** of `valayam`. Each feature is a self-contained module owning its parser, executor, and matcher logic. Shared infrastructure lives in thin foundation layers (`core/`, `network/`).
+Valayam is an enterprise-grade vulnerability scanning and continuous security assessment platform written in Rust. It utilizes a modular, decoupled workspace architecture combining high-performance native components, sandboxed WebAssembly (WASM) plugins, out-of-process gRPC workers, and kernel-level eBPF telemetry hooks.
 
-## Directory Structure
+---
+
+## 1. Workspace Directory & Crate Layout
 
 ```
 valayam/
-├── Cargo.toml                       # Virtual workspace manifest
-├── crates/
-│   ├── valayam-core/                # Shared library (Foundation + Features)
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── core/                # error.rs, result.rs, variables.rs, rate_limiter.rs, registry.rs
-│   │       │   └── reporters/       # composite.rs, json.rs, console.rs
-│   │       ├── network/             # http.rs, tcp.rs, udp.rs, dns.rs, tls.rs
-│   │       ├── stealth/             # proxy.rs, user_agent.rs
-│   │       ├── template/            # schema.rs, loader.rs
-│   │       └── features/            # Vertical slices: http_scan, network_scan, scripting, etc.
-│   │
-│   ├── valayam-cli/                 # Command-line interface
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       └── main.rs              # CLI parsing (clap), orchestrator invocation, JSON output
-│   │
-│   ├── valayam-worker/              # Distributed worker node (gRPC & TaskBroker queue mode)
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── main.rs
-│   │       └── broker/              # Redis, RabbitMQ, Kafka drivers
-│   │
-│   ├── valayam-plugin-wasm-example/ # Example WASM Plugin for Valayam engine
-│   └── valayam-plugin-grpc-example/ # Example gRPC Plugin for distributed execution
+├── Cargo.toml                         # Virtual workspace configuration
+├── ARCHITECTURE.md                    # Top-level architecture overview
+├── README.md                          # Project documentation
+├── helper.md                          # CLI & operations guide
 │
-├── services/
-│   ├── ai/                          # Python AI Orchestration Layer
-│   │   ├── requirements.txt
-│   │   ├── valayam_client.py        # Python gRPC client & subprocess fallback
-│   │   ├── agent.py                 # Autonomous multi-step recon loop agent
-│   │   └── valayam_pb2.py           # Generated gRPC stubs
-│   └── web-ui/                      # Production Next.js React Application
+├── crates/
+│   ├── valayam-core/                  # Central scanning orchestrator & native plugin definitions
+│   ├── valayam-engine/                # Execution DAG, Extism WASM runtime, rate limiter & matchers
+│   ├── valayam-cli/                   # Command-line interface with interactive progress
+│   ├── valayam-api/                   # Axum REST & Tonic gRPC control plane service
+│   ├── valayam-agent/                 # Continuous auditing daemon
+│   ├── valayam-ebpf-agent/            # Linux eBPF kernel-level event monitoring agent
+│   ├── valayam-network/               # Stealth HTTP client, JA3/JA4 spoofing, proxy manager
+│   ├── valayam-core-net/              # Raw TCP/UDP port scanning and network probing
+│   ├── valayam-common/                # Shared utilities (ports, secrets regex, URL parser, UA rotator)
+│   ├── valayam-models/                # Strictly typed schema definitions (templates, findings, I/O)
+│   ├── valayam-threatintel/           # CISA KEV feeds, IOC matcher, offline vulnerability DB
+│   ├── valayam-oob/                   # Out-of-band correlation and interaction server
+│   ├── valayam-crawler/               # Target endpoint and asset discovery crawler
+│   ├── valayam-schema-drift/          # Live API vs. OpenAPI schema drift analyzer
+│   ├── valayam-reporter/              # Multi-sink reporting engine (JSON, SARIF, PDF, console)
+│   ├── valayam-proxy/                 # MITM proxy for traffic capture and template generation
+│   ├── valayam-crypto/                # ED25519 key generation & plugin signature verification
+│   ├── valayam-plugin-sdk/            # Rust SDK for authoring WASM & gRPC plugins
+│   ├── valayam-config/                # Configuration management and environment loading
+│   ├── valayam-error/                 # Unified error hierarchy
+│   ├── valayam-proto/                 # Protocol Buffers & Tonic gRPC definitions
+│   ├── valayam-telemetry/             # OpenTelemetry metrics and tracing instrumentation
+│   ├── valayam-state/                 # In-memory and persistent scan state store
+│   ├── valayam-payloads/              # Standard security payloads and fuzzing wordlists
+│   └── valayam-tests/                 # End-to-end integration and mock server test suite
+│
+├── plugins-wasm/                      # Standalone WASM security plugins (e.g. cors-audit)
+├── templates_repo/                    # YAML vulnerability templates
+└── docs/                              # Technical guides, ADRs, and plugin specifications
 ```
 
-## Dependency Flow
+---
+
+## 2. Core Architectural Pillars
+
+### 1. Extensible Plugin DAG Execution (`valayam-engine`)
+The scan execution engine schedules plugins using a topological dependency graph:
+- **Topological Sorting**: Resolves plugin execution order and enforces prerequisite outputs.
+- **WASM Isolation**: WASM modules execute inside sandboxed `wasmtime`/`extism` runtimes with enforced memory limits and timeout guards.
+- **Host Functions**: WASM plugins interact with the outside world only through controlled host functions (`dns_resolve`, `kv_get`, `kv_set`, `host_http_get`).
+- **Cryptographic Trust**: Enforces ED25519 signature checks before loading any third-party `.vpa` package or `.wasm` binary.
+
+### 2. Stealth Networking & Evasion (`valayam-network` & `valayam-core-net`)
+Built to operate transparently across restrictive network environments:
+- **JA3 / JA4 Fingerprint Spoofing**: Simulates realistic browser TLS handshakes (Chrome, Firefox, Safari) using custom `rustls` configurations.
+- **Dynamic Proxy Rotation**: Pools and cycles SOCKS5 and HTTP proxies per request.
+- **User-Agent Randomization**: Randomized header generation via `valayam-common::UserAgentRotator`.
+- **Token Bucket Rate Limiting**: Centralized rate limiting via `governor` prevents accidental self-denial-of-service.
+
+### 3. Distributed Operations & Control Plane (`valayam-api` & `valayam-agent`)
+- **API Server**: `valayam-api` exposes REST and gRPC endpoints for initiating scans, pausing/resuming jobs, and collecting findings.
+- **Worker Daemon**: Remote worker nodes execute scans offloaded from CLI or orchestrator.
+- **eBPF Monitoring**: `valayam-ebpf-agent` attaches to Linux kernel tracepoints to observe network connections and socket activities directly.
+
+### 4. Domain Security Modules
+- **`valayam-threatintel`**: Continually synchronizes CISA KEV feeds and matches against live scan targets.
+- **`valayam-oob`**: Runs a lightweight DNS/HTTP server generating correlation IDs to detect blind SSRF, RCE, and out-of-band leaks.
+- **`valayam-schema-drift`**: Validates dynamic API responses against OpenAPI/Swagger schemas to pinpoint undocumented routes and breaking changes.
+- **`valayam-crawler`**: Crawls web targets, parses HTML/JS, extracts form endpoints, and passes targets into the scan pipeline.
+
+---
+
+## 3. Findings & Data Flow
 
 ```mermaid
-graph BT
-    subgraph Core["valayam-core"]
-        subgraph Foundation
-            CoreData["core/<br/>error, result, variables, rate_limiter, registry"]
-            Reporters["core/reporters/<br/>composite, json, console"]
-            Network["network/<br/>http, tcp, udp, dns, tls, stealth"]
-        end
+sequenceDiagram
+    participant User as User / CLI
+    participant Core as valayam-core
+    participant Engine as valayam-engine
+    participant Net as valayam-network
+    participant Plugin as WASM Sandbox
+    participant OOB as valayam-oob
+    participant Reporter as valayam-reporter
 
-        subgraph Slices["features/ — vertical slices"]
-            HTTP["http_scan/"]
-            Extract["extractors/"]
-            Helpers["helpers/"]
-            NetScan["network_scan/"]
-            DNS["dns_audit/"]
-            TLS["tls_audit/"]
-            Script["scripting/"]
-            Nuclei["nuclei_compat/"]
-            Crawler["crawler/"]
-            DeepAnalysis["deep_analysis/"]
-            DependencyAudit["dependency_audit/"]
-        end
-
-        Stealth["stealth/<br/>proxies, UA pool"]
-        Template["template/<br/>schema + loader"]
-    end
-
-    CLI["valayam-cli<br/>(CLI + progress output)"]
-    Worker["valayam-worker<br/>(gRPC Server / Queue Worker)"]
-    AIAgent["services/ai/<br/>(Autonomous AI Agent)"]
-
-    Network --> CoreData
-    Stealth --> Network
-
-    HTTP --> CoreData
-    HTTP --> Network
-    Extract --> CoreData
-    Helpers --> CoreData
-    NetScan --> CoreData
-    NetScan --> Network
-    DNS --> CoreData
-    DNS --> Network
-    TLS --> CoreData
-    TLS --> Network
-    Script --> CoreData
-    Script --> Network
-    Nuclei --> CoreData
-    Nuclei --> Network
-    Crawler --> CoreData
-    Crawler --> Network
-
-    Template --> HTTP
-    Template --> Extract
-    Template --> Helpers
-    Template --> NetScan
-    Template --> DNS
-    Template --> TLS
-    Template --> Script
-    Template --> Nuclei
-    Template --> Crawler
-
-    CLI --> Template
-    CLI --> Stealth
-    CLI --> CoreData
-    CLI --> Worker
-    CLI --> Reporters
-
-    Worker --> Template
-    Worker --> CoreData
-
-    AIAgent -.->|gRPC| Worker
-    AIAgent -.->|Subprocess fallback| CLI
-    
-    WebUI -.->|API| CLI
+    User->>Core: Start Scan (target, templates)
+    Core->>Engine: Resolve Plugin DAG & Dependencies
+    Engine->>Net: Issue HTTP / Port scan probes
+    Net-->>Engine: Target Response
+    Engine->>Plugin: Execute WASM with WasmInput
+    Plugin->>OOB: Trigger Out-Of-Band payload (if applicable)
+    Plugin-->>Engine: Return WasmOutput (Findings)
+    Engine->>OOB: Check Correlation IDs
+    OOB-->>Engine: OOB Hit Confirmed
+    Engine->>Reporter: Emit normalized Findings
+    Reporter->>User: Stream Output (Console, JSON, SARIF, PDF)
 ```
-
-## Design Principles
-
-### 1. Vertical Slice Isolation
-Each feature directory under `features/` is a complete vertical slice containing its own:
-- **Parser** — YAML schema types (serde structs)
-- **Executor** — Scan logic, matcher evaluation
-- **Tests** — Unit and integration tests
-
-Slices **never depend on each other**. They only depend downward on `core/` and `network/`.
-
-### 2. Shared Variable Context
-A `HashMap<String, String>` flows through the entire template execution pipeline. Each slice can:
-- **Read** variables (e.g., `{{auth_token}}` in paths, headers, bodies)
-- **Write** variables (extractors add captured values to the map)
-
-The `core/variables.rs` module handles all `{{placeholder}}` resolution, including both variable substitution and helper function evaluation.
-
-### 3. Template Orchestrator
-The `template/loader.rs` is the **only** place where slices are composed. It executes phases in order:
-
-```
-HTTP Requests → Network Scan → DNS Audit → TLS Audit → Scripts
-```
-
-Each phase receives and can mutate the shared variable context.
-
-### 4. Foundation Layers
-- **`core/`** — Pure data types, utilities, variable resolution, and plugin management via `registry.rs`. No heavy network business logic.
-- **`core/reporters/`** — Multi-sink output abstraction (`CompositeReporter`, `JsonReporter`) routing scan results dynamically.
-- **`network/`** — Protocol-level primitives shared by all slices. Thin wrappers around `reqwest`, `tokio::net`, `hickory-resolver`, `rustls`.
-
-### 5. Stealth Layer
-The `stealth/` module enhances `network/http.rs` transparently:
-- Randomized User-Agent rotation
-- SOCKS5/HTTP proxy cycling
-- JA3/JA4 TLS fingerprint spoofing (Chrome/Safari signatures)
-
-This is injected at the `StealthHttpClient` level, so all slices benefit without any code changes.
-
-## Component Responsibilities
-
-| Component | Responsibility |
-|---|---|
-| `valayam-cli` | CLI argument parsing (clap), progress display, JSON output, crawl options |
-| `valayam-worker`| Daemonized distributed scanning node (gRPC server or Redis/RabbitMQ/Kafka task queue worker) |
-| `services/ai/`| Python AI Agent for autonomous multi-step recon loop scanning |
-| `core/error.rs` | Unified error enum for all slices |
-| `core/result.rs` | `ScanResult` struct serialized to JSON |
-| `core/variables.rs` | `{{var}}` substitution + `{{helper()}}` evaluation |
-| `core/rate_limiter.rs` | Global token-bucket RPS limiter (governor) |
-| `core/registry.rs` | Dynamic PluginRegistry for securely loading WASM and gRPC modules |
-| `core/reporters/` | Pluggable output multiplexer (`CompositeReporter`) |
-| `network/http.rs` | Async HTTP client with stealth features |
-| `network/tcp.rs` | TCP connect scan + banner grabbing |
-| `network/udp.rs` | UDP probe + response capture |
-| `network/dns.rs` | DNS query resolution (A, AAAA, CNAME, TXT, MX) |
-| `network/tls.rs` | TLS handshake + certificate extraction |
-| `features/http_scan/` | HTTP request execution, regex/status matching |
-| `features/extractors/` | Dynamic value extraction: regex and JSON pointer support |
-| `features/helpers/` | DSL functions: base64, md5, sha256, hex, url_encode |
-| `features/network_scan/` | Port scanning with banner regex matching |
-| `features/dns_audit/` | DNS record querying + response matching |
-| `features/tls_audit/` | Certificate expiry, cipher, issuer auditing |
-| `features/scripting/` | Sandboxed Rhai engine with HTTP/TCP/crypto builtins |
-| `features/nuclei_compat/` | Isolated Nuclei template parser + executor |
-| `features/crawler/` | Enterprise crawler supporting HTML, JS/SPA routes, WASM, WebSockets, OpenAPI, and PostgREST |
-| `features/fuzzer/` | Active query parameter mutation and anomaly detection engine |
-| `features/waf_detect/` | Signature-based WAF identification and active trigger probing |
-| `features/cloud_sec/` | Phase 10: Cloud metadata exploitation and container discovery |
-| `features/auth_logic/` | Stateful transaction replay and automated IDOR detection |
-| `features/deep_analysis/` | Local LLM WAF payload mutation, WASM decompilation, Source Map secrets recovery |
-| `features/dependency_audit/` | Offline SQLite (`vuln-db.sqlite`) querying for CVE cross-referencing |
-| `stealth/` | JA3 spoofing, proxy rotation, UA randomization |
-| `template/schema.rs` | Top-level `VulnerabilityTemplate` YAML schema including `compliance` mapping |
-| `template/loader.rs` | Orchestrates slice execution in sequence |

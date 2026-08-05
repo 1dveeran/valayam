@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 pub use valayam_models::finding::{FindingOwned, PluginOutcomeKind, PluginMetrics, PluginHealth};
 pub use valayam_models::template_info::TemplateMetadata;
 pub use valayam_models::ScanResult;
+/// Documentation for this item.
 pub const MINIMUM_API_VERSION: &str = "1.0";
 // ─── VariableScope ──────────────────────────────────────────────────────
 
@@ -20,15 +21,19 @@ pub struct VariableScope {
 }
 
 impl VariableScope {
+    /// Documentation for this item.
     pub fn new(globals: HashMap<String, String>) -> Self {
         Self { global: globals, scoped: HashMap::new() }
     }
+    /// Documentation for this item.
     pub fn set_global(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.global.insert(key.into(), value.into());
     }
+    /// Documentation for this item.
     pub fn set(&mut self, plugin: &str, key: impl Into<String>, value: impl Into<String>) {
         self.scoped.entry(plugin.to_string()).or_default().insert(key.into(), value.into());
     }
+    /// Documentation for this item.
     pub fn get(&self, key: &str) -> Option<&String> {
         if let Some(v) = self.global.get(key) { return Some(v); }
         for scope in self.scoped.values() {
@@ -36,6 +41,7 @@ impl VariableScope {
         }
         None
     }
+    /// Documentation for this item.
     pub fn to_flat_map(&self) -> std::collections::HashMap<String, String> {
         let mut flat = self.global.clone();
         for scope in self.scoped.values() {
@@ -43,6 +49,7 @@ impl VariableScope {
         }
         flat
     }
+    /// Documentation for this item.
     pub fn merge_from(&mut self, other: &VariableScope) {
         self.global.extend(other.global.clone());
         for (plugin, vars) in &other.scoped {
@@ -65,21 +72,30 @@ pub struct ScanContext {
     /// Unique scan session identifier, propagated through the entire MPSC pipeline
     /// for audit trail and provenance tracking.
     pub scan_id: uuid::Uuid,
+    /// Documentation for this item.
     pub target: String,
+    /// Documentation for this item.
     pub target_host: String,
+    /// Documentation for this item.
     pub template: Arc<valayam_models::templates::schema::VulnerabilityTemplate>, // Passed via Arc, no cloning!
+    /// Documentation for this item.
     pub variables: Arc<RwLock<VariableScope>>,
+    /// Documentation for this item.
     pub finding_tx: mpsc::Sender<FindingOwned>,
+    /// Documentation for this item.
     pub cancellation: CancellationToken,
 }
 
 impl ScanContext {
+    /// Documentation for this item.
     pub async fn snapshot_variables(&self) -> std::collections::HashMap<String, String> {
         self.variables.read().await.to_flat_map()
     }
+    /// Documentation for this item.
     pub async fn set_variable(&self, plugin_name: &str, key: &str, value: String) {
         self.variables.write().await.set(plugin_name, key, value);
     }
+    /// Documentation for this item.
     pub async fn emit_finding(&self, mut finding: FindingOwned) -> Result<(), mpsc::error::SendError<FindingOwned>> {
         // Auto-inject description if the plugin omitted it
         if finding.description.is_none() {
@@ -87,6 +103,7 @@ impl ScanContext {
         }
         self.finding_tx.send(finding).await
     }
+    /// Documentation for this item.
     pub fn is_cancelled(&self) -> bool {
         self.cancellation.is_cancelled()
     }
@@ -95,10 +112,15 @@ impl ScanContext {
 // ─── PluginOutcome & Metrics ────────────────────────────────────────────
 
 #[derive(Debug)]
+/// Documentation for this item.
 pub enum PluginOutcome {
+    /// Documentation for this item.
     NoMatch,
+    /// Documentation for this item.
     Matched { count: usize },
+    /// Documentation for this item.
     Skipped { reason: String },
+    /// Documentation for this item.
     Failed { error: valayam_models::error::ScannerError, retryable: bool },
 }
 
@@ -108,26 +130,34 @@ pub enum PluginOutcome {
 /// No `RefUnwindSafe` bound needed here, handled at the call site.
 #[async_trait::async_trait]
 pub trait ScanPlugin: Send + Sync {
+    /// Documentation for this item.
     fn name(&self) -> &str;
+    /// Documentation for this item.
     fn version(&self) -> &str { "0.1.0" }
+    /// Documentation for this item.
     fn api_version(&self) -> &str { "1.0" }
 
+    /// Documentation for this item.
     fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool;
 
     /// Validate the plugin's configuration against a template.
     fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError>;
+    /// Documentation for this item.
     async fn init(&self) -> Result<(), valayam_models::error::ScannerError>;
 
     /// Execute the plugin's scan logic.
     async fn execute(&self, ctx: &ScanContext) -> PluginOutcome;
 
+    /// Documentation for this item.
     async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError>;
 
     /// Perform a health check. Returns `Ok(())` if healthy, or an error describing
     /// what is wrong. Called by `PluginRegistry::health_check_all()`.
     async fn health_check(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
 
+    /// Documentation for this item.
     fn depends_on(&self) -> &[&'static str] { &[] }
+    /// Documentation for this item.
     fn timeout(&self) -> Duration { Duration::from_secs(60) }
 }
 

@@ -1,40 +1,55 @@
-/target
+# ── Rust & Cargo ──────────────────────────────────────────────
+/target/
+**/target/
 **/*.rs.bk
 *.pdb
+*.profraw
+*.profdata
+
+# ── IDEs & Editors ────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+*.bak
+*~
 .DS_Store
-/impl*.md
-/mvp*.md
-/fix*.py
-/fill*.py
-/scan_logs.json
-/results.json
-/improve*.md
-/feature*.md
-.claude/
-.agents/
-.gemini/
-/*.py
-/err*.log
-/err.log
-/*.log
-/*.txt
-/*.sqlite
-/*.db
-/arch*.md
-/*arch*.md
-/ref*.md
-/impl*.md
-/enterprise*.md
-/enterprise_tracker.md
+Thumbs.db
 
-# Graphify outputs
+# ── Environments & Secrets ────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sig
+
+# ── Local Runtime & Scan State ────────────────────────────────
+.valayam_state/
+.valayam-state/
+*.log
+scan_results/
+reports/
+*.sqlite
+*.db
+data/
+results.json*
+
+# ── AI / Agent / Tooling Artifacts ────────────────────────────
+.agents/
+.claude/
+.gemini/
 graphify-out/
 
-# Python
+# ── Python & Node ─────────────────────────────────────────────
 venv/
+.venv/
 __pycache__/
-.env
+*.pyc
+node_modules/
+.next/
+dist/
+build/
 
-**/target/
+# ── Compiled Plugins ──────────────────────────────────────────
+*.vpa

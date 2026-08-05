@@ -56,6 +56,7 @@ impl RetryConfig {
     }
 }
 
+/// Documentation for this item.
 pub struct PluginRegistry {
     plugins: Arc<Mutex<Vec<Arc<dyn ScanPlugin>>>>,
     pub_key: Option<[u8; 32]>,
@@ -64,6 +65,7 @@ pub struct PluginRegistry {
 }
 
 impl PluginRegistry {
+    /// Documentation for this item.
     pub fn new() -> Self {
         Self::with_key(None)
     }
@@ -83,6 +85,7 @@ impl PluginRegistry {
         self.plugin_config = config;
     }
 
+    /// Documentation for this item.
     pub fn set_trusted_key(&mut self, pub_key: [u8; 32]) {
         self.pub_key = Some(pub_key);
     }
@@ -92,6 +95,7 @@ impl PluginRegistry {
         self.plugins.lock().iter().map(|p| p.name().to_string()).collect()
     }
 
+    /// Documentation for this item.
     pub fn set_retry_config(&mut self, config: RetryConfig) {
         self.retry_config = config;
     }
@@ -118,6 +122,7 @@ impl PluginRegistry {
         self.plugins.lock().push(Arc::new(plugin));
     }
 
+    /// Documentation for this item.
     pub fn load_external_plugins(&self, dir_path: &std::path::Path) -> std::io::Result<()> {
         if !dir_path.exists() {
             return Ok(()); // No external plugins directory
@@ -227,6 +232,7 @@ impl PluginRegistry {
     }
 
     #[tracing::instrument(skip(self))]
+    /// Documentation for this item.
     pub async fn init_all(&self) -> Result<(), ScannerError> {
         let plugins = self.plugins.lock().clone();
         for plugin in &plugins {
@@ -303,7 +309,9 @@ impl PluginRegistry {
         results
     }
 
+    /// Documentation for this item.
     pub fn len(&self) -> usize { self.plugins.lock().len() }
+    /// Documentation for this item.
     pub fn is_empty(&self) -> bool { self.plugins.lock().is_empty() }
 
     /// Execute all applicable plugins for a template against a target.

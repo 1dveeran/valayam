@@ -1,78 +1,42 @@
-# Valayam Features & Plugin Ecosystem
+# Valayam Features & Capabilities Overview
 
-Valayam has transitioned from a monolithic architecture with rigid features into a highly extensible, WebAssembly-driven plugin ecosystem. All domain-specific testing logic now runs inside isolated WASM modules powered by `extism`.
+Valayam is a full-featured, enterprise-grade security scanner engine. It combines high-throughput asynchronous network scanning with sandboxed WebAssembly execution and threat intelligence pipelines.
 
-This architecture allows developers to rapidly build, test, and deploy new security tests without touching the `valayam-core` crate.
+---
 
-## Official Plugin Ecosystem (`plugins-wasm/`)
+## 1. Core Scanning Capabilities
 
-The following capabilities are provided as official, standalone WASM plugins compiled from Rust using the `valayam-plugin-sdk`.
+- **HTTP Template Execution**: Native YAML and Nuclei-compatible template parsing with multi-step requests, regex/status/header matchers, and dynamic variable extraction.
+- **Stealth Network Probing**: Raw TCP/UDP port scanning (`valayam-core-net`), banner grabbing, and DNS record auditing (A, AAAA, CNAME, TXT, MX).
+- **Out-of-Band (OOB) Testing**: Built-in DNS and HTTP callback listener (`valayam-oob`) for detecting blind SSRF, RCE, and data exfiltration.
+- **Web Asset Discovery**: Multi-threaded crawler (`valayam-crawler`) parsing HTML, SPA JS routes, form parameters, and sitemaps.
+- **API Schema Drift Detection**: Automated comparison of live HTTP responses against OpenAPI/Swagger schemas (`valayam-schema-drift`) to detect unauthorized parameters or route drift.
+- **Threat Intelligence & KEV**: Direct ingestion of CISA Known Exploited Vulnerabilities feeds (`valayam-threatintel`) with IOC matching.
+- **Multi-Sink Reporting**: Seamless generation of console summaries, JSON streams, SARIF exports for GitHub CodeQL, and PDF audit reports (`valayam-reporter`).
 
-### 1. Web & API Security
-- **`api-audit`**: Automatically discovers and tests REST API endpoints for common misconfigurations and injection vulnerabilities.
-- **`graphql-audit`**: Explores GraphQL endpoints via introspection and mutates queries to test for depth-limiting flaws and unauthorized data access.
-- **`cors-audit`**: Actively probes cross-origin configurations to detect overly permissive `Access-Control-Allow-Origin: *` headers or credential leakage.
-- **`csp-audit`**: Audits `Content-Security-Policy` headers to detect missing `default-src` directives or unsafe inline executions.
-- **`header-scorecard`**: Evaluates targets based on HTTP security headers (e.g., HSTS, X-Frame-Options, Referrer-Policy).
-- **`dom-redirect-audit`**: Parses HTML and JS artifacts to locate sinks where user input directly manipulates `location.href` or `window.open`.
+---
 
-### 2. Cloud & Infrastructure Security
-- **`cloud-audit`**: Probes for metadata endpoint SSRF vulnerabilities (e.g., AWS IMDSv1/v2, GCP, Azure) to extract IAM credentials.
-- **`iac-audit`**: Statically analyzes Terraform, Kubernetes YAML, and Dockerfiles for insecure configurations (e.g., privileged containers, missing network policies).
-- **`dependency-audit`**: Parses package lockfiles to identify vulnerabilities by checking them against an offline `vuln-db.sqlite` artifact.
+## 2. Stealth & Evasion Engine (`valayam-network`)
 
-### 3. Specialty Protocols & Architectures
-- **`iot-audit`**: Connects to unauthenticated MQTT brokers or fuzzes CoAP packets targeting constrained hardware devices.
-- **`mobile-audit`**: Analyzes APK/IPA binaries for hardcoded secrets, insecure TLS, and deep-link manipulations.
-- **`browser-audit`**: Manages browser-based testing for dynamic SPA applications.
+- **JA3 / JA4 Fingerprint Spoofing**: Simulates realistic browser TLS ClientHellos (Chrome, Firefox, Safari) to bypass WAFs and bot blockers.
+- **Dynamic Proxy Rotation**: Supports pools of HTTP, HTTPS, and SOCKS5 proxies with automated failover and health checks.
+- **User-Agent Pool Rotation**: Randomizes User-Agent strings using `valayam-common::UserAgentRotator`.
+- **Token Bucket Rate Limiting**: Global and per-target request throttling to respect target SLAs.
 
-### 4. Advanced Threat Intel & Recon
-- **`recon-audit`**: Automatically maps subdomains and network surfaces.
-- **`reputation-audit`**: Compares discovered endpoints against active IP blocklists and threat intelligence feeds.
-- **`threat-audit`**: Ingests automated IOCs (Indicators of Compromise) to check against live hosts.
-- **`pii-leak-audit`**: Scans application responses for unmasked credit cards, SSNs, or other sensitive information markers.
+---
 
-### 5. Authentication & Identity
-- **`oauth-audit`**: Actively tests OAuth authorization code flows for CSRF, open redirects, and token leaks, and evaluates JWT signatures.
+## 3. Sandboxed Plugin Architecture
 
-## Creating Custom Plugins
+- **Extism WASM Runtime**: Run untrusted or third-party audit checks in isolated WebAssembly sandboxes with strict memory and CPU timeout limits.
+- **Host Function Bridge**: Secure host function APIs for DNS resolution, scoped key-value persistence, and rate-limited HTTP dispatch.
+- **gRPC Plugin Support**: Out-of-process distributed plugins communicating via Tonic gRPC.
+- **Cryptographic Security**: ED25519 signature verification on all `.vpa` plugin packages.
+- **OCI Container Distribution**: Push and pull packaged plugins from any OCI-compliant registry.
 
-Using the `valayam-plugin-sdk`, extending the Valayam engine is as simple as implementing a single `WasmScanner` trait in Rust and compiling to the `wasm32-unknown-unknown` target.
+---
 
-### Example SDK Implementation
-```rust
-use extism_pdk::*;
-use valayam_plugin_sdk::{export_plugin, Finding, WasmInput, WasmOutput, WasmScanner};
+## 4. Distributed & Agent Architecture
 
-pub struct MyCustomAudit;
-
-impl WasmScanner for MyCustomAudit {
-    fn execute_scan(input: WasmInput) -> Result<WasmOutput, Error> {
-        let mut findings = Vec::new();
-        
-        // Custom logic here!
-        if input.context.contains_key("TARGET_URL") {
-            findings.push(Finding {
-                id: "custom-finding".into(),
-                name: "Custom Match Found".into(),
-                severity: "Info".into(),
-                extracted_values: None,
-            });
-        }
-        
-        Ok(WasmOutput {
-            matched: !findings.is_empty(),
-            findings,
-        })
-    }
-}
-
-// Wire up the WebAssembly FFI
-export_plugin!(MyCustomAudit);
-```
-
-### The SDK Architecture
-Plugins are provided with access to high-performance, asynchronous networking capabilities executed securely on the host via `extism` host functions:
-- `extism_pdk::http::request` - Safely proxy HTTP calls through the core engine's connection pool and rate limiters.
-- `valayam-plugin-sdk::host_funcs::dns_resolve` - Utilize the host's DNS resolution stack.
-- `valayam-plugin-sdk::host_funcs::kv_get/kv_set` - Persist state locally for multi-step exploits.
+- **Control Plane API (`valayam-api`)**: Axum REST and Tonic gRPC server for job dispatching, state management, and real-time finding feeds.
+- **Host & Continuous Agent (`valayam-agent`)**: Polling daemon for scheduled and continuous environment security auditing.
+- **Kernel-Level eBPF Monitoring (`valayam-ebpf-agent`)**: Linux eBPF tracepoint agent for monitoring raw socket connections and anomalous outbound traffic.
