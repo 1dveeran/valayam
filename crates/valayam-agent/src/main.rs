@@ -11,9 +11,38 @@ const MIN_BACKOFF_SECS: u64 = 1;
 /// Maximum backoff between polls
 const MAX_BACKOFF_SECS: u64 = 60;
 
-/// Start the agent loop: poll → execute → report → heartbeat (repeat).
-#[allow(unused_assignments)]
-pub async fn start_agent(cfg: AgentConfig, cancel: CancellationToken) -> anyhow::Result<()> {
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(name = "valayam-agent", about = "Valayam worker agent")]
+pub struct Args {
+    #[arg(long, env = "VALAYAM_PLATFORM_URL", default_value = "http://localhost:3000")]
+    pub platform_url: String,
+    #[arg(long, env = "VALAYAM_WORKER_ID")]
+    pub worker_id: Option<String>,
+    #[arg(long, env = "VALAYAM_POLL_INTERVAL_SECS", default_value_t = 10)]
+    pub poll_interval_secs: u64,
+    #[arg(long, env = "VALAYAM_HEARTBEAT_INTERVAL_SECS", default_value_t = 30)]
+    pub heartbeat_interval_secs: u64,
+    #[arg(long, env = "VALAYAM_CAPABILITIES", default_value = "http,ssl,network")]
+    pub capabilities: String,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+    let args = Args::parse();
+    
+    let cfg = AgentConfig {
+        platform_url: args.platform_url,
+        worker_id: args.worker_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        poll_interval_secs: args.poll_interval_secs,
+        heartbeat_interval_secs: args.heartbeat_interval_secs,
+        capabilities: args.capabilities.split(',').map(|s| s.trim().to_string()).collect(),
+        job_secret: std::env::var("PLATFORM_JOB_SECRET").unwrap_or_default(),
+    };
+    
+    let cancel = CancellationToken::new();
     let start_time = Instant::now();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
@@ -131,7 +160,7 @@ async fn execute_and_report(
         })
         .collect();
 
-    let scan_args = crate::cli::Args {
+    let scan_args = valayam_cli::cli::Args {
         target: job.target_url.clone(),
         template: Some(tmp_dir.to_string_lossy().to_string()),
         nuclei_template: None,
@@ -162,29 +191,30 @@ async fn execute_and_report(
         command: None,
     };
 
-    let http_client = crate::setup::init_http_client(&None, false, false)
+    let http_client = valayam_cli::setup::init_http_client(&None, false, false)
         .map_err(|e| anyhow::anyhow!("Failed to init HTTP client: {}", e))?;
     let rate_limiter = scan_args.rate_limit.map(|rps| {
         Arc::new(valayam_engine::rate_limiter::RateLimiter::new_simple(rps))
     });
-    let template_files = crate::setup::discover_templates(&tmp_dir.to_string_lossy());
+    let template_files = valayam_cli::setup::discover_templates(&tmp_dir.to_string_lossy());
 
     if template_files.is_empty() {
         anyhow::bail!("No valid templates found for job {}", job.job_id);
     }
 
-    if let Err(e) = crate::orchestrator::run_scan_with_job_id(
+    if let Err(e) = valayam_cli::orchestrator::run_scan_with_job_id(
         scan_args,
         template_files,
-        false,
-        vec![job.target_url.clone()],
+        false, // is_nuclei
+        vec![job.target_url.clone()], // targets
         http_client,
         rate_limiter,
-        None,
-        None,
+        None, // grpc_client
+        None, // state_rx
         cancel,
         Some(job.job_id.clone()),
     ).await {
+
         tracing::error!("Scan execution error: {}", e);
     }
 

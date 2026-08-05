@@ -130,7 +130,6 @@ pub enum Commands {
         #[command(subcommand)]
         action: PluginCommands,
     },
-    /// Execution control plane (pause/resume/cancel running scans)
     Control {
         /// The control action (pause, resume, cancel)
         action: String,
@@ -149,25 +148,6 @@ pub enum Commands {
         /// The output path for the synced database
         #[arg(long, default_value = "data/vuln-db.sqlite")]
         output: String,
-    },
-    /// Run in agent mode — outbound polling worker for SaaS orchestration.
-    /// Polls the platform for jobs, executes scans, and reports results.
-    Agent {
-        /// Platform API base URL (e.g. https://api.valayam.io)
-        #[arg(long, default_value = "http://localhost:8000")]
-        platform_url: String,
-        /// Unique identifier for this worker node
-        #[arg(long)]
-        worker_id: Option<String>,
-        /// Seconds between job poll attempts
-        #[arg(long, default_value = "5")]
-        poll_interval_secs: u64,
-        /// Seconds between heartbeat reports
-        #[arg(long, default_value = "15")]
-        heartbeat_interval_secs: u64,
-        /// Comma-separated list of worker capabilities
-        #[arg(long, default_value = "wasm,grpc,native")]
-        capabilities: String,
     },
 }
 

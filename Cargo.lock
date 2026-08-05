@@ -6376,6 +6376,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "valayam-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "colored",
+ "hex",
+ "hmac",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "valayam-cli",
+ "valayam-config",
+ "valayam-engine",
+]
+
+[[package]]
 name = "valayam-api"
 version = "0.1.0"
 dependencies = [

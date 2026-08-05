@@ -1,4 +1,3 @@
-pub mod agent;
 pub mod agent_config;
 pub mod cli;
 pub mod orchestrator;
@@ -74,21 +73,6 @@ pub async fn run_cli() -> anyhow::Result<()> {
     if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
         return handle_control_command(action, scan_id, port).await;
     }
-    // Handle agent subcommand — early return
-    if let Some(cli::Commands::Agent { platform_url, worker_id, poll_interval_secs, heartbeat_interval_secs, capabilities }) = &args.command {
-        let cfg = agent_config::AgentConfig {
-            platform_url: platform_url.clone(),
-            worker_id: worker_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
-            poll_interval_secs: *poll_interval_secs,
-            heartbeat_interval_secs: *heartbeat_interval_secs,
-            capabilities: capabilities.split(',').map(|s| s.trim().to_string()).collect(),
-            job_secret: std::env::var("PLATFORM_JOB_SECRET").unwrap_or_default(),
-        };
-        let cancel = CancellationToken::new();
-        return agent::start_agent(cfg, cancel).await;
-    }
-
-
     // ── Template path resolution ──────────────────────────────────────────
     let (template_path, is_nuclei) = resolve_template(&args);
     ensure_demo_template(&template_path);

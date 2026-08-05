@@ -30,6 +30,18 @@ impl FromStr for Severity {
     }
 }
 
+impl From<&str> for Severity {
+    fn from(s: &str) -> Self {
+        s.parse().unwrap_or(Severity::Unknown)
+    }
+}
+
+impl From<String> for Severity {
+    fn from(s: String) -> Self {
+        s.parse().unwrap_or(Severity::Unknown)
+    }
+}
+
 impl std::fmt::Display for Severity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {

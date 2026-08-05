@@ -505,7 +505,7 @@ mod tests {
         FindingOwned { scan_id: uuid::Uuid::default(), 
             template_id: String::new(),
             template_name: String::new(),
-            severity: String::new(),
+            severity: valayam_models::finding::Severity::Unknown,
             target: String::new(),
             matched_at: String::new(),
             description: None,

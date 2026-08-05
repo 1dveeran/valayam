@@ -585,7 +585,7 @@ mod tests {
     #[test]
     fn test_severity_counts_record_critical() {
         let mut counts = SeverityCounts::default();
-        counts.record("critical");
+        counts.record(valayam_models::finding::Severity::from("critical"));
         assert_eq!(counts.critical, 1);
         assert_eq!(counts.total(), 1);
     }
@@ -593,12 +593,12 @@ mod tests {
     #[test]
     fn test_severity_counts_record_all_levels() {
         let mut counts = SeverityCounts::default();
-        counts.record("critical");
-        counts.record("high");
-        counts.record("medium");
-        counts.record("low");
-        counts.record("info");
-        counts.record("unknown");
+        counts.record(valayam_models::finding::Severity::from("critical"));
+        counts.record(valayam_models::finding::Severity::from("high"));
+        counts.record(valayam_models::finding::Severity::from("medium"));
+        counts.record(valayam_models::finding::Severity::from("low"));
+        counts.record(valayam_models::finding::Severity::from("info"));
+        counts.record(valayam_models::finding::Severity::from("unknown"));
         assert_eq!(counts.critical, 1);
         assert_eq!(counts.high, 1);
         assert_eq!(counts.medium, 1);
@@ -611,9 +611,9 @@ mod tests {
     #[test]
     fn test_severity_counts_case_insensitive() {
         let mut counts = SeverityCounts::default();
-        counts.record("Critical");
-        counts.record("HIGH");
-        counts.record("Medium");
+        counts.record(valayam_models::finding::Severity::from("Critical"));
+        counts.record(valayam_models::finding::Severity::from("HIGH"));
+        counts.record(valayam_models::finding::Severity::from("Medium"));
         assert_eq!(counts.critical, 1);
         assert_eq!(counts.high, 1);
         assert_eq!(counts.medium, 1);
@@ -622,8 +622,8 @@ mod tests {
     #[test]
     fn test_severity_counts_unknown_severity() {
         let mut counts = SeverityCounts::default();
-        counts.record("unknown_severity");
-        counts.record("nope");
+        counts.record(valayam_models::finding::Severity::from("unknown_severity"));
+        counts.record(valayam_models::finding::Severity::from("nope"));
         assert_eq!(counts.unknown, 2);
         assert_eq!(counts.total(), 2);
     }
@@ -632,10 +632,10 @@ mod tests {
     fn test_severity_counts_multiple_records() {
         let mut counts = SeverityCounts::default();
         for _ in 0..5 {
-            counts.record("high");
+            counts.record(valayam_models::finding::Severity::from("high"));
         }
         for _ in 0..3 {
-            counts.record("critical");
+            counts.record(valayam_models::finding::Severity::from("critical"));
         }
         assert_eq!(counts.high, 5);
         assert_eq!(counts.critical, 3);
