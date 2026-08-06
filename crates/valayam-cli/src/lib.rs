@@ -37,10 +37,15 @@ fn print_banner() {
 }
 
 pub async fn run_cli() -> anyhow::Result<()> {
-    let args = cli::Args::parse();
+    let mut args = cli::Args::parse();
+    
+    // Ensure target has a valid protocol to prevent URL parsing errors
+    if !args.target.starts_with("http://") && !args.target.starts_with("https://") {
+        args.target = format!("http://{}", args.target);
+    }
+    
     let config = config::CliConfig::from_env();
     print_banner();
-    
     // --- Telemetry setup (console + OTLP + optional file) ---
     let console_level_str = config.valayam_log.clone()
         .unwrap_or_else(|| {
@@ -50,8 +55,29 @@ pub async fn run_cli() -> anyhow::Result<()> {
                 args.log_level.clone()
             }
         });
-    let otlp_endpoint = config.otel_exporter_otlp_endpoint.clone()
+    let mut otlp_endpoint = config.otel_exporter_otlp_endpoint.clone()
         .unwrap_or_else(|| "http://localhost:4317".to_string());
+        
+    // ── Pre-flight OTLP Connectivity Check ──────────────────────────────
+    let mut otlp_active = false;
+    if let Ok(url) = reqwest::Url::parse(&otlp_endpoint) {
+        if let Some(host) = url.host_str() {
+            let port = url.port().unwrap_or(4317);
+            let addr_str = format!("{}:{}", host, port);
+            if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&addr_str) {
+                if let Some(addr) = addrs.next() {
+                    if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500)).is_ok() {
+                        otlp_active = true;
+                    }
+                }
+            }
+        }
+    }
+    
+    if !otlp_active {
+        otlp_endpoint = String::new(); // Disable OTLP to prevent spam
+    }
+
     let _telemetry = valayam_telemetry::init_telemetry(
         &console_level_str,
         &otlp_endpoint,
@@ -113,6 +139,28 @@ pub async fn run_cli() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // ── Pre-flight OOB DNS Check ───────────────────────────────────────────
+    let oob_dns_bind = valayam_oob::server::OobServer::config_from_env().dns_bind;
+    let oob_dns_active = if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&oob_dns_bind) {
+        if let Some(addr) = addrs.next() {
+            std::net::UdpSocket::bind(&addr).is_ok()
+        } else { false }
+    } else { false };
+
+    // ── Pre-flight Target Connectivity Check ───────────────────────────────
+    let target_online = match reqwest::Client::new().get(&args.target).timeout(std::time::Duration::from_secs(5)).send().await {
+        Ok(_) => true,
+        Err(e) => {
+            println!("{} Target connectivity check failed: {}", "[-]".red().bold(), e);
+            false
+        }
+    };
+
+    if !target_online {
+        println!("{} Scan aborted because target is unreachable.", "[-]".red().bold());
+        return Ok(());
+    }
+
     // ── Print scan config ──────────────────────────────────────────────────
     let engine_name = if is_nuclei { "Nuclei" } else { "Native" };
     print_scan_config(
@@ -122,6 +170,9 @@ pub async fn run_cli() -> anyhow::Result<()> {
         args.concurrency,
         args.rate_limit,
         args.output.as_deref(),
+        otlp_active,
+        oob_dns_active,
+        target_online,
     );
 
     // ── Crawler ────────────────────────────────────────────────────────────

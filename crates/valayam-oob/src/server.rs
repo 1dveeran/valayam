@@ -146,7 +146,7 @@ impl OobServer {
                     Self::run_dns_server(socket, hits_dns, shutdown_dns, &callback_domain_dns).await;
                 }
                 Err(e) => {
-                    tracing::error!(bind = %dns_bind, error = %e, "Failed to bind OOB DNS server");
+                    tracing::error!(bind = %dns_bind, error = %e, "Failed to bind OOB DNS server: port is being used by another process");
                 }
             }
         });

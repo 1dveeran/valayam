@@ -1,7 +1,23 @@
 use valayam_models::error::ScannerError;
 use crate::traits::{FindingOwned, PluginOutcome, ScanContext, ScanPlugin};
 use std::path::PathBuf;
-use extism::{Plugin, Manifest, Wasm};
+use extism::{Manifest, Wasm};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WasmPluginFinding {
+    pub template_id: String,
+    pub template_name: String,
+    pub severity: String,
+    pub target: String,
+    pub matched_at: String,
+    pub description: Option<String>,
+    pub solution: Option<String>,
+    pub extracted_data: Option<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, String>,
+}
 
 /// Configuration for WASM plugin sandbox limits.
 #[derive(Clone)]
@@ -19,7 +35,7 @@ impl Default for PluginConfig {
         Self {
             memory_max_pages: 2048,   // 128 MB
             timeout_ms: 30000,        // 30 sec
-            allowed_hosts: Vec::new(), // deny all egress by default
+            allowed_hosts: vec!["*".to_string()], // allow all hosts by default for security scanner plugins
         }
     }
 }
@@ -53,11 +69,11 @@ impl WasmPluginBridge {
         manifest = manifest
             .with_timeout(std::time::Duration::from_millis(self.config.timeout_ms))
             .with_memory_max(self.config.memory_max_pages);
-        // By default allowed_hosts is None (deny all). If config has hosts, set them.
+        // Allow configured hosts, or default to "*" (allow all egress for scanner)
         if !self.config.allowed_hosts.is_empty() {
             manifest = manifest.with_allowed_hosts(self.config.allowed_hosts.clone().into_iter());
         } else {
-            manifest = manifest.disallow_all_hosts();
+            manifest = manifest.with_allowed_hosts(vec!["*".to_string()].into_iter());
         }
         manifest.allowed_paths = None; // deny filesystem access by default
         manifest
@@ -103,8 +119,16 @@ impl ScanPlugin for WasmPluginBridge {
     }
 
     async fn init(&self) -> Result<(), ScannerError> {
+        let f1 = extism::Function::new("dns_resolve", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::dns_resolve);
+        let f2 = extism::Function::new("kv_get", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_get);
+        let f3 = extism::Function::new("kv_set", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_set);
+
         let manifest = self.build_manifest();
-        if let Err(e) = Plugin::new(&manifest, [], true) {
+        if let Err(e) = extism::PluginBuilder::new(manifest)
+            .with_wasi(true)
+            .with_functions([f1, f2, f3])
+            .build()
+        {
             return Err(ScannerError::PluginInitializationError(
                 format!("Failed to load Wasm via Extism '{}': {}", self.wasm_path.display(), e)
             ));
@@ -125,30 +149,14 @@ impl ScanPlugin for WasmPluginBridge {
             template_json, context_json
         );
 
+        let f1 = extism::Function::new("dns_resolve", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::dns_resolve);
+        let f2 = extism::Function::new("kv_get", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_get);
+        let f3 = extism::Function::new("kv_set", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_set);
+
         let manifest = self.build_manifest();
         let mut plugin = match extism::PluginBuilder::new(manifest)
             .with_wasi(true)
-            .with_function(
-                "dns_resolve",
-                [extism::ValType::I64],
-                [extism::ValType::I64],
-                extism::UserData::new(()),
-                crate::host_functions::dns_resolve
-            )
-            .with_function(
-                "kv_get",
-                [extism::ValType::I64],
-                [extism::ValType::I64],
-                extism::UserData::new(()),
-                crate::host_functions::kv_get
-            )
-            .with_function(
-                "kv_set",
-                [extism::ValType::I64],
-                [extism::ValType::I64],
-                extism::UserData::new(()),
-                crate::host_functions::kv_set
-            )
+            .with_functions([f1, f2, f3])
             .build()
         {
             Ok(p) => p,
@@ -161,12 +169,32 @@ impl ScanPlugin for WasmPluginBridge {
             }
         };
 
-        let output_bytes = match plugin.call::<&str, Vec<u8>>("execute_scan", &input_json) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            let res = plugin.call::<&str, Vec<u8>>("execute_scan", &input_json);
+            let _ = tx.send(res);
+        });
+
+        let output_bytes = match rx.await.expect("WASM thread panicked") {
             Ok(output) => output,
             Err(e) => {
-                tracing::error!(plugin = %self.name, error = %e, "wasm execute failed");
+                let err_str = e.to_string();
+                let clean_err = if let Some(idx) = err_str.find("Caused by:") {
+                    let cause = &err_str[idx..];
+                    if let Some(stack_idx) = cause.find("Stack backtrace:") {
+                        cause[..stack_idx].trim().to_string()
+                    } else {
+                        cause.trim().to_string()
+                    }
+                } else if err_str.contains("error while executing at wasm backtrace:") {
+                    "Plugin execution timed out (or encountered an internal WASM trap)".to_string()
+                } else {
+                    err_str.clone()
+                };
+                
+                tracing::error!(plugin = %self.name, error = %clean_err, "wasm execution failed");
                 return PluginOutcome::Failed {
-                    error: ScannerError::PluginExecutionError(format!("wasm execute: {}", e)),
+                    error: ScannerError::PluginExecutionError(clean_err),
                     retryable: false,
                 };
             }
@@ -185,12 +213,22 @@ impl ScanPlugin for WasmPluginBridge {
 
                     if let Some(findings) = json.get("findings").and_then(|v| v.as_array()) {
                         for finding_val in findings {
-                                match serde_json::from_value::<FindingOwned>(finding_val.clone()) {
-                                    Ok(mut finding) => {
-                                        finding.template_id = ctx.template.id.clone();
-                                        finding.template_name = ctx.template.info.name.clone();
-                                        let _ = ctx.finding_tx.send(finding).await;
-                                    }
+                            match serde_json::from_value::<WasmPluginFinding>(finding_val.clone()) {
+                                Ok(f) => {
+                                    let finding = FindingOwned {
+                                        scan_id: ctx.scan_id,
+                                        template_id: format!("{}/{}", ctx.template.id, f.template_id),
+                                        template_name: format!("{} [{}]", ctx.template.info.name, f.template_name),
+                                        severity: f.severity.as_str().into(),
+                                        target: f.target,
+                                        matched_at: f.matched_at,
+                                        description: f.description,
+                                        solution: f.solution,
+                                        extracted_data: f.extracted_data,
+                                        metadata: f.metadata,
+                                    };
+                                    let _ = ctx.finding_tx.send(finding).await;
+                                }
                                 Err(e) => {
                                     tracing::error!("Failed to deserialize finding {}: {:?}", e, finding_val);
                                 }

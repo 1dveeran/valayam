@@ -7,7 +7,7 @@ fn reputation_localhost_clean() {
     let wasm = build_wasm("valayam-plugin-reputation-audit");
     let input = WasmInput {
         template: json!({"id": "test", "info": {"name": "reputation"}}),
-        context: HashMap::from([("BaseURL".into(), "localhost".into())]),
+        context: HashMap::from([("BaseURL".into(), "http://localhost".into())]),
     };
     let out = run_plugin(&wasm, &input);
     assert!(!out.matched);

@@ -23,12 +23,18 @@ pub fn init_telemetry(
     otlp_endpoint: &str,
     log_path: Option<&Path>,
 ) -> TelemetryGuard {
+    // ── Global Error Handler ───────────────────────────────────────────
+    let _ = opentelemetry::global::set_error_handler(|_error| {
+        // Silenced: CLI already performs pre-flight check and displays status
+    });
+
     // ── Console layer ──────────────────────────────────────────────────
     let console_level = console_level_str
         .parse::<tracing::Level>()
         .unwrap_or(tracing::Level::ERROR);
-    let console_filter =
-        tracing_subscriber::filter::LevelFilter::from_level(console_level);
+    let console_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(console_level.into())
+        .parse_lossy(format!("{},extism=off,wasmtime=off,cranelift=off", console_level_str));
 
     let console_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)

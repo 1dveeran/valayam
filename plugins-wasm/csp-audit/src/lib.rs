@@ -1,5 +1,5 @@
-use valayam_plugin_sdk::{export_plugin, extism_pdk, Finding, WasmInput, WasmOutput, WasmScanner};
-use extism_pdk::HttpRequest;
+use valayam_plugin_sdk::{export_plugin, Finding, WasmInput, WasmOutput, WasmScanner, PluginResult};
+use extism_pdk::*;
 use lazy_static::lazy_static;
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -203,7 +203,7 @@ fn extract_meta_content(meta_tag: &str) -> Option<&str> {
 pub struct CspAuditScanner;
 
 impl WasmScanner for CspAuditScanner {
-    fn scan(&self, input: WasmInput) -> Result<WasmOutput, extism_pdk::Error> {
+    fn scan(&self, input: WasmInput) -> PluginResult<WasmOutput> {
 
         let template_id = input.template.get("id").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
         let template_name = input.template.get("info").and_then(|i| i.get("name")).and_then(|v| v.as_str()).unwrap_or("CSP Audit").to_string();
@@ -215,8 +215,10 @@ impl WasmScanner for CspAuditScanner {
             Ok(r) => r,
             Err(_) => return Ok(WasmOutput { matched: false, count: 0, findings: vec![] }),
         };
-
+        
         let res_headers = res.headers();
+        let body_bytes = res.body();
+
         let mut header_csp = Vec::new();
         if let Some(csp) = res_headers.get("content-security-policy") {
             header_csp.push(csp.clone());
@@ -227,7 +229,6 @@ impl WasmScanner for CspAuditScanner {
             report_only_csp.push(csp.clone());
         }
 
-        let body_bytes = res.body();
         let body_str = String::from_utf8_lossy(&body_bytes);
         let meta_csp = extract_csp_from_meta(&body_str);
 

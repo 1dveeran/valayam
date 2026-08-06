@@ -5,7 +5,7 @@ use crate::result::ScanResult;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(from = "String", into = "String")]
 pub enum Severity {
     Critical,
     High,
@@ -39,6 +39,12 @@ impl From<&str> for Severity {
 impl From<String> for Severity {
     fn from(s: String) -> Self {
         s.parse().unwrap_or(Severity::Unknown)
+    }
+}
+
+impl From<Severity> for String {
+    fn from(s: Severity) -> Self {
+        s.to_string()
     }
 }
 

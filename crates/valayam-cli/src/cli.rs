@@ -110,7 +110,7 @@ pub struct Args {
     #[arg(long, help = "Allow scanning internal/private IP ranges (disabled by default for SSRF protection)")]
     pub allow_internal: bool,
 
-    #[arg(long, default_value = "128", help = "Max memory per WASM plugin in MB (default: 128)")]
+    #[arg(long, default_value = "50", help = "Memory limit per WASM plugin execution in MB")]
     pub plugin_memory_limit: u32,
 
     #[arg(long, default_value = "30", help = "Plugin execution timeout in seconds (default: 30)")]

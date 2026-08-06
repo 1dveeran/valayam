@@ -12,7 +12,13 @@ impl WasmScanner for DomRedirectAuditScanner {
         let template_id = input.template.get("id").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
         let template_name = input.template.get("info").and_then(|i| i.get("name")).and_then(|v| v.as_str()).unwrap_or("DOM Redirect Audit").to_string();
         
-        let target = input.context.get("BaseURL").cloned().unwrap_or_else(|| "http://localhost".to_string());
+        let target = input.context.get("BaseURL")
+            .or_else(|| input.context.get("TARGET_URL"))
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "http://localhost".to_string());
+        if target.is_empty() {
+            return Ok(WasmOutput { matched: false, count: 0, findings: vec![] });
+        }
 
         let req = HttpRequest::new(&target).with_method("GET");
         let res = match extism_pdk::http::request::<()>(&req, None) {

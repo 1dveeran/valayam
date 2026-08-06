@@ -127,6 +127,9 @@ pub fn print_scan_config(
     concurrency: usize,
     rate_limit: Option<u32>,
     output: Option<&str>,
+    otlp_active: bool,
+    oob_dns_active: bool,
+    target_online: bool,
 ) {
     let bar = "─".repeat(54);
     println!("  {}", format!("┌─ Scan Configuration {}┐", "─".repeat(32)).bright_black());
@@ -149,6 +152,43 @@ pub fn print_scan_config(
         "│ rate limit".bright_black(),
         rate_str.white()
     );
+
+    let conn_status = if target_online {
+        "Online / Reachable".green().to_string()
+    } else {
+        "Offline / Unreachable".red().to_string()
+    };
+    println!(
+        "  {}  {}  {}",
+        "│".bright_black(),
+        "Target Status:".bright_black(),
+        conn_status
+    );
+    
+    let telemetry_status = if otlp_active {
+        "OTLP Enabled".green().to_string()
+    } else {
+        "Offline / Disabled".yellow().to_string()
+    };
+    println!(
+        "  {}  {}  {}",
+        "│".bright_black(),
+        "Telemetry:".bright_black(),
+        telemetry_status
+    );
+    
+    let oob_status = if oob_dns_active {
+        "Active / Listening".green().to_string()
+    } else {
+        "Offline / Port Occupied".yellow().to_string()
+    };
+    println!(
+        "  {}  {}    {}",
+        "│".bright_black(),
+        "OOB DNS:".bright_black(),
+        oob_status
+    );
+
     if let Some(out) = output {
         println!("  {}  {}     {} {}", "│".bright_black(), "Output:".bright_black(), "console".white(), format!("+ {}", out).bright_black());
     } else {

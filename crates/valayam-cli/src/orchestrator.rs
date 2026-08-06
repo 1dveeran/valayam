@@ -256,6 +256,39 @@ pub async fn run_scan_with_job_id(
         });
     }
     
+    // ── Target Liveness Pre-flight Check ──
+    let mut online_targets = Vec::new();
+    for target in actual_targets {
+        if let Ok(url) = reqwest::Url::parse(&target) {
+            if let Some(host) = url.host_str() {
+                let port = url.port().unwrap_or_else(|| if url.scheme() == "https" { 443 } else { 80 });
+                let addr_str = format!("{}:{}", host, port);
+                let is_online = if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&addr_str) {
+                    if let Some(addr) = addrs.next() {
+                        std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)).is_ok()
+                    } else { false }
+                } else { false };
+                
+                if is_online {
+                    online_targets.push(target.clone());
+                } else {
+                    tracing::error!("Target {} is offline, skipping scan", target);
+                    eprintln!("{} Target {} is offline, skipping scan", "[-]".red().bold(), target);
+                }
+            } else {
+                online_targets.push(target); // Fallback
+            }
+        } else {
+            online_targets.push(target); // Fallback
+        }
+    }
+    let actual_targets = online_targets;
+    if actual_targets.is_empty() {
+        tracing::error!("No targets are online. Aborting scan.");
+        eprintln!("{} No targets are online. Aborting scan.", "[-]".red().bold());
+        return Ok(());
+    }
+    
     let pending_for_shutdown = actual_targets.clone();
     tokio::spawn(async move {
         if tokio::signal::ctrl_c().await.is_ok() {
@@ -304,10 +337,15 @@ pub async fn run_scan_with_job_id(
         let mut reg = PluginRegistry::with_key(pub_key);
 
         // Apply WASM plugin sandbox config from CLI args
+        let allowed_hosts = if args.plugin_allow_host.is_empty() {
+            vec!["*".to_string()]
+        } else {
+            args.plugin_allow_host.clone()
+        };
         let plugin_config = PluginConfig {
             memory_max_pages: (args.plugin_memory_limit as u64 * 1024 * 1024 / 65536) as u32,
             timeout_ms: args.plugin_timeout * 1000,
-            allowed_hosts: args.plugin_allow_host.clone(),
+            allowed_hosts,
         };
         reg.set_plugin_config(plugin_config);
         // Core protocols
@@ -352,7 +390,7 @@ pub async fn run_scan_with_job_id(
         reg.register(ThreatIntelPlugin { matcher });
 
         // Initialize OOB Server and register
-        let oob_server = Arc::new(valayam_oob::server::OobServer::new(valayam_oob::server::OobServerConfig::default()));
+        let oob_server = Arc::new(valayam_oob::server::OobServer::new(valayam_oob::server::OobServer::config_from_env()));
         reg.register(OobPlugin { server: oob_server });
         // DependencyAudit moved to Wasm
         
@@ -538,7 +576,14 @@ pub async fn run_scan_with_job_id(
         }
     });
 
-    stream.buffer_unordered(concurrency).collect::<Vec<()>>().await;
+    tokio::select! {
+        _ = stream.buffer_unordered(concurrency).collect::<Vec<()>>() => {
+            // normal completion
+        }
+        _ = cancel.cancelled() => {
+            tracing::warn!("Scan execution cancelled, cleaning up...");
+        }
+    }
 
     // Drop executor and tx to close the channel, allowing consumer to finish
     drop(executor);

@@ -105,7 +105,7 @@ impl WasmScanner for ReputationAuditScanner {
         let template_id = input.template.get("id").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
         let template_name = input.template.get("info").and_then(|i| i.get("name")).and_then(|v| v.as_str()).unwrap_or("Reputation Audit").to_string();
         
-        let target = input.context.get("BaseURL").cloned().unwrap_or_else(|| "localhost".to_string());
+        let target = input.context.get("BaseURL").cloned().unwrap_or_else(|| "http://localhost".to_string());
         
         let target_str = target.trim().trim_start_matches("http://").trim_start_matches("https://").trim_start_matches("www.").trim_end_matches('/');
         let target_str = target_str.split(':').next().unwrap_or(target_str).to_string();

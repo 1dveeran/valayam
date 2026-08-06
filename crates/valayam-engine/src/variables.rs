@@ -91,9 +91,10 @@ fn is_valid_var_name(s: &str) -> bool {
 /// Builds the initial variable context from the target URL.
 /// Seeds `BaseURL` and `Hostname` as built-in variables.
 pub fn build_initial_context(target_url: &str, target_host: &str) -> HashMap<String, String> {
-    let mut context = HashMap::with_capacity(2);
+    let mut context = HashMap::with_capacity(3);
     let clean_target = target_url.trim_end_matches('/').to_string();
-    context.insert("BaseURL".to_string(), clean_target);
+    context.insert("BaseURL".to_string(), clean_target.clone());
+    context.insert("TARGET_URL".to_string(), clean_target); // backwards compatibility for some WASM plugins
     context.insert("Hostname".to_string(), target_host.to_string());
     context
 }

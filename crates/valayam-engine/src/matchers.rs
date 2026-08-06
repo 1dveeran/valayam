@@ -68,7 +68,12 @@ impl Matcher for WordMatcher {
 
 /// AND/OR combinator.
 /// Documentation for this item.
-pub enum MatchCondition { And, Or }
+pub enum MatchCondition {
+    /// All matchers must pass.
+    And,
+    /// At least one matcher must pass.
+    Or,
+}
 
 /// Documentation for this item.
 pub struct CompositeMatcher {

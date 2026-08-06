@@ -8,7 +8,13 @@ pub struct WasmScannerImpl;
 impl WasmScanner for WasmScannerImpl {
     fn scan(&self, input: WasmInput) -> Result<WasmOutput, extism_pdk::Error> {
         let template_id = input.template.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let target_url = input.context.get("TARGET_URL").map(|s| s.as_str()).unwrap_or("");
+        let target_url = input.context.get("TARGET_URL")
+            .or_else(|| input.context.get("BaseURL"))
+            .map(|s| s.as_str())
+            .unwrap_or("");
+        if target_url.is_empty() {
+            return Ok(WasmOutput { matched: false, count: 0, findings: vec![] });
+        }
         
         let mut all_findings = Vec::new();
         let mut metadata = HashMap::new();

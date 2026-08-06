@@ -117,11 +117,22 @@ pub enum PluginOutcome {
     /// Documentation for this item.
     NoMatch,
     /// Documentation for this item.
-    Matched { count: usize },
+    Matched { 
+        /// Number of matched vulnerabilities
+        count: usize 
+    },
     /// Documentation for this item.
-    Skipped { reason: String },
+    Skipped { 
+        /// Reason for skipping
+        reason: String 
+    },
     /// Documentation for this item.
-    Failed { error: valayam_models::error::ScannerError, retryable: bool },
+    Failed { 
+        /// The error that occurred
+        error: valayam_models::error::ScannerError, 
+        /// Whether the failure can be retried
+        retryable: bool 
+    },
 }
 
 // ─── ScanPlugin Trait (Enterprise Lifecycle) ────────────────────────────
