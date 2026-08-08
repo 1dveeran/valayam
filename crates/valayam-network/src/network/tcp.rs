@@ -93,7 +93,10 @@ fn detect_service_from_banner(port: u16, banner: &str) -> ServiceInfo {
         info.service_name = Some("HTTP".to_string());
 
         // Try to extract server header
-        if let Some(server_line) = banner.lines().find(|l| l.to_lowercase().starts_with("server:")) {
+        if let Some(server_line) = banner
+            .lines()
+            .find(|l| l.to_lowercase().starts_with("server:"))
+        {
             info.product = Some(server_line["server:".len()..].trim().to_string());
         }
 
@@ -229,7 +232,10 @@ fn extract_version_from_ftp_banner(banner: &str) -> Option<String> {
 /// Extract version from SMTP banner
 fn extract_version_from_smtp_banner(banner: &str) -> Option<String> {
     // Examples: "220 mail.example.com ESMTP Postfix", "220 Microsoft ESMTP MAIL Service"
-    let _re = regex::Regex::new(r"(?i)(?:esmtp|smtp).*?([0-9]+\.[0-9]+\.[0-9]+)|([0-9]+\.[0-9]+\.[0-9]+)\s*(?:esmtp|smtp)").ok()?;
+    let _re = regex::Regex::new(
+        r"(?i)(?:esmtp|smtp).*?([0-9]+\.[0-9]+\.[0-9]+)|([0-9]+\.[0-9]+\.[0-9]+)\s*(?:esmtp|smtp)",
+    )
+    .ok()?;
     // Simplified extraction
     let re_simple = regex::Regex::new(r"\d+\.\d+\.\d+").ok()?;
     re_simple.find(banner).map(|m| m.as_str().to_string())
@@ -251,28 +257,40 @@ fn extract_mysql_version(banner: &str) -> Option<String> {
 fn extract_postgres_version(banner: &str) -> Option<String> {
     // Look for PostgreSQL semantic versions in the banner string
     let re = regex::Regex::new(r"(?i)PostgreSQL\s+(\d+\.\d+(\.\d+)?)").ok()?;
-    re.captures(banner).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
+    re.captures(banner)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 /// Extract MSSQL version
 fn extract_mssql_version(banner: &str) -> Option<String> {
     // Look for Microsoft SQL Server versions
     let re = regex::Regex::new(r"(?i)Microsoft SQL Server.*?(\d+\.\d+\.\d+(\.\d+)?)").ok()?;
-    re.captures(banner).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
+    re.captures(banner)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 /// Extract Redis version
 fn extract_redis_version(banner: &str) -> Option<String> {
     // Redis typically sends something like "redis_version:6.2.6\r\n"
     let re = regex::Regex::new(r"redis_version:?(\d+\.\d+\.\d+)").ok()?;
-    re.find(banner).map(|m| m.as_str().split(':').nth(1).unwrap_or(m.as_str()).to_string())
+    re.find(banner).map(|m| {
+        m.as_str()
+            .split(':')
+            .nth(1)
+            .unwrap_or(m.as_str())
+            .to_string()
+    })
 }
 
 /// Extract MongoDB version
 fn extract_mongo_version(banner: &str) -> Option<String> {
     // Look for MongoDB versions
     let re = regex::Regex::new(r"(?i)MongoDB.*?(\d+\.\d+\.\d+(\.\d+)?)").ok()?;
-    re.captures(banner).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
+    re.captures(banner)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 /// Generic version extractor for unknown services
@@ -321,7 +339,7 @@ pub async fn scan_ports(
         let banner_ms = banner_timeout_ms;
         let _detect_service = enable_service_detection;
         let probe = send_probe_arc.clone();
-        
+
         tokio::spawn(async move {
             let address = format!("{}:{}", host, port);
             let connect_timeout = Duration::from_secs(3); // Slightly increased for reliability
@@ -343,14 +361,17 @@ pub async fn scan_ports(
                                     ..Default::default()
                                 },
                             });
-                        },
+                        }
                         Ok(false) => {
                             // Port is closed or filtered
                             return None;
-                        },
+                        }
                         Err(_) => {
                             // Permission error or raw socket failure; fallback to connect scan below
-                            tracing::debug!("Raw SYN scan failed for {}, falling back to Connect scan", address);
+                            tracing::debug!(
+                                "Raw SYN scan failed for {}, falling back to Connect scan",
+                                address
+                            );
                         }
                     }
                 }
@@ -438,9 +459,7 @@ async fn probe_service(stream: &mut TcpStream, port: u16) -> Option<String> {
     // Try common probes based on port
     match port {
         // Web servers - try GET request
-        80 | 443 | 8080 | 8443 | 8000 | 8001 | 8888 => {
-            probe_http_get(stream).await
-        }
+        80 | 443 | 8080 | 8443 | 8000 | 8001 | 8888 => probe_http_get(stream).await,
         // SSH - usually sends banner immediately, but we can try to interact
         22 => None, // SSH typically sends banner on connect
         // FTP - usually sends banner immediately
@@ -476,8 +495,10 @@ async fn probe_http_get(stream: &mut TcpStream) -> Option<String> {
         Ok(Ok(n)) if n > 0 => {
             let response = String::from_utf8_lossy(&buf[..n]);
             // Extract Server header if present
-            if let Some(server_line) = response.lines()
-                .find(|line| line.to_lowercase().starts_with("server:")) {
+            if let Some(server_line) = response
+                .lines()
+                .find(|line| line.to_lowercase().starts_with("server:"))
+            {
                 return Some(server_line["server:".len()..].trim().to_string());
             }
             // Return first line of response as fallback
@@ -509,8 +530,10 @@ async fn probe_http_service(stream: &mut TcpStream) -> Option<HttpServiceInfo> {
             let mut server = None;
 
             // Parse Allow header
-            if let Some(allow_line) = response.lines()
-                .find(|line| line.to_lowercase().starts_with("allow:")) {
+            if let Some(allow_line) = response
+                .lines()
+                .find(|line| line.to_lowercase().starts_with("allow:"))
+            {
                 let methods_str = &allow_line["allow:".len()..];
                 for method in methods_str.split(',') {
                     let method = method.trim().to_uppercase();
@@ -521,8 +544,10 @@ async fn probe_http_service(stream: &mut TcpStream) -> Option<HttpServiceInfo> {
             }
 
             // Parse Server header
-            if let Some(server_line) = response.lines()
-                .find(|line| line.to_lowercase().starts_with("server:")) {
+            if let Some(server_line) = response
+                .lines()
+                .find(|line| line.to_lowercase().starts_with("server:"))
+            {
                 server = Some(server_line["server:".len()..].trim().to_string());
             }
 
@@ -572,16 +597,19 @@ mod tests {
         assert_eq!(info.product.as_deref(), Some("OpenSSH"));
 
         // Test MySQL detection
-        let _info = detect_service_from_banner(3306, "\x4a\x00\x00\x00\x0a\x35\x2e\x37\x2e\x33\x33");
+        let _info =
+            detect_service_from_banner(3306, "\x4a\x00\x00\x00\x0a\x35\x2e\x37\x2e\x33\x33");
         // Note: This is a simplified test - real MySQL packet parsing would be more complex
     }
 
     #[tokio::test]
     async fn test_extract_version_from_ssh_banner() {
-        let version = extract_version_from_ssh_banner("SSH-2.0-OpenSSH_7.4p1 Ubuntu-10ubuntu1").expect("Should extract version");
+        let version = extract_version_from_ssh_banner("SSH-2.0-OpenSSH_7.4p1 Ubuntu-10ubuntu1")
+            .expect("Should extract version");
         assert_eq!(version, "OpenSSH_7.4p1");
 
-        let version = extract_version_from_ssh_banner("SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.1").expect("Should extract version");
+        let version = extract_version_from_ssh_banner("SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.1")
+            .expect("Should extract version");
         assert_eq!(version, "OpenSSH_8.9p1");
     }
 }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct EasmTemplate {
     /// List of OSINT sources to query, e.g. ["crtsh", "alienvault"]
     pub sources: Vec<String>,
-    
+
     /// Target domain to enumerate subdomains for. Usually "{{Hostname}}" or a literal domain.
     pub domain: String,
 
@@ -23,7 +23,8 @@ mod tests {
 
     #[test]
     fn test_easm_template_deser() {
-        let json = r#"{"sources": ["crtsh", "alienvault"], "domain": "example.com", "max_results": 500}"#;
+        let json =
+            r#"{"sources": ["crtsh", "alienvault"], "domain": "example.com", "max_results": 500}"#;
         let tmpl: EasmTemplate = serde_json::from_str(json).unwrap();
         assert_eq!(tmpl.sources, vec!["crtsh", "alienvault"]);
         assert_eq!(tmpl.domain, "example.com");

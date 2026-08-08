@@ -200,7 +200,6 @@ pub async fn execute(
 
             tracing::debug!(target = %target_url, method = %req_rule.method, url = %full_url, "Sending HTTP request");
 
-
             let resp = match client
                 .send_request(
                     &req_rule.method,

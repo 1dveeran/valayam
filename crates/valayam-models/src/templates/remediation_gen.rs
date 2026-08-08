@@ -27,7 +27,9 @@ mod tests {
 
     #[test]
     fn test_remediation_gen_serde_roundtrip() {
-        let tmpl = RemediationGenTemplate { output_format: "json".into() };
+        let tmpl = RemediationGenTemplate {
+            output_format: "json".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: RemediationGenTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.output_format, "json");

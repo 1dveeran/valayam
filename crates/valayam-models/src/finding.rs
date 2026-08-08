@@ -1,8 +1,8 @@
+use crate::result::ScanResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
-use crate::result::ScanResult;
 use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
@@ -98,7 +98,10 @@ impl FindingOwned {
 
         let template_id = metadata.get("template_id").cloned().unwrap_or_default();
         let template_name = metadata.get("template_name").cloned().unwrap_or_default();
-        let severity_str = metadata.get("template_severity").map(|s| s.as_str()).unwrap_or("unknown");
+        let severity_str = metadata
+            .get("template_severity")
+            .map(|s| s.as_str())
+            .unwrap_or("unknown");
         let severity = Severity::from_str(severity_str).unwrap_or(Severity::Unknown);
 
         let mut meta = std::collections::HashMap::new();
@@ -152,7 +155,8 @@ impl FindingOwned {
             scan_id: uuid::Uuid::default(),
             template_id: template_id.into(),
             template_name: template_meta.template_name().to_string(),
-            severity: Severity::from_str(template_meta.template_severity()).unwrap_or(Severity::Unknown),
+            severity: Severity::from_str(template_meta.template_severity())
+                .unwrap_or(Severity::Unknown),
             target: target.into(),
             matched_at: matched_at.into(),
             description: template_meta.description().map(|s| s.to_string()),

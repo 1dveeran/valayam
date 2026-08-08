@@ -50,8 +50,8 @@ impl Crawler {
 fn extract_links_from_html(body_text: &str) -> HashSet<String> {
     let mut found = HashSet::new();
     let document = scraper::Html::parse_document(body_text);
-    let selector =
-        scraper::Selector::parse("a[href], form[action], script[src], link[href]").expect("static css selector");
+    let selector = scraper::Selector::parse("a[href], form[action], script[src], link[href]")
+        .expect("static css selector");
     for el in document.select(&selector) {
         let link = el
             .value()
@@ -120,7 +120,14 @@ impl Crawler {
 
                 if let Ok(resp) = self
                     .client
-                    .send_request("GET", &probe_url_str, self.crawl_headers.as_ref(), None, None, None)
+                    .send_request(
+                        "GET",
+                        &probe_url_str,
+                        self.crawl_headers.as_ref(),
+                        None,
+                        None,
+                        None,
+                    )
                     .await
                 {
                     if resp.status().is_success() {
@@ -169,7 +176,14 @@ impl Crawler {
 
         let response = match self
             .client
-            .send_request("GET", &url_str, self.crawl_headers.as_ref(), None, None, None)
+            .send_request(
+                "GET",
+                &url_str,
+                self.crawl_headers.as_ref(),
+                None,
+                None,
+                None,
+            )
             .await
         {
             Ok(resp) => resp,

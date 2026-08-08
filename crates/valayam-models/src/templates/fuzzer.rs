@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
 use crate::templates::matcher::ResponseMatcher;
+use serde::{Deserialize, Serialize};
 
 /// Defines configuration schema for parameter fuzzing targets.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FuzzTemplate {
-    pub part: String,           // e.g., "query", "body", "headers"
+    pub part: String, // e.g., "query", "body", "headers"
     #[serde(default)]
-    pub keys: Vec<String>,      // Parameter names to target; if empty, fuzzes all detected keys.
-    pub payloads: Vec<String>,  // Payloads to inject
+    pub keys: Vec<String>, // Parameter names to target; if empty, fuzzes all detected keys.
+    pub payloads: Vec<String>, // Payloads to inject
     #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
 }
@@ -35,7 +35,12 @@ mod tests {
 
     #[test]
     fn test_fuzz_template_serde_roundtrip() {
-        let tmpl = FuzzTemplate { part: "query".into(), keys: vec![], payloads: vec!["test".into()], matchers: vec![] };
+        let tmpl = FuzzTemplate {
+            part: "query".into(),
+            keys: vec![],
+            payloads: vec!["test".into()],
+            matchers: vec![],
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: FuzzTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.payloads, vec!["test"]);

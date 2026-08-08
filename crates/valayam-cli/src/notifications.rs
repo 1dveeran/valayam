@@ -14,7 +14,8 @@ impl Notifier {
                             result.target, result.template_name, result.template_severity)
         });
 
-        client.post(webhook_url)
+        client
+            .post(webhook_url)
             .json(&payload)
             .send()
             .await
@@ -44,8 +45,20 @@ mod tests {
                             result.target, result.template_name, result.template_severity)
         });
 
-        assert_eq!(payload["text"].as_str().unwrap().contains("SQL Injection Test"), true);
-        assert_eq!(payload["text"].as_str().unwrap().contains("https://example.com/login"), true);
+        assert_eq!(
+            payload["text"]
+                .as_str()
+                .unwrap()
+                .contains("SQL Injection Test"),
+            true
+        );
+        assert_eq!(
+            payload["text"]
+                .as_str()
+                .unwrap()
+                .contains("https://example.com/login"),
+            true
+        );
         assert_eq!(payload["text"].as_str().unwrap().contains("high"), true);
     }
 
@@ -58,8 +71,10 @@ mod tests {
             ..Default::default()
         };
 
-        let text = format!("🚨 *Vulnerability Found!*\n*Target:* {}\n*Template:* {}\n*Severity:* {}",
-                           result.target, result.template_name, result.template_severity);
+        let text = format!(
+            "🚨 *Vulnerability Found!*\n*Target:* {}\n*Template:* {}\n*Severity:* {}",
+            result.target, result.template_name, result.template_severity
+        );
 
         assert!(text.contains("RCE"));
         assert!(text.contains("critical"));

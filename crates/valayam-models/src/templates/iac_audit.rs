@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::templates::matcher::ResponseMatcher;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IacAuditTemplate {
@@ -31,7 +31,11 @@ mod tests {
 
     #[test]
     fn test_iac_audit_serde_roundtrip() {
-        let tmpl = IacAuditTemplate { target: "deploy.yaml".into(), r#type: "kubernetes".into(), matchers: vec![] };
+        let tmpl = IacAuditTemplate {
+            target: "deploy.yaml".into(),
+            r#type: "kubernetes".into(),
+            matchers: vec![],
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: IacAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.r#type, "kubernetes");

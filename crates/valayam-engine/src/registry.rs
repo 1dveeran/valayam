@@ -7,23 +7,23 @@
 //! - **Parallel execution**: independent plugins run concurrently via JoinSet
 //! - **Metrics collection**: per-plugin execution time, outcome, finding count
 
-use valayam_models::error::ScannerError;
 use crate::traits::{
     FindingOwned, PluginMetrics, PluginOutcome, PluginOutcomeKind, ScanContext, ScanPlugin,
     VariableScope,
 };
-use crate::variables::build_initial_context;
-use valayam_models::templates::schema::VulnerabilityTemplate;
 use crate::unwind_safe::SafePluginFuture;
+use crate::variables::build_initial_context;
 use futures::FutureExt;
-use rand::Rng;
 use parking_lot::Mutex;
+use rand::Rng;
 use std::collections::HashSet;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
+use valayam_models::error::ScannerError;
+use valayam_models::templates::schema::VulnerabilityTemplate;
 
 /// Configuration for plugin execution retry with exponential backoff.
 #[derive(Debug, Clone)]
@@ -112,7 +112,11 @@ impl PluginRegistry {
 
     /// Returns a list of all currently registered plugins.
     pub fn list_plugins(&self) -> Vec<String> {
-        self.plugins.lock().iter().map(|p| p.name().to_string()).collect()
+        self.plugins
+            .lock()
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect()
     }
 
     /// Documentation for this item.
@@ -138,7 +142,11 @@ impl PluginRegistry {
             return;
         }
 
-        tracing::info!(plugin = plugin.name(), version = plugin.version(), "registered plugin");
+        tracing::info!(
+            plugin = plugin.name(),
+            version = plugin.version(),
+            "registered plugin"
+        );
         self.plugins.lock().push(Arc::new(plugin));
     }
 
@@ -162,25 +170,39 @@ impl PluginRegistry {
             let path = entry.path();
             if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    
+                    let file_name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+
                     if ext == "vpa" {
                         tracing::info!(file = %path.display(), "Extracting VPA plugin archive");
                         // In offline mode, enable cache-hit extraction skip
-                        let skip_extract_if_cache_hit = std::env::var("VALAYAM_OFFLINE_MODE").is_ok();
-                        match crate::vpa::extract_vpa(&path, &cache_dir, pk.as_ref(), skip_extract_if_cache_hit) {
+                        let skip_extract_if_cache_hit =
+                            std::env::var("VALAYAM_OFFLINE_MODE").is_ok();
+                        match crate::vpa::extract_vpa(
+                            &path,
+                            &cache_dir,
+                            pk.as_ref(),
+                            skip_extract_if_cache_hit,
+                        ) {
                             Ok((manifest, extract_dir)) => {
                                 let entrypoint_path = extract_dir.join(&manifest.entrypoint);
                                 if manifest.runtime == "wasm" {
                                     tracing::info!(plugin = %manifest.name, "Loading VPA WASM plugin");
                                     let plugin = crate::wasm_plugin::WasmPluginBridge::new(
-                                        manifest.name.clone(), entrypoint_path,
+                                        manifest.name.clone(),
+                                        entrypoint_path,
                                         self.plugin_config.clone(),
                                     );
                                     self.register(plugin);
                                 } else if manifest.runtime == "grpc" {
                                     tracing::info!(plugin = %manifest.name, "Loading VPA gRPC plugin");
-                                    let plugin = crate::grpc_plugin::GrpcPluginBridge::new(manifest.name.clone(), entrypoint_path);
+                                    let plugin = crate::grpc_plugin::GrpcPluginBridge::new(
+                                        manifest.name.clone(),
+                                        entrypoint_path,
+                                    );
                                     self.register(plugin);
                                 } else {
                                     tracing::warn!(plugin = %manifest.name, runtime = %manifest.runtime, "Unknown VPA runtime");
@@ -193,18 +215,29 @@ impl PluginRegistry {
                     } else if ext == "wasm" {
                         tracing::info!(file = %path.display(), "Loading external WASM plugin");
                         let plugin = crate::wasm_plugin::WasmPluginBridge::new(
-                            file_name, path,
+                            file_name,
+                            path,
                             self.plugin_config.clone(),
                         );
                         self.register(plugin);
-                    } else if ext == "exe" || ext == "sh" || ext == "bat" || ext == "cmd" || (ext == "py" && !file_name.contains("_pb2")) || (std::env::consts::FAMILY == "unix" && ext.is_empty()) {
+                    } else if ext == "exe"
+                        || ext == "sh"
+                        || ext == "bat"
+                        || ext == "cmd"
+                        || (ext == "py" && !file_name.contains("_pb2"))
+                        || (std::env::consts::FAMILY == "unix" && ext.is_empty())
+                    {
                         tracing::info!(file = %path.display(), "Loading external gRPC plugin");
                         let plugin = crate::grpc_plugin::GrpcPluginBridge::new(file_name, path);
                         self.register(plugin);
                     }
                 } else if std::env::consts::FAMILY == "unix" {
                     // Files without extension on unix might be executables
-                    let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    let file_name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
                     tracing::info!(file = %path.display(), "Loading external gRPC plugin");
                     let plugin = crate::grpc_plugin::GrpcPluginBridge::new(file_name, path);
                     self.register(plugin);
@@ -216,44 +249,54 @@ impl PluginRegistry {
 
     /// Start hot-reloading plugins from a directory.
     /// Returns an opaque Watcher that MUST be kept alive by the caller.
-    pub fn start_hot_reload(self: Arc<Self>, dir_path: std::path::PathBuf) -> anyhow::Result<Box<dyn std::any::Any + Send + Sync>> {
-        use notify::{Watcher, RecursiveMode, EventKind};
-        
+    pub fn start_hot_reload(
+        self: Arc<Self>,
+        dir_path: std::path::PathBuf,
+    ) -> anyhow::Result<Box<dyn std::any::Any + Send + Sync>> {
+        use notify::{EventKind, RecursiveMode, Watcher};
+
         // Initial load
         let _ = self.load_external_plugins(&dir_path);
 
         let registry = self.clone();
         let watch_dir = dir_path.clone();
-        
-        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            if let Ok(event) = res {
-                match event.kind {
-                    EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
-                        tracing::info!("Detected changes in {:?}, hot-reloading plugins...", watch_dir);
-                        
-                        // We must re-register core plugins, but our architecture currently mixes core & external plugins in the same Vec.
-                        // For a pure enterprise V3 setup, we ideally separate them or we just reload everything.
-                        // Since this is a CLI scan, we will just reload external plugins by removing them.
-                        // Wait, to safely remove only external plugins, we'd need to track which are external.
-                        // As a simple robust fallback: we just load newly added .vpa/.wasm files.
-                        // If it's a modify, `register` will append a new instance.
-                        // For a true enterprise hot-reload, we'd clear the Vec and run the full setup, or keep core plugins separate.
-                        // Here we just re-run load_external_plugins. It will append to the end.
-                        // To avoid duplicates, we can clear the whole list, but we'd lose core plugins.
-                        // Let's implement a safe 'reload_external' by filtering out plugins not loaded from the watch dir?
-                        // For now, we will just call load_external_plugins and let it append, and rely on `PluginRegistry` not caring about duplicates for now.
-                        // In a real V3, we'd have `core_plugins` and `external_plugins`.
-                        
-                        if let Err(e) = registry.load_external_plugins(&watch_dir) {
-                            tracing::error!("Hot-reload failed: {}", e);
-                        } else {
-                            tracing::info!("Hot-reload complete. Total plugins: {}", registry.len());
+
+        let mut watcher =
+            notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    match event.kind {
+                        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+                            tracing::info!(
+                                "Detected changes in {:?}, hot-reloading plugins...",
+                                watch_dir
+                            );
+
+                            // We must re-register core plugins, but our architecture currently mixes core & external plugins in the same Vec.
+                            // For a pure enterprise V3 setup, we ideally separate them or we just reload everything.
+                            // Since this is a CLI scan, we will just reload external plugins by removing them.
+                            // Wait, to safely remove only external plugins, we'd need to track which are external.
+                            // As a simple robust fallback: we just load newly added .vpa/.wasm files.
+                            // If it's a modify, `register` will append a new instance.
+                            // For a true enterprise hot-reload, we'd clear the Vec and run the full setup, or keep core plugins separate.
+                            // Here we just re-run load_external_plugins. It will append to the end.
+                            // To avoid duplicates, we can clear the whole list, but we'd lose core plugins.
+                            // Let's implement a safe 'reload_external' by filtering out plugins not loaded from the watch dir?
+                            // For now, we will just call load_external_plugins and let it append, and rely on `PluginRegistry` not caring about duplicates for now.
+                            // In a real V3, we'd have `core_plugins` and `external_plugins`.
+
+                            if let Err(e) = registry.load_external_plugins(&watch_dir) {
+                                tracing::error!("Hot-reload failed: {}", e);
+                            } else {
+                                tracing::info!(
+                                    "Hot-reload complete. Total plugins: {}",
+                                    registry.len()
+                                );
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
-            }
-        })?;
+            })?;
 
         watcher.watch(&dir_path, RecursiveMode::NonRecursive)?;
         Ok(Box::new(watcher))
@@ -266,9 +309,7 @@ impl PluginRegistry {
         for plugin in &plugins {
             plugin.init().await.map_err(|e| {
                 tracing::error!(plugin = plugin.name(), error = %e, "plugin init failed");
-                ScannerError::PluginInitializationError(
-                    format!("{}: {}", plugin.name(), e)
-                )
+                ScannerError::PluginInitializationError(format!("{}: {}", plugin.name(), e))
             })?;
         }
         Ok(())
@@ -276,10 +317,7 @@ impl PluginRegistry {
 
     /// Validate all applicable plugin configs for a template. Fail-fast.
     #[tracing::instrument(skip(self, template), fields(template_id = %template.id))]
-    pub fn validate_template(
-        &self,
-        template: &VulnerabilityTemplate,
-    ) -> Result<(), ScannerError> {
+    pub fn validate_template(&self, template: &VulnerabilityTemplate) -> Result<(), ScannerError> {
         let plugins = self.plugins.lock().clone();
         for plugin in &plugins {
             if plugin.is_applicable(template) {
@@ -338,9 +376,13 @@ impl PluginRegistry {
     }
 
     /// Documentation for this item.
-    pub fn len(&self) -> usize { self.plugins.lock().len() }
+    pub fn len(&self) -> usize {
+        self.plugins.lock().len()
+    }
     /// Documentation for this item.
-    pub fn is_empty(&self) -> bool { self.plugins.lock().is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.plugins.lock().is_empty()
+    }
 
     /// Execute all applicable plugins for a template against a target.
     ///
@@ -368,7 +410,10 @@ impl PluginRegistry {
         let variables = Arc::new(RwLock::new(VariableScope::new(initial_vars)));
 
         // Filter to applicable plugins
-        let applicable: Vec<_> = self.plugins.lock().iter()
+        let applicable: Vec<_> = self
+            .plugins
+            .lock()
+            .iter()
             .filter(|p| p.is_applicable(&template))
             .cloned()
             .collect();
@@ -378,10 +423,8 @@ impl PluginRegistry {
         let template_sections = template.sections();
         if applicable.is_empty() {
             if !template_sections.is_empty() {
-                let section_names: Vec<&str> = template_sections
-                    .iter()
-                    .map(|s| s.section_name())
-                    .collect();
+                let section_names: Vec<&str> =
+                    template_sections.iter().map(|s| s.section_name()).collect();
                 tracing::warn!(
                     template_id = %template.id,
                     target = %target,
@@ -393,19 +436,20 @@ impl PluginRegistry {
         }
 
         // Build adjacency and in-degree maps for Kahn's topological sort
-        let plugin_name_map: std::collections::HashMap<&str, Arc<dyn ScanPlugin>> = applicable.iter()
-            .map(|p| (p.name(), p.clone()))
-            .collect();
+        let plugin_name_map: std::collections::HashMap<&str, Arc<dyn ScanPlugin>> =
+            applicable.iter().map(|p| (p.name(), p.clone())).collect();
 
         let applicable_names: HashSet<&str> = plugin_name_map.keys().copied().collect();
 
         // in_degree[name] = number of applicable dependencies not yet satisfied
-        let mut in_degree: std::collections::HashMap<&str, usize> = applicable_names.iter()
+        let mut in_degree: std::collections::HashMap<&str, usize> = applicable_names
+            .iter()
             .map(|name| (*name, 0usize))
             .collect();
 
         // dependents[name] = list of plugins that depend on `name`
-        let mut dependents: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+        let mut dependents: std::collections::HashMap<&str, Vec<&str>> =
+            std::collections::HashMap::new();
         for name in &applicable_names {
             dependents.entry(name).or_default();
         }
@@ -426,7 +470,8 @@ impl PluginRegistry {
 
         // Phase 1+2: Kahn's algorithm — plugins become available as deps complete.
         // Start with all zero-in-degree plugins (no unmet dependencies).
-        let mut ready_queue: Vec<&str> = in_degree.iter()
+        let mut ready_queue: Vec<&str> = in_degree
+            .iter()
             .filter(|(_, &deg)| deg == 0)
             .map(|(name, _)| *name)
             .collect();
@@ -444,12 +489,16 @@ impl PluginRegistry {
             );
 
             for plugin_name in &ready_queue {
-                let plugin = plugin_name_map.get(plugin_name)
-            .expect("plugin_name drawn from plugin_name_map keys — guaranteed to exist")
-            .clone();
+                let plugin = plugin_name_map
+                    .get(plugin_name)
+                    .expect("plugin_name drawn from plugin_name_map keys — guaranteed to exist")
+                    .clone();
 
                 let ctx = ScanContext {
-                    scan_id: template.id.parse::<uuid::Uuid>().unwrap_or_else(|_| uuid::Uuid::new_v4()),
+                    scan_id: template
+                        .id
+                        .parse::<uuid::Uuid>()
+                        .unwrap_or_else(|_| uuid::Uuid::new_v4()),
                     target: target.to_string(),
                     target_host: target_host.clone(),
                     template: template.clone(),
@@ -465,9 +514,7 @@ impl PluginRegistry {
 
                 join_set.spawn({
                     let retry_config = self.retry_config.clone();
-                    async move {
-                        execute_plugin_isolated(plugin, ctx, &retry_config).await
-                    }
+                    async move { execute_plugin_isolated(plugin, ctx, &retry_config).await }
                 });
             }
 
@@ -495,7 +542,8 @@ impl PluginRegistry {
             }
 
             // Rebuild ready queue: plugins whose in-degree just hit zero
-            ready_queue = in_degree.iter()
+            ready_queue = in_degree
+                .iter()
                 .filter(|(name, &deg)| {
                     deg == 0 && !all_metrics.iter().any(|m| m.plugin_name == **name)
                 })
@@ -526,17 +574,16 @@ impl PluginRegistry {
 }
 
 impl Default for PluginRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Execute a single plugin attempt with full isolation:
 /// - `catch_unwind` for panic protection
 /// - `tokio::time::timeout` for hang protection
 /// - Structured tracing span for observability
-async fn execute_plugin_once(
-    plugin: &Arc<dyn ScanPlugin>,
-    ctx: &ScanContext,
-) -> PluginOutcome {
+async fn execute_plugin_once(plugin: &Arc<dyn ScanPlugin>, ctx: &ScanContext) -> PluginOutcome {
     let plugin_name = plugin.name();
     let timeout_duration = plugin.timeout();
 
@@ -554,30 +601,41 @@ async fn execute_plugin_once(
     // as mpsc::Sender, cancellation as CancellationToken). All are UnwindSafe.
     let timeout_result = tokio::time::timeout(
         timeout_duration,
-        SafePluginFuture(AssertUnwindSafe(plugin.execute(ctx))).0.catch_unwind(),
-    ).await;
+        SafePluginFuture(AssertUnwindSafe(plugin.execute(ctx)))
+            .0
+            .catch_unwind(),
+    )
+    .await;
 
     match timeout_result {
         Ok(Ok(outcome)) => outcome, // normal completion
-        Ok(Err(_panic)) => { // caught panic
-            tracing::error!(plugin = plugin_name, "🚨 PLUGIN PANICKED 🚨 Engine protected.");
+        Ok(Err(_panic)) => {
+            // caught panic
+            tracing::error!(
+                plugin = plugin_name,
+                "🚨 PLUGIN PANICKED 🚨 Engine protected."
+            );
             PluginOutcome::Failed {
-                error: ScannerError::PluginExecutionError(
-                    format!("plugin '{}' panicked during execution", plugin_name)
-                ),
+                error: ScannerError::PluginExecutionError(format!(
+                    "plugin '{}' panicked during execution",
+                    plugin_name
+                )),
                 retryable: false,
             }
-        },
-        Err(_elapsed) => { // timeout
+        }
+        Err(_elapsed) => {
+            // timeout
             tracing::error!(
                 plugin = plugin_name,
                 timeout_secs = timeout_duration.as_secs(),
                 "plugin timed out"
             );
             PluginOutcome::Failed {
-                error: ScannerError::TimeoutError(
-                    format!("plugin '{}' exceeded {}s timeout", plugin_name, timeout_duration.as_secs())
-                ),
+                error: ScannerError::TimeoutError(format!(
+                    "plugin '{}' exceeded {}s timeout",
+                    plugin_name,
+                    timeout_duration.as_secs()
+                )),
                 retryable: false,
             }
         }
@@ -634,7 +692,9 @@ async fn execute_plugin_isolated(
         last_outcome = execute_plugin_once(&plugin, &attempt_ctx).await;
 
         match &last_outcome {
-            PluginOutcome::Failed { retryable: true, .. } if attempt < retry_config.max_retries => {
+            PluginOutcome::Failed {
+                retryable: true, ..
+            } if attempt < retry_config.max_retries => {
                 // Retryable and we have attempts left — continue loop
                 continue;
             }
@@ -704,9 +764,7 @@ fn is_api_compatible(plugin_version: &str, minimum_version: &str) -> bool {
     };
 
     match (parse(plugin_version), parse(minimum_version)) {
-        (Some((p_maj, p_min)), Some((m_maj, m_min))) => {
-            p_maj == m_maj && p_min >= m_min
-        }
+        (Some((p_maj, p_min)), Some((m_maj, m_min))) => p_maj == m_maj && p_min >= m_min,
         _ => false, // unparseable versions → reject
     }
 }
@@ -715,9 +773,9 @@ fn is_api_compatible(plugin_version: &str, minimum_version: &str) -> bool {
 mod tests {
     use super::*;
     use crate::traits::PluginOutcomeKind;
-    use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
+    use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
 
     // ── Mock plugins ──────────────────────────────────────────────────────
 
@@ -727,24 +785,41 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockMatchPlugin {
-        fn name(&self) -> &str { &self.name }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
         async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
             for i in 0..3 {
-                let _ = ctx.finding_tx.send(FindingOwned { scan_id: uuid::Uuid::default(), 
-                    template_id: "test".into(),
-                    template_name: "test".into(),
-                    severity: "medium".into(),
-                    target: ctx.target.clone(),
-                    matched_at: format!("match_{}", i),
-                    description: None,
-                    solution: None,
-                    extracted_data: None,
-                    metadata: Default::default(),
-                }).await;
+                let _ = ctx
+                    .finding_tx
+                    .send(FindingOwned {
+                        scan_id: uuid::Uuid::default(),
+                        template_id: "test".into(),
+                        template_name: "test".into(),
+                        severity: "medium".into(),
+                        target: ctx.target.clone(),
+                        matched_at: format!("match_{}", i),
+                        description: None,
+                        solution: None,
+                        extracted_data: None,
+                        metadata: Default::default(),
+                    })
+                    .await;
             }
             PluginOutcome::Matched { count: 3 }
         }
@@ -756,11 +831,24 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockNoMatchPlugin {
-        fn name(&self) -> &str { &self.name }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             PluginOutcome::NoMatch
         }
@@ -774,11 +862,24 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockRetryableFailPlugin {
-        fn name(&self) -> &str { &self.name }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             let count = self.call_count.fetch_add(1, Ordering::SeqCst);
             if count + 1 >= self.succeed_on {
@@ -796,11 +897,24 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockPanicPlugin {
-        fn name(&self) -> &str { "panic_plugin" }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        fn name(&self) -> &str {
+            "panic_plugin"
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             panic!("mock panic from plugin");
         }
@@ -810,12 +924,27 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockTimeoutPlugin {
-        fn name(&self) -> &str { "timeout_plugin" }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        fn timeout(&self) -> Duration { Duration::from_millis(10) }
+        fn name(&self) -> &str {
+            "timeout_plugin"
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        fn timeout(&self) -> Duration {
+            Duration::from_millis(10)
+        }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             tokio::time::sleep(Duration::from_secs(100)).await;
             PluginOutcome::NoMatch
@@ -829,12 +958,27 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockDependentPlugin {
-        fn name(&self) -> &str { self.name }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        fn depends_on(&self) -> &[&'static str] { self.deps }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        fn depends_on(&self) -> &[&'static str] {
+            self.deps
+        }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             PluginOutcome::Matched { count: 1 }
         }
@@ -848,12 +992,27 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockOrderPlugin {
-        fn name(&self) -> &str { self.name }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        fn depends_on(&self) -> &[&'static str] { self.deps }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        fn depends_on(&self) -> &[&'static str] {
+            self.deps
+        }
         async fn execute(&self, _: &ScanContext) -> PluginOutcome {
             self.order.lock().push(self.name);
             PluginOutcome::Matched { count: 1 }
@@ -882,19 +1041,22 @@ mod tests {
     #[tokio::test]
     async fn test_single_match_plugin() {
         let registry = PluginRegistry::new();
-        registry.register(MockMatchPlugin { name: "match_plugin" });
+        registry.register(MockMatchPlugin {
+            name: "match_plugin",
+        });
 
         let (finding_tx, mut finding_rx) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].outcome, PluginOutcomeKind::Matched);
@@ -903,26 +1065,31 @@ mod tests {
         // Should have received 3 findings via channel
         drop(finding_tx);
         let mut received = 0;
-        while finding_rx.try_recv().is_ok() { received += 1; }
+        while finding_rx.try_recv().is_ok() {
+            received += 1;
+        }
         assert_eq!(received, 3);
     }
 
     #[tokio::test]
     async fn test_no_match_plugin() {
         let registry = PluginRegistry::new();
-        registry.register(MockNoMatchPlugin { name: "no_match_plugin" });
+        registry.register(MockNoMatchPlugin {
+            name: "no_match_plugin",
+        });
 
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].outcome, PluginOutcomeKind::NoMatch);
@@ -945,14 +1112,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].outcome, PluginOutcomeKind::Matched);
@@ -975,14 +1143,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].outcome, PluginOutcomeKind::Failed);
@@ -991,26 +1160,34 @@ mod tests {
     #[tokio::test]
     async fn test_panic_isolation() {
         let registry = PluginRegistry::new();
-        registry.register(MockMatchPlugin { name: "good_plugin" });
+        registry.register(MockMatchPlugin {
+            name: "good_plugin",
+        });
         registry.register(MockPanicPlugin);
-        registry.register(MockMatchPlugin { name: "another_good" });
+        registry.register(MockMatchPlugin {
+            name: "another_good",
+        });
 
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         // All 3 plugins should produce metrics despite the panic
         assert_eq!(metrics.len(), 3);
 
-        let panic_metrics = metrics.iter().find(|m| m.plugin_name == "panic_plugin").unwrap();
+        let panic_metrics = metrics
+            .iter()
+            .find(|m| m.plugin_name == "panic_plugin")
+            .unwrap();
         assert_eq!(panic_metrics.outcome, PluginOutcomeKind::Failed);
     }
 
@@ -1054,14 +1231,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 2);
         for m in &metrics {
@@ -1084,14 +1262,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 2);
         for m in &metrics {
@@ -1119,14 +1298,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 3);
         for m in &metrics {
@@ -1140,20 +1320,29 @@ mod tests {
         let order = Arc::new(Mutex::new(Vec::new()));
 
         // B depends on A → A must execute before B
-        registry.register(MockOrderPlugin { name: "plugin_a", deps: &[], order: order.clone() });
-        registry.register(MockOrderPlugin { name: "plugin_b", deps: &["plugin_a"], order: order.clone() });
+        registry.register(MockOrderPlugin {
+            name: "plugin_a",
+            deps: &[],
+            order: order.clone(),
+        });
+        registry.register(MockOrderPlugin {
+            name: "plugin_b",
+            deps: &["plugin_a"],
+            order: order.clone(),
+        });
 
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         let executed = order.lock();
         // A must appear before B
@@ -1174,7 +1363,9 @@ mod tests {
     #[tokio::test]
     async fn test_registry_init_and_shutdown() {
         let registry = PluginRegistry::new();
-        registry.register(MockMatchPlugin { name: "test_plugin" });
+        registry.register(MockMatchPlugin {
+            name: "test_plugin",
+        });
 
         let init_result = registry.init_all().await;
         assert!(init_result.is_ok());
@@ -1236,13 +1427,30 @@ mod tests {
         struct OldApiPlugin;
         #[async_trait::async_trait]
         impl ScanPlugin for OldApiPlugin {
-            fn name(&self) -> &str { "old_plugin" }
-            fn api_version(&self) -> &str { "0.5" } // below minimum
-            fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-            fn validate_config(&self, _: &VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-            async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-            async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-            async fn execute(&self, _: &ScanContext) -> PluginOutcome { PluginOutcome::NoMatch }
+            fn name(&self) -> &str {
+                "old_plugin"
+            }
+            fn api_version(&self) -> &str {
+                "0.5"
+            } // below minimum
+            fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+                true
+            }
+            fn validate_config(
+                &self,
+                _: &VulnerabilityTemplate,
+            ) -> Result<(), valayam_models::error::ScannerError> {
+                Ok(())
+            }
+            async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+                Ok(())
+            }
+            async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+                Ok(())
+            }
+            async fn execute(&self, _: &ScanContext) -> PluginOutcome {
+                PluginOutcome::NoMatch
+            }
         }
 
         let registry = PluginRegistry::new();
@@ -1317,14 +1525,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            Some(&rl),
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                Some(&rl),
+                cancel,
+            )
+            .await;
 
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].outcome, PluginOutcomeKind::Matched);
@@ -1333,20 +1542,23 @@ mod tests {
     #[tokio::test]
     async fn test_execute_template_with_cancellation_pre_check() {
         let registry = PluginRegistry::new();
-        registry.register(MockMatchPlugin { name: "cancel_plugin" });
+        registry.register(MockMatchPlugin {
+            name: "cancel_plugin",
+        });
 
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
         cancel.cancel(); // Pre-cancelled
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         // Plugin still executes (cancellation is checked within each plugin)
         assert_eq!(metrics.len(), 1);
@@ -1360,14 +1572,15 @@ mod tests {
         let (finding_tx, _) = mpsc::channel(100);
         let cancel = CancellationToken::new();
 
-        let metrics = registry.execute_template(
-            "https://example.com",
-            dummy_template(),
-            &finding_tx,
-            None,
-            cancel,
-        )
-        .await;
+        let metrics = registry
+            .execute_template(
+                "https://example.com",
+                dummy_template(),
+                &finding_tx,
+                None,
+                cancel,
+            )
+            .await;
 
         assert!(metrics.is_empty());
     }

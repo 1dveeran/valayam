@@ -27,7 +27,10 @@ mod tests {
 
     #[test]
     fn test_csp_audit_serde_roundtrip() {
-        let tmpl = CspAuditTemplate { target: "https://app.com".into(), strict_mode: true };
+        let tmpl = CspAuditTemplate {
+            target: "https://app.com".into(),
+            strict_mode: true,
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: CspAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target, "https://app.com");

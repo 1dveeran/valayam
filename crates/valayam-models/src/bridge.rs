@@ -3,8 +3,8 @@
 //! (for legacy reporter compatibility). The scan-to-finding direction is
 //! still needed in the gRPC wire-format deserialization path.
 
-use crate::result::ScanResult;
 use crate::finding::FindingOwned;
+use crate::result::ScanResult;
 use std::collections::HashMap;
 
 /// Prefix used for ScanResult-only fields stored in FindingOwned.metadata.
@@ -33,7 +33,8 @@ pub fn scan_result_to_finding(res: ScanResult) -> FindingOwned {
         scan_id: uuid::Uuid::default(),
         template_id: res.template_id,
         template_name: res.template_name,
-        severity: std::str::FromStr::from_str(&res.template_severity).unwrap_or(crate::finding::Severity::Unknown),
+        severity: std::str::FromStr::from_str(&res.template_severity)
+            .unwrap_or(crate::finding::Severity::Unknown),
         target: res.target,
         matched_at: res.payload,
         description: None,
@@ -147,7 +148,11 @@ mod tests {
             description: None,
             solution: None,
             extracted_data: None,
-            metadata: [("owasp".into(), "A3:2017".into()), ("nist".into(), "SP-800-53".into())].into(),
+            metadata: [
+                ("owasp".into(), "A3:2017".into()),
+                ("nist".into(), "SP-800-53".into()),
+            ]
+            .into(),
         };
 
         let back = finding_to_scan_result(finding);

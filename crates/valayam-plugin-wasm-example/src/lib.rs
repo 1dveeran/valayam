@@ -1,5 +1,7 @@
-use valayam_plugin_sdk::{export_plugin, Finding, WasmInput, WasmOutput, WasmScanner, PluginResult};
 use std::collections::HashMap;
+use valayam_plugin_sdk::{
+    export_plugin, Finding, PluginResult, WasmInput, WasmOutput, WasmScanner,
+};
 
 /// Example scanner that performs a basic HTTP health check against the target.
 ///
@@ -55,13 +57,14 @@ impl WasmScanner for HealthCheckScanner {
                 findings.push(Finding {
                     template_id: template_id.clone(),
                     template_name: template_name.clone(),
-                    severity: if status < 400 { "info".into() } else { "medium".into() },
+                    severity: if status < 400 {
+                        "info".into()
+                    } else {
+                        "medium".into()
+                    },
                     target: target_url.to_string(),
                     matched_at: format!("GET {}", target_url),
-                    description: Some(format!(
-                        "HTTP health check returned status {}",
-                        status
-                    )),
+                    description: Some(format!("HTTP health check returned status {}", status)),
                     solution: Some("Verify the target is healthy and accessible.".to_string()),
                     extracted_data: None,
                     metadata,
@@ -78,10 +81,7 @@ impl WasmScanner for HealthCheckScanner {
                     severity: "high".into(),
                     target: target_url.to_string(),
                     matched_at: format!("GET {} (failed)", target_url),
-                    description: Some(format!(
-                        "HTTP health check failed to reach target: {}",
-                        e
-                    )),
+                    description: Some(format!("HTTP health check failed to reach target: {}", e)),
                     solution: Some(
                         "Ensure the target is reachable from the scanner network.".to_string(),
                     ),

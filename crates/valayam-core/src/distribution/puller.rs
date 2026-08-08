@@ -85,10 +85,7 @@ impl PluginPuller {
         } else {
             tracing::info!(url = %url, plugin = %plugin_name, "Downloading plugin via HTTP");
             let response = self.client.get(url).send().await?.error_for_status()?;
-            let signature_header = response
-                .headers()
-                .get("x-plugin-signature")
-                .cloned();
+            let signature_header = response.headers().get("x-plugin-signature").cloned();
             let bytes = response.bytes().await?;
             (bytes.to_vec(), signature_header)
         };

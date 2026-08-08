@@ -27,7 +27,10 @@ mod tests {
 
     #[test]
     fn test_aws_escalate_serde_roundtrip() {
-        let tmpl = AwsEscalateTemplate { target: "arn:aws:iam::111111111111:user/test".into(), region: Some("eu-west-1".into()) };
+        let tmpl = AwsEscalateTemplate {
+            target: "arn:aws:iam::111111111111:user/test".into(),
+            region: Some("eu-west-1".into()),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: AwsEscalateTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.region.unwrap(), "eu-west-1");

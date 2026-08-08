@@ -1,7 +1,7 @@
+use hickory_resolver::proto::rr::*;
+use reqwest::Client;
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
-use reqwest::Client;
-use hickory_resolver::proto::rr::*;
 use tracing::debug;
 
 /// Attempts a DNS zone transfer (AXFR) for the given domain.
@@ -58,7 +58,10 @@ pub async fn attempt_axfr(domain: &str, nameservers: Option<&[String]>) -> Vec<S
 }
 
 /// Performs the actual AXFR transfer with a nameserver over TCP.
-async fn perform_axfr_transfer(nameserver: &str, domain: &str) -> Result<Option<Vec<String>>, std::io::Error> {
+async fn perform_axfr_transfer(
+    nameserver: &str,
+    domain: &str,
+) -> Result<Option<Vec<String>>, std::io::Error> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let addr = format!("{}:53", nameserver);
@@ -100,13 +103,19 @@ async fn perform_axfr_transfer(nameserver: &str, domain: &str) -> Result<Option<
     tcp_req.extend_from_slice(&len_prefix);
     tcp_req.extend_from_slice(&dns_pkt);
 
-    if timeout(Duration::from_secs(5), stream.write_all(&tcp_req)).await.is_err() {
+    if timeout(Duration::from_secs(5), stream.write_all(&tcp_req))
+        .await
+        .is_err()
+    {
         return Ok(None);
     }
 
     // Read 2-byte length response
     let mut len_buf = [0u8; 2];
-    if timeout(Duration::from_secs(5), stream.read_exact(&mut len_buf)).await.is_err() {
+    if timeout(Duration::from_secs(5), stream.read_exact(&mut len_buf))
+        .await
+        .is_err()
+    {
         return Ok(None);
     }
     let resp_len = u16::from_be_bytes(len_buf) as usize;
@@ -115,7 +124,10 @@ async fn perform_axfr_transfer(nameserver: &str, domain: &str) -> Result<Option<
     }
 
     let mut resp_buf = vec![0u8; resp_len];
-    if timeout(Duration::from_secs(5), stream.read_exact(&mut resp_buf)).await.is_err() {
+    if timeout(Duration::from_secs(5), stream.read_exact(&mut resp_buf))
+        .await
+        .is_err()
+    {
         return Ok(None);
     }
 
@@ -269,25 +281,33 @@ async fn calculate_takeover_confidence(target: &str) -> String {
     // Perform an HTTP GET to check for known "not found" fingerprints
     let host = target.to_string();
     let check = tokio::task::spawn_blocking(move || {
+        use std::io::{Read, Write};
         use std::net::TcpStream;
-        use std::io::{Write, Read};
         use std::time::Duration;
-        
+
         let addr = format!("{}:80", host);
-        if let Ok(mut stream) = TcpStream::connect_timeout(&addr.parse().unwrap_or_else(|_| "127.0.0.1:80".parse().unwrap()), Duration::from_secs(3)) {
-            let request = format!("GET / HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n", host);
+        if let Ok(mut stream) = TcpStream::connect_timeout(
+            &addr
+                .parse()
+                .unwrap_or_else(|_| "127.0.0.1:80".parse().unwrap()),
+            Duration::from_secs(3),
+        ) {
+            let request = format!(
+                "GET / HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
+                host
+            );
             if stream.write_all(request.as_bytes()).is_ok() {
                 let mut response = String::new();
                 let _ = stream.read_to_string(&mut response);
-                
+
                 let fingerprints = [
                     "There isn't a GitHub Pages site here",
                     "No such app",
                     "project not found",
                     "NoSuchBucket",
-                    "The specified bucket does not exist"
+                    "The specified bucket does not exist",
                 ];
-                
+
                 for fp in fingerprints {
                     if response.contains(fp) {
                         return "High";
@@ -297,7 +317,7 @@ async fn calculate_takeover_confidence(target: &str) -> String {
         }
         "Medium"
     });
-    
+
     match check.await {
         Ok(res) => res.to_string(),
         Err(_) => "Medium".to_string(),
@@ -308,17 +328,20 @@ async fn calculate_takeover_confidence(target: &str) -> String {
 async fn get_takeover_remediation(target: &str) -> String {
     // Provide specific remediation based on service
     if target.ends_with("github.io") || target.ends_with("gitlab.io") {
-        "Remove the CNAME record and ensure no conflicting resources exist on GitHub/GitLab Pages".to_string()
+        "Remove the CNAME record and ensure no conflicting resources exist on GitHub/GitLab Pages"
+            .to_string()
     } else if target.ends_with("herokuapp.com") || target.ends_with("heroku.com") {
         "Remove the CNAME record and reclaim the Heroku app or release the subdomain".to_string()
     } else if target.ends_with("s3.amazonaws.com") {
         "Remove the CNAME record and either delete or rename the S3 bucket".to_string()
     } else if target.ends_with("azurewebsites.net") {
-        "Remove the CNAME record and delete the Azure App Service or use a different domain".to_string()
+        "Remove the CNAME record and delete the Azure App Service or use a different domain"
+            .to_string()
     } else if target.ends_with("shopify.com") {
         "Remove the CNAME record and close the Shopify store or transfer the domain".to_string()
     } else {
-        "Remove the CNAME record as it points to an external service that may no longer be in use".to_string()
+        "Remove the CNAME record as it points to an external service that may no longer be in use"
+            .to_string()
     }
 }
 
@@ -342,7 +365,7 @@ lazy_static::lazy_static! {
         opts.timeout = std::time::Duration::from_secs(3);
         opts.attempts = 3;
         opts.num_concurrent_reqs = 2;
-        
+
         hickory_resolver::TokioAsyncResolver::tokio(
             hickory_resolver::config::ResolverConfig::default(),
             opts,
@@ -351,12 +374,17 @@ lazy_static::lazy_static! {
 }
 
 /// Resolve DNS records for a domain.
-pub async fn resolve(domain: &str, record_type: &str) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn resolve(
+    domain: &str,
+    record_type: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
     // Parse the record type
     let record_type_parsed = record_type.parse::<RecordType>()?;
 
     // Perform the lookup
-    let response = GLOBAL_DNS_RESOLVER.lookup(domain, record_type_parsed).await?;
+    let response = GLOBAL_DNS_RESOLVER
+        .lookup(domain, record_type_parsed)
+        .await?;
 
     // Extract record data as strings
     let mut results = Vec::new();
@@ -383,7 +411,8 @@ pub async fn resolve(domain: &str, record_type: &str) -> Result<Vec<String>, Box
 
             // TXT record
             RData::TXT(txt) => {
-                let txt_data: Vec<String> = txt.txt_data()
+                let txt_data: Vec<String> = txt
+                    .txt_data()
                     .iter()
                     .map(|txt_data| String::from_utf8_lossy(txt_data).into_owned())
                     .collect();

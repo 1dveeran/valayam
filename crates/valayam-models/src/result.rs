@@ -39,7 +39,6 @@ pub struct ScanResult {
 }
 
 impl ScanResult {
-
     /// Add a compliance mapping
     pub fn with_compliance(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.compliance.insert(key.into(), value.into());
@@ -92,11 +91,7 @@ impl Default for ScanResult {
 }
 
 impl ScanResult {
-    pub fn new(
-        template_id: &str,
-        template_meta: &dyn TemplateMetadata,
-        target_url: &str,
-    ) -> Self {
+    pub fn new(template_id: &str, template_meta: &dyn TemplateMetadata, target_url: &str) -> Self {
         Self {
             schema_version: default_schema_version(),
             timestamp: Utc::now(),
@@ -186,8 +181,12 @@ mod tests {
 
     #[test]
     fn test_with_reference() {
-        let sr = ScanResult::default().with_reference("https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234");
-        assert_eq!(sr.reference.unwrap(), "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234");
+        let sr = ScanResult::default()
+            .with_reference("https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234");
+        assert_eq!(
+            sr.reference.unwrap(),
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234"
+        );
     }
 
     #[test]

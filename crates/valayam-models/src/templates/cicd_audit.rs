@@ -18,7 +18,9 @@ mod tests {
 
     #[test]
     fn test_cicd_template_serde_roundtrip() {
-        let tmpl = CicdAuditTemplate { target_repo: "/home/user/project".into() };
+        let tmpl = CicdAuditTemplate {
+            target_repo: "/home/user/project".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: CicdAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target_repo, "/home/user/project");

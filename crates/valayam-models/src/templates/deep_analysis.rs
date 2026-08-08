@@ -139,16 +139,16 @@ pub struct AnalysisCondition {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeepAnalysisTemplate {
     pub target: String,
-    
+
     #[serde(flatten)]
     pub analysis: DeepAnalysisType,
-    
+
     pub prompt: Option<String>,
-    
+
     pub severity_override: Option<String>,
-    
+
     pub tags: Option<Vec<String>>,
-    
+
     pub conditions: Option<Vec<AnalysisCondition>>,
 }
 
@@ -217,7 +217,7 @@ mod tests {
                 extract_archives: true,
                 secret_scan: false,
                 pattern_file: None,
-            })
+            }),
         };
         let json = serde_json::to_string(&tmpl).unwrap();
         let deser: DeepAnalysisTemplate = serde_json::from_str(&json).unwrap();

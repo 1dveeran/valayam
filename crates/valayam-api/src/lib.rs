@@ -1,11 +1,13 @@
-use valayam_engine::reflection::ValayamReflection;
-use tonic::{transport::Server, Request, Response, Status};
-use valayam_engine::rpc::scanner_server::{Scanner, ScannerServer};
-use valayam_engine::rpc::{ScanRequest, ScanResponse, TelemetryEvent, TelemetryResponse, ControlRequest, ControlResponse};
-use valayam_proto::reflection::v1::server_reflection_server::ServerReflectionServer;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
+use tonic::{transport::Server, Request, Response, Status};
+use valayam_engine::reflection::ValayamReflection;
+use valayam_engine::rpc::scanner_server::{Scanner, ScannerServer};
+use valayam_engine::rpc::{
+    ControlRequest, ControlResponse, ScanRequest, ScanResponse, TelemetryEvent, TelemetryResponse,
+};
 use valayam_engine::scan_state::ScanState;
+use valayam_proto::reflection::v1::server_reflection_server::ServerReflectionServer;
 
 /// Optional TLS configuration for the gRPC control plane.
 /// When `ca_pem` is provided, the server requires client certificates signed by that CA (mTLS).
@@ -26,31 +28,39 @@ impl Scanner for TelemetryService {
     async fn scan(&self, request: Request<ScanRequest>) -> Result<Response<ScanResponse>, Status> {
         let req = request.into_inner();
         let target = req.target_url;
-        let template: valayam_models::templates::schema::VulnerabilityTemplate = match serde_yaml::from_str(&req.template_yaml) {
-            Ok(t) => t,
-            Err(e) => return Err(Status::invalid_argument(format!("Invalid template YAML: {}", e))),
-        };
-        
+        let template: valayam_models::templates::schema::VulnerabilityTemplate =
+            match serde_yaml::from_str(&req.template_yaml) {
+                Ok(t) => t,
+                Err(e) => {
+                    return Err(Status::invalid_argument(format!(
+                        "Invalid template YAML: {}",
+                        e
+                    )))
+                }
+            };
+
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let registry = std::sync::Arc::new(valayam_engine::registry::PluginRegistry::new());
         let token = tokio_util::sync::CancellationToken::new();
         let executor = valayam_engine::executor::ScanExecutor::new(tx, registry, None, token);
-        
+
         let template_arc = std::sync::Arc::new(template);
         executor.execute(&target, template_arc).await;
-        
+
         let mut findings = Vec::new();
         // tx is dropped when executor is dropped at end of scope? Wait, executor doesn't drop tx until execute completes, wait execute consumes tx?
         // Actually execute just takes &self, so tx is cloned. But wait, we need to drop the original tx so rx will close!
         drop(executor); // or drop tx before creating executor? We moved tx into executor, so dropping executor drops tx.
-        
+
         while let Some(finding) = rx.recv().await {
             if let Ok(json) = serde_json::to_string(&finding) {
                 findings.push(json);
             }
         }
-        
-        Ok(Response::new(ScanResponse { findings_json: findings }))
+
+        Ok(Response::new(ScanResponse {
+            findings_json: findings,
+        }))
     }
 
     async fn stream_telemetry(
@@ -70,26 +80,44 @@ impl Scanner for TelemetryService {
         Ok(Response::new(TelemetryResponse { received: true }))
     }
 
-    async fn pause_scan(&self, _req: Request<ControlRequest>) -> Result<Response<ControlResponse>, Status> {
+    async fn pause_scan(
+        &self,
+        _req: Request<ControlRequest>,
+    ) -> Result<Response<ControlResponse>, Status> {
         if let Some(tx) = &self.state_tx {
             let _ = tx.send(ScanState::Paused);
-            return Ok(Response::new(ControlResponse { success: true, message: "Paused".into() }));
+            return Ok(Response::new(ControlResponse {
+                success: true,
+                message: "Paused".into(),
+            }));
         }
         Err(Status::unavailable("Control plane not active"))
     }
 
-    async fn resume_scan(&self, _req: Request<ControlRequest>) -> Result<Response<ControlResponse>, Status> {
+    async fn resume_scan(
+        &self,
+        _req: Request<ControlRequest>,
+    ) -> Result<Response<ControlResponse>, Status> {
         if let Some(tx) = &self.state_tx {
             let _ = tx.send(ScanState::Running);
-            return Ok(Response::new(ControlResponse { success: true, message: "Resumed".into() }));
+            return Ok(Response::new(ControlResponse {
+                success: true,
+                message: "Resumed".into(),
+            }));
         }
         Err(Status::unavailable("Control plane not active"))
     }
 
-    async fn cancel_scan(&self, _req: Request<ControlRequest>) -> Result<Response<ControlResponse>, Status> {
+    async fn cancel_scan(
+        &self,
+        _req: Request<ControlRequest>,
+    ) -> Result<Response<ControlResponse>, Status> {
         if let Some(token) = &self.cancellation_token {
             token.cancel();
-            return Ok(Response::new(ControlResponse { success: true, message: "Cancelled".into() }));
+            return Ok(Response::new(ControlResponse {
+                success: true,
+                message: "Cancelled".into(),
+            }));
         }
         Err(Status::unavailable("Control plane not active"))
     }
@@ -105,11 +133,18 @@ fn spawn_metrics_http_server(metrics_addr: std::net::SocketAddr) -> Cancellation
         let listener = match tokio::net::TcpListener::bind(metrics_addr).await {
             Ok(l) => l,
             Err(e) => {
-                tracing::warn!("Failed to bind metrics HTTP server on {}: {}", metrics_addr, e);
+                tracing::warn!(
+                    "Failed to bind metrics HTTP server on {}: {}",
+                    metrics_addr,
+                    e
+                );
                 return;
             }
         };
-        tracing::info!("Prometheus metrics endpoint listening on http://{}/metrics", metrics_addr);
+        tracing::info!(
+            "Prometheus metrics endpoint listening on http://{}/metrics",
+            metrics_addr
+        );
 
         loop {
             tokio::select! {
@@ -230,13 +265,14 @@ pub async fn start_telemetry_server_tls(
                 .identity(identity)
                 .client_ca_root(ca);
             tracing::info!("gRPC mTLS enabled — client certificates required");
-            builder = builder.tls_config(server_tls)
+            builder = builder
+                .tls_config(server_tls)
                 .map_err(|e| format!("Failed to configure mTLS: {}", e))?;
         } else {
-            let server_tls = tonic::transport::ServerTlsConfig::new()
-                .identity(identity);
+            let server_tls = tonic::transport::ServerTlsConfig::new().identity(identity);
             tracing::info!("gRPC TLS enabled (server-only)");
-            builder = builder.tls_config(server_tls)
+            builder = builder
+                .tls_config(server_tls)
                 .map_err(|e| format!("Failed to configure TLS: {}", e))?;
         }
     }
@@ -252,11 +288,16 @@ pub async fn start_telemetry_server_tls(
 }
 
 /// Start a minimal HTTP server serving Prometheus metrics at `/metrics`.
-pub async fn start_metrics_server(addr: std::net::SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_metrics_server(
+    addr: std::net::SocketAddr,
+) -> Result<(), Box<dyn std::error::Error>> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("Starting Valayam metrics endpoint on http://{}/metrics", addr);
+    tracing::info!(
+        "Starting Valayam metrics endpoint on http://{}/metrics",
+        addr
+    );
 
     loop {
         let (mut stream, _) = listener.accept().await?;
@@ -271,7 +312,9 @@ pub async fn start_metrics_server(addr: std::net::SocketAddr) -> Result<(), Box<
                 body_bytes.len()
             );
 
-            if stream.write_all(header.as_bytes()).await.is_err() { return; }
+            if stream.write_all(header.as_bytes()).await.is_err() {
+                return;
+            }
             let _ = stream.write_all(body_bytes).await;
         });
     }

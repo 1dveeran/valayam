@@ -4,10 +4,6 @@
 //! specific scan category: web application, network, cloud, mobile, IoT,
 //! API, graphql, etc. The `schema` module defines the core VulnerabilityTemplate.
 
-pub mod matcher;
-pub mod functions;
-pub mod section;
-pub mod schema;
 pub mod auth_logic;
 pub mod auto_exploit;
 pub mod auto_redteam;
@@ -29,6 +25,7 @@ pub mod dom_redirect_audit;
 pub mod drift_detect;
 pub mod easm;
 pub mod extractors;
+pub mod functions;
 pub mod fuzzer;
 pub mod graphql_audit;
 pub mod grpc_audit;
@@ -40,6 +37,7 @@ pub mod idp_audit;
 pub mod implant_deploy;
 pub mod iot_audit;
 pub mod k8s_audit;
+pub mod matcher;
 pub mod mitre_mapping;
 pub mod mobile_audit;
 pub mod network_scan;
@@ -53,8 +51,10 @@ pub mod sast_secrets;
 pub mod sast_taint;
 pub mod sbom_audit;
 pub mod scada_audit;
+pub mod schema;
 pub mod schema_drift;
 pub mod scripting;
+pub mod section;
 pub mod serverless_audit;
 pub mod subdomain_takeover;
 pub mod tls_audit;

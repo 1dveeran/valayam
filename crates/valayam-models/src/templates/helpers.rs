@@ -1,5 +1,5 @@
-use regex::Regex;
 use crate::templates::functions;
+use regex::Regex;
 /// Parses and evaluates all `{{function(arg)}}` helper expressions in a string.
 ///
 /// This is called **after** variable substitution, so expressions like

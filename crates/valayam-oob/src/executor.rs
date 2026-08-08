@@ -37,7 +37,13 @@ impl OobExecutor {
         correlation_id: &str,
         timeout_secs: u64,
     ) -> bool {
-        Self::wait_for_interaction_with_config(server, correlation_id, timeout_secs, &OobPollConfig::default()).await
+        Self::wait_for_interaction_with_config(
+            server,
+            correlation_id,
+            timeout_secs,
+            &OobPollConfig::default(),
+        )
+        .await
     }
 
     /// Polls with a custom retry config.

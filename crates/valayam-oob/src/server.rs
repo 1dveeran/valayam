@@ -91,15 +91,31 @@ impl OobServer {
         OobServerConfig {
             http_bind: std::env::var("OOB_HTTP_BIND").unwrap_or_else(|_| "0.0.0.0:8080".into()),
             dns_bind: std::env::var("OOB_DNS_BIND").unwrap_or_else(|_| "0.0.0.0:5353".into()),
-            callback_domain: std::env::var("OOB_CALLBACK_DOMAIN").unwrap_or_else(|_| "oob.valayam.local".into()),
+            callback_domain: std::env::var("OOB_CALLBACK_DOMAIN")
+                .unwrap_or_else(|_| "oob.valayam.local".into()),
             retention_duration: Duration::from_secs(
-                std::env::var("OOB_RETENTION_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(3600)
+                std::env::var("OOB_RETENTION_SECS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(3600),
             ),
-            max_body_capture: std::env::var("OOB_MAX_BODY").ok().and_then(|v| v.parse().ok()).unwrap_or(4096),
-            max_concurrent_connections: std::env::var("OOB_MAX_CONCURRENT").ok().and_then(|v| v.parse().ok()).unwrap_or(1000),
-            per_ip_rate_limit: std::env::var("OOB_RATE_LIMIT").ok().and_then(|v| v.parse().ok()).unwrap_or(50),
+            max_body_capture: std::env::var("OOB_MAX_BODY")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(4096),
+            max_concurrent_connections: std::env::var("OOB_MAX_CONCURRENT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1000),
+            per_ip_rate_limit: std::env::var("OOB_RATE_LIMIT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(50),
             cleanup_interval: Duration::from_secs(
-                std::env::var("OOB_CLEANUP_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(300)
+                std::env::var("OOB_CLEANUP_SECS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(300),
             ),
             tls_config: None,
         }
@@ -130,7 +146,18 @@ impl OobServer {
             match TcpListener::bind(&http_bind).await {
                 Ok(listener) => {
                     tracing::info!(bind = %http_bind, "OOB HTTP server started");
-                    Self::run_http_server(listener, hits_http, shutdown_http, max_body, &callback_domain_http, max_concurrent, tls_config, ip_limits_http, rate_limit_per_sec).await;
+                    Self::run_http_server(
+                        listener,
+                        hits_http,
+                        shutdown_http,
+                        max_body,
+                        &callback_domain_http,
+                        max_concurrent,
+                        tls_config,
+                        ip_limits_http,
+                        rate_limit_per_sec,
+                    )
+                    .await;
                 }
                 Err(e) => {
                     tracing::error!(bind = %http_bind, error = %e, "Failed to bind OOB HTTP server");
@@ -143,7 +170,8 @@ impl OobServer {
             match UdpSocket::bind(&dns_bind).await {
                 Ok(socket) => {
                     tracing::info!(bind = %dns_bind, "OOB DNS server started");
-                    Self::run_dns_server(socket, hits_dns, shutdown_dns, &callback_domain_dns).await;
+                    Self::run_dns_server(socket, hits_dns, shutdown_dns, &callback_domain_dns)
+                        .await;
                 }
                 Err(e) => {
                     tracing::error!(bind = %dns_bind, error = %e, "Failed to bind OOB DNS server: port is being used by another process");
@@ -177,7 +205,9 @@ impl OobServer {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         if http_handle.is_finished() || dns_handle.is_finished() || cleanup_handle.is_finished() {
-            return Err("OOB server failed to start — check bind addresses and permissions".to_string());
+            return Err(
+                "OOB server failed to start — check bind addresses and permissions".to_string(),
+            );
         }
 
         tracing::info!("OOB Server fully operational");
@@ -327,9 +357,19 @@ impl OobServer {
             }
         }
 
-        if path.len() > 8 && path.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '-' || c == '_') {
-            let last_segment = path.rsplit('/').next().filter(|s| !s.is_empty() && s.len() >= 8)?;
-            if last_segment.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        if path.len() > 8
+            && path
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '-' || c == '_')
+        {
+            let last_segment = path
+                .rsplit('/')
+                .next()
+                .filter(|s| !s.is_empty() && s.len() >= 8)?;
+            if last_segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
                 return Some(last_segment.to_string());
             }
         }
@@ -388,7 +428,10 @@ impl OobServer {
     }
 
     /// Extract a correlation ID and optional payload from a DNS query.
-    fn extract_dns_correlation_id(query: &[u8], callback_domain: &str) -> (Option<String>, Option<String>) {
+    fn extract_dns_correlation_id(
+        query: &[u8],
+        callback_domain: &str,
+    ) -> (Option<String>, Option<String>) {
         if query.len() < 12 {
             return (None, None);
         }
@@ -418,7 +461,10 @@ impl OobServer {
         let domain_name = labels.join(".");
 
         if domain_name.ends_with(callback_domain) {
-            let prefix = domain_name.strip_suffix(callback_domain).unwrap_or_default().trim_end_matches('.');
+            let prefix = domain_name
+                .strip_suffix(callback_domain)
+                .unwrap_or_default()
+                .trim_end_matches('.');
 
             let mut parts: Vec<&str> = prefix.split('.').collect();
 
@@ -436,14 +482,23 @@ impl OobServer {
                 None
             };
 
-            if !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            if !id.is_empty()
+                && id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
                 return (Some(id.to_string()), payload);
             }
         }
 
-        if !domain_name.contains('.') && domain_name.len() >= 8 && domain_name.len() <= 64
-            && domain_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                return (Some(domain_name), None);
+        if !domain_name.contains('.')
+            && domain_name.len() >= 8
+            && domain_name.len() <= 64
+            && domain_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return (Some(domain_name), None);
         }
 
         (None, None)
@@ -477,13 +532,18 @@ impl OobServer {
     pub fn generate_correlation_id() -> String {
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        let id: String = (0..12).map(|_| rng.sample(rand::distributions::Alphanumeric) as char).collect();
+        let id: String = (0..12)
+            .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+            .collect();
         id.to_lowercase()
     }
 
     /// Build the full callback URL for a given correlation ID.
     pub fn callback_url(&self, correlation_id: &str) -> String {
-        format!("http://{}.{}/{}", correlation_id, self.config.callback_domain, correlation_id)
+        format!(
+            "http://{}.{}/{}",
+            correlation_id, self.config.callback_domain, correlation_id
+        )
     }
 
     /// Build the DNS callback domain for a given correlation ID.

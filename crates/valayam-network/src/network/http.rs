@@ -1,14 +1,14 @@
-use valayam_models::error::ScannerError;
-use crate::stealth::tls::{Ja3Ja4Spoofer, Ja3Ja4Profile};
+use crate::network::ssrf_filter::{reject_private_ip, SsrfConfig};
+use crate::network_metrics;
 use crate::stealth::proxy::ProxyRotator;
-use crate::network::ssrf_filter::{SsrfConfig, reject_private_ip};
+use crate::stealth::tls::{Ja3Ja4Profile, Ja3Ja4Spoofer};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use tracing::{debug, warn};
-use crate::network_metrics;
+use valayam_models::error::ScannerError;
 
 /// A pool of reqwest clients, each configured with a different proxy.
 /// Clients are created lazily and reused.
@@ -24,7 +24,11 @@ struct ProxiedClientPool {
 }
 
 impl ProxiedClientPool {
-    fn new(rotator: ProxyRotator, timeout: u32, default_headers: Option<reqwest::header::HeaderMap>) -> Self {
+    fn new(
+        rotator: ProxyRotator,
+        timeout: u32,
+        default_headers: Option<reqwest::header::HeaderMap>,
+    ) -> Self {
         Self {
             rotator: Arc::new(rotator),
             clients: Mutex::new(HashMap::new()),
@@ -63,12 +67,14 @@ impl ProxiedClientPool {
             .danger_accept_invalid_hostnames(true)
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(self.timeout as u64));
-            
+
         // Construct and attach the TLS config if we're simulating spoofing.
         // NOTE: In the ProxiedClientPool we aren't passing the profile down currently,
         // so we use the default permissive config. In a full implementation, the profile
         // would be passed into the pool.
-        let tls_config = crate::stealth::tls::TlsConfig::new_with_spoofing(None).ok().and_then(|c| c.build().ok());
+        let tls_config = crate::stealth::tls::TlsConfig::new_with_spoofing(None)
+            .ok()
+            .and_then(|c| c.build().ok());
         if let Some(cfg) = tls_config {
             client_builder = client_builder.use_preconfigured_tls(cfg);
         }
@@ -154,7 +160,16 @@ impl StealthHttpClient {
         ja3_ja4_profile: Option<Ja3Ja4Profile>,
         follow_meta_refresh: bool,
     ) -> Result<Self, ScannerError> {
-        Self::new_with_options(use_proxy_rotation, use_user_agent_rotation, ja3_ja4_profile, follow_meta_refresh, None, None, None, None)
+        Self::new_with_options(
+            use_proxy_rotation,
+            use_user_agent_rotation,
+            ja3_ja4_profile,
+            follow_meta_refresh,
+            None,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Create a new StealthHttpClient with stealth features and advanced options.
@@ -170,7 +185,7 @@ impl StealthHttpClient {
         ssrf_config: Option<SsrfConfig>,
     ) -> Result<Self, ScannerError> {
         let timeout = timeout_opt.unwrap_or(30);
-        
+
         // Convert HashMap to HeaderMap
         let mut headers_map = None;
         if let Some(hdrs) = default_headers {
@@ -201,17 +216,18 @@ impl StealthHttpClient {
         let (proxy_client_pool, proxy_rotator) = if use_proxy_rotation {
             let rotator = ProxyRotator::new();
             let pool = ProxiedClientPool::new(rotator.clone(), timeout, headers_map);
-            (
-                Some(Arc::new(pool)),
-                Some(Arc::new(rotator)),
-            )
+            (Some(Arc::new(pool)), Some(Arc::new(rotator)))
         } else {
             (None, None)
         };
 
         // Add user-agent rotation if enabled
         let user_agent_rotator = if use_user_agent_rotation {
-            Some(Arc::new(valayam_common::user_agent::UserAgentRotator::new().map_err(|e| valayam_models::error::ScannerError::NetworkError(tokio::io::Error::other(e)))?))
+            Some(Arc::new(
+                valayam_common::user_agent::UserAgentRotator::new().map_err(|e| {
+                    valayam_models::error::ScannerError::NetworkError(tokio::io::Error::other(e))
+                })?,
+            ))
         } else {
             None
         };
@@ -220,7 +236,7 @@ impl StealthHttpClient {
         let tls_cfg = crate::stealth::tls::TlsConfig::new_with_spoofing(ja3_ja4_profile)?;
         let rustls_client_config = tls_cfg.build()?;
         client_builder = client_builder.use_preconfigured_tls(rustls_client_config);
-        
+
         let ja3_ja4_spoofer = ja3_ja4_profile.map(Ja3Ja4Spoofer::new);
 
         let client = client_builder.build()?;
@@ -235,8 +251,13 @@ impl StealthHttpClient {
             user_agent_rotator,
             ja3_ja4_spoofer,
             follow_meta_refresh,
-            circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(cb_max_fails, cb_timeout)),
-            adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(0, 0, 5000, 50)),
+            circuit_breaker: Arc::new(crate::network::resilience::CircuitBreaker::new(
+                cb_max_fails,
+                cb_timeout,
+            )),
+            adaptive_rate_limiter: Arc::new(crate::network::resilience::AdaptiveRateLimiter::new(
+                0, 0, 5000, 50,
+            )),
             ssrf_config: ssrf_config.unwrap_or_default(),
         })
     }
@@ -261,7 +282,7 @@ impl StealthHttpClient {
         reject_private_ip(url, &self.ssrf_config)?;
 
         self.adaptive_rate_limiter.wait().await;
-        
+
         let http_method: reqwest::Method = method
             .parse()
             .map_err(|_| ScannerError::InvalidHttpMethod(method.to_string()))?;
@@ -303,7 +324,9 @@ impl StealthHttpClient {
                         let ua = rotator.next_ua();
                         proxied_req = proxied_req.header(reqwest::header::USER_AGENT, ua);
                     }
-                    response_result = Some(send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await);
+                    response_result = Some(
+                        send_with_proxied_req(proxied_req, pool, self.follow_meta_refresh).await,
+                    );
                 } else {
                     warn!("No healthy proxies available, falling back to direct connection");
                 }
@@ -333,11 +356,17 @@ impl StealthHttpClient {
                 // Apply user-agent rotation if configured
                 if let Some(ref rotator) = self.user_agent_rotator {
                     let user_agent = rotator.next_ua();
-                    request_builder = request_builder.header(reqwest::header::USER_AGENT, user_agent);
+                    request_builder =
+                        request_builder.header(reqwest::header::USER_AGENT, user_agent);
                 }
 
                 // Send the request
-                response_result = Some(request_builder.send().await.map_err(ScannerError::HttpClientError));
+                response_result = Some(
+                    request_builder
+                        .send()
+                        .await
+                        .map_err(ScannerError::HttpClientError),
+                );
             }
 
             let response_res = if let Some(res) = response_result {
@@ -376,7 +405,12 @@ impl StealthHttpClient {
                 }
             };
             let elapsed = start.elapsed().as_secs_f64();
-            network_metrics::record_http_request(method, response.status().as_u16(), proxied_used, elapsed);
+            network_metrics::record_http_request(
+                method,
+                response.status().as_u16(),
+                proxied_used,
+                elapsed,
+            );
 
             // Handle meta-refresh redirects if enabled
             let response = if self.follow_meta_refresh {
@@ -460,7 +494,8 @@ async fn handle_meta_refresh(
     }
 
     if let Some(len) = response.content_length() {
-        if len > 5 * 1024 * 1024 { // 5 MB limit
+        if len > 5 * 1024 * 1024 {
+            // 5 MB limit
             return Ok(response);
         }
     }
@@ -468,17 +503,23 @@ async fn handle_meta_refresh(
     // Limit body read to 5MB to prevent chunked response DOS
     let mut bytes = Vec::new();
     let max_bytes = 5 * 1024 * 1024;
-    
+
     // We can't use `response.bytes_stream()` since `stream` feature might not be enabled.
     // However `response.chunk()` allows reading chunks one by one.
     let mut current_response = response;
-    while let Some(chunk) = current_response.chunk().await.map_err(ScannerError::HttpClientError)? {
+    while let Some(chunk) = current_response
+        .chunk()
+        .await
+        .map_err(ScannerError::HttpClientError)?
+    {
         if bytes.len() + chunk.len() > max_bytes {
-            return Err(ScannerError::ResourceExhausted("Meta-refresh body too large".to_string()));
+            return Err(ScannerError::ResourceExhausted(
+                "Meta-refresh body too large".to_string(),
+            ));
         }
         bytes.extend_from_slice(&chunk);
     }
-    
+
     let body = String::from_utf8_lossy(&bytes).to_string();
 
     if let Some(redirect_url) = extract_meta_refresh(&body) {
@@ -516,7 +557,7 @@ fn extract_meta_refresh(html: &str) -> Option<String> {
     let re1 = META_REFRESH_RE1.get_or_init(|| regex::Regex::new(
         r#"(?i)<meta\s+[^>]*http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["']\d+\s*;\s*url\s*=\s*["']([^"']*)["'][^>]*>"#
     ).unwrap());
-    
+
     let re2 = META_REFRESH_RE2.get_or_init(|| regex::Regex::new(
         r#"(?i)<meta\s+[^>]*http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["']\d+\s*;\s*url\s*=\s*([^"'\s>]+)"#
     ).unwrap());
@@ -538,7 +579,9 @@ mod tests {
     async fn test_stealth_http_client_creation() {
         let client = StealthHttpClient::new(true, true, Some(Ja3Ja4Profile::Chrome), true)
             .expect("Should create client");
-        assert!(client.client().get("https://example.com")
+        assert!(client
+            .client()
+            .get("https://example.com")
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .is_ok());

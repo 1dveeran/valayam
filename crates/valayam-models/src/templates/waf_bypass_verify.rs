@@ -12,7 +12,8 @@ mod tests {
 
     #[test]
     fn test_waf_bypass_verify_template_deser() {
-        let json = r#"{"target": "example.com", "payloads": ["' OR 1=1--", "<script>alert(1)</script>"]}"#;
+        let json =
+            r#"{"target": "example.com", "payloads": ["' OR 1=1--", "<script>alert(1)</script>"]}"#;
         let tmpl: WafBypassVerifyTemplate = serde_json::from_str(json).unwrap();
         assert_eq!(tmpl.target, "example.com");
         assert_eq!(tmpl.payloads.len(), 2);

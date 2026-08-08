@@ -1,8 +1,8 @@
 use super::oci_client::{OciClient, OciDescriptor, OciManifest};
 use anyhow::{Context, Result};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use serde_json::json;
 use std::path::Path;
 
 /// Documentation for this item.
@@ -66,9 +66,10 @@ impl PluginPublisher {
                 "diff_ids": [digest_str.clone()]
             }
         });
-        let config_data_str = serde_json::to_string(&config_json).unwrap_or_else(|_| "{}".to_string());
+        let config_data_str =
+            serde_json::to_string(&config_json).unwrap_or_else(|_| "{}".to_string());
         let config_data = config_data_str.as_bytes();
-        
+
         let mut config_hasher = Sha256::new();
         config_hasher.update(config_data);
         let config_digest_str = format!("sha256:{:x}", config_hasher.finalize());

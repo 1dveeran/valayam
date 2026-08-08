@@ -1,8 +1,12 @@
-#![allow(clippy::field_reassign_with_default, clippy::same_item_push, clippy::redundant_field_names)]
+#![allow(
+    clippy::field_reassign_with_default,
+    clippy::same_item_push,
+    clippy::redundant_field_names
+)]
 use futures::future::join_all;
 use std::collections::HashSet;
 use tokio::net::UdpSocket;
- // Reuse service info from TCP module
+// Reuse service info from TCP module
 
 /// Result of a UDP port scan, including optional response data.
 #[derive(Debug, Clone)]
@@ -15,7 +19,6 @@ pub struct UdpPortResult {
 
 /// Additional service information for UDP services
 pub mod service_info {
-    
 
     #[derive(Debug, Clone, Default)]
     pub struct ServiceInfo {
@@ -48,14 +51,12 @@ fn parse_ports(ports: &[String]) -> Result<HashSet<u16>, ScannerError> {
     let mut parsed_ports = HashSet::new();
     for port_str in ports {
         if let Some((start, end)) = port_str.split_once('-') {
-            let start_port: u16 = start
-                .trim()
-                .parse()
-                .map_err(|_| ScannerError::ConfigurationError(format!("Invalid port range start: {}", start)))?;
-            let end_port: u16 = end
-                .trim()
-                .parse()
-                .map_err(|_| ScannerError::ConfigurationError(format!("Invalid port range end: {}", end)))?;
+            let start_port: u16 = start.trim().parse().map_err(|_| {
+                ScannerError::ConfigurationError(format!("Invalid port range start: {}", start))
+            })?;
+            let end_port: u16 = end.trim().parse().map_err(|_| {
+                ScannerError::ConfigurationError(format!("Invalid port range end: {}", end))
+            })?;
             if start_port > end_port {
                 return Err(ScannerError::ConfigurationError(format!(
                     "Invalid port range: start > end ({} > {})",
@@ -66,10 +67,9 @@ fn parse_ports(ports: &[String]) -> Result<HashSet<u16>, ScannerError> {
                 parsed_ports.insert(port);
             }
         } else {
-            let port: u16 = port_str
-                .trim()
-                .parse()
-                .map_err(|_| ScannerError::ConfigurationError(format!("Invalid port: {}", port_str)))?;
+            let port: u16 = port_str.trim().parse().map_err(|_| {
+                ScannerError::ConfigurationError(format!("Invalid port: {}", port_str))
+            })?;
             parsed_ports.insert(port);
         }
     }
@@ -103,7 +103,7 @@ async fn probe_udp_service(_socket: &UdpSocket, port: u16) -> Option<Vec<u8>> {
             query.push(0x00);
             // Question: example.com
             query.extend_from_slice(b"\x07example\x03com\x00"); // length-prefixed labels
-            // QTYPE: A (1)
+                                                                // QTYPE: A (1)
             query.push(0x00);
             query.push(0x01);
             // QCLASS: IN (1)
@@ -116,7 +116,11 @@ async fn probe_udp_service(_socket: &UdpSocket, port: u16) -> Option<Vec<u8>> {
             // SNMPv1 GetRequest for sysDescr.0
             // This is a simplified version - real implementation would use proper BER encoding
             let mut pkt = Vec::new();
-            pkt.extend_from_slice(&[0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0, 0x19, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x12, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x01, 0x00, 0x05, 0x00]);
+            pkt.extend_from_slice(&[
+                0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0,
+                0x19, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x12, 0x06, 0x08, 0x2b, 0x06, 0x01,
+                0x02, 0x01, 0x01, 0x01, 0x00, 0x05, 0x00,
+            ]);
             Some(pkt)
         }
         // DHCP - client discover message
@@ -163,7 +167,7 @@ async fn probe_udp_service(_socket: &UdpSocket, port: u16) -> Option<Vec<u8>> {
             }
             // OPTIONS: magic cookie + options
             pkt.extend_from_slice(&[0x63, 0x82, 0x53, 0x63]); // Magic cookie
-            // DHCP Message Type: Discover (1)
+                                                              // DHCP Message Type: Discover (1)
             pkt.extend_from_slice(&[0x35, 0x01, 0x01]);
             // END
             pkt.push(0xff);
@@ -336,7 +340,10 @@ fn parse_ssdp_response(response: &[u8]) -> service_info::ServiceInfo {
     if resp_str.contains("HTTP/1.1 200 OK") || resp_str.contains("UPnP") {
         info.version = Some("UPnP Device".to_string());
         // Try to extract Server header
-        if let Some(server_line) = resp_str.lines().find(|l| l.to_lowercase().starts_with("server:")) {
+        if let Some(server_line) = resp_str
+            .lines()
+            .find(|l| l.to_lowercase().starts_with("server:"))
+        {
             info.version = Some(server_line["server:".len()..].trim().to_string());
         }
     }
@@ -382,8 +389,10 @@ pub async fn scan_ports(
                         let mut buf = vec![0u8; 65535]; // Max UDP packet size
                         match tokio::time::timeout(
                             std::time::Duration::from_millis(timeout_ms),
-                            socket.recv(&mut buf)
-                        ).await {
+                            socket.recv(&mut buf),
+                        )
+                        .await
+                        {
                             Ok(Ok(n)) if n > 0 => {
                                 response = Some(buf[..n].to_vec());
                             }
@@ -397,8 +406,10 @@ pub async fn scan_ports(
                     let mut buf = vec![0u8; 65535];
                     match tokio::time::timeout(
                         std::time::Duration::from_millis(timeout_ms),
-                        socket.recv(&mut buf)
-                    ).await {
+                        socket.recv(&mut buf),
+                    )
+                    .await
+                    {
                         Ok(Ok(n)) if n > 0 => {
                             response = Some(buf[..n].to_vec());
                         }
@@ -492,9 +503,9 @@ mod tests {
         // Minimal valid DNS response (header only, no questions/answers)
         // ID: 0x1234, Flags: 0x8180 (standard response), QDCOUNT: 1, ANCOUNT: 2, etc.
         let response = [
-            0x12, 0x34, 0x81, 0x80, 0x00, 0x01, 0x00, 0x02,
-            0x00, 0x00, 0x00, 0x00, // Header
-            // Question section would follow...
+            0x12, 0x34, 0x81, 0x80, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00,
+            0x00, // Header
+                 // Question section would follow...
         ];
         let info = parse_dns_response(&response);
         assert!(info.is_dns);
@@ -504,7 +515,10 @@ mod tests {
     #[tokio::test]
     async fn test_parse_snmp_response() {
         // Minimal SNMP response (simplified)
-        let response = [0x30, 0x0a, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa2, 0x00];
+        let response = [
+            0x30, 0x0a, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa2,
+            0x00,
+        ];
         let info = parse_snmp_response(&response);
         assert!(info.is_snmp);
         assert_eq!(info.service_name.as_deref(), Some("SNMP"));

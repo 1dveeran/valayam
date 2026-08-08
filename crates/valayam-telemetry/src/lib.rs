@@ -4,8 +4,8 @@
 //! be kept alive for the lifetime of the application (it holds the
 //! non-blocking file writer guard and the OTLP tracer provider).
 
-use std::path::Path;
 use opentelemetry_otlp::WithExportConfig;
+use std::path::Path;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 /// Opaque guard that keeps file-appender and OTLP resources alive.
@@ -34,7 +34,10 @@ pub fn init_telemetry(
         .unwrap_or(tracing::Level::ERROR);
     let console_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(console_level.into())
-        .parse_lossy(format!("{},extism=off,wasmtime=off,cranelift=off", console_level_str));
+        .parse_lossy(format!(
+            "{},extism=off,wasmtime=off,cranelift=off",
+            console_level_str
+        ));
 
     let console_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)

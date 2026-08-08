@@ -10,13 +10,15 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
+use valayam_core::core::plugins::*;
+use valayam_core::core::reporters::{
+    composite::CompositeReporter, console::ConsoleReporter, json::JsonReporter,
+};
+use valayam_engine::executor::ScanExecutor;
 use valayam_engine::rate_limiter::RateLimiter;
 use valayam_engine::registry::PluginRegistry;
-use valayam_engine::wasm_plugin::PluginConfig;
-use valayam_engine::executor::ScanExecutor;
 use valayam_engine::traits::{FindingOwned, Reporter};
-use valayam_core::core::reporters::{console::ConsoleReporter, json::JsonReporter, composite::CompositeReporter};
-use valayam_core::core::plugins::*;
+use valayam_engine::wasm_plugin::PluginConfig;
 // Extended plugins moved to Wasm
 // NucleiExecutor moved to Wasm
 use valayam_core::rpc::scanner_client::ScannerClient;
@@ -31,7 +33,9 @@ fn resolve_bundle_dirs() -> Option<(PathBuf, PathBuf, PathBuf)> {
             PathBuf::from("/bundle"),
             PathBuf::from("/opt/valayam/bundle"),
             dirs::home_dir().unwrap_or_default().join(".valayam/bundle"),
-            dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/bundle"),
+            dirs::cache_dir()
+                .unwrap_or_else(std::env::temp_dir)
+                .join("valayam/bundle"),
         ];
 
         for bundle in bundle_candidates {
@@ -40,7 +44,11 @@ fn resolve_bundle_dirs() -> Option<(PathBuf, PathBuf, PathBuf)> {
             let wasm_cache_dir = bundle.join("wasm_cache");
 
             if plugins_dir.exists() && wasm_cache_dir.exists() {
-                println!("{} Air-gapped mode: using bundle at {}", "[+]".green().bold(), bundle.display());
+                println!(
+                    "{} Air-gapped mode: using bundle at {}",
+                    "[+]".green().bold(),
+                    bundle.display()
+                );
                 return Some((bundle, plugins_dir, wasm_cache_dir));
             }
         }
@@ -90,7 +98,10 @@ fn print_summary(
     let bar = "─".repeat(54);
 
     println!();
-    println!("  {}", format!("┌─ Scan Summary {}┐", "─".repeat(38)).bright_black());
+    println!(
+        "  {}",
+        format!("┌─ Scan Summary {}┐", "─".repeat(38)).bright_black()
+    );
 
     // Timing
     let secs = duration.as_secs_f64();
@@ -121,7 +132,11 @@ fn print_summary(
     );
 
     // Separator
-    println!("  {}  {}", "│".bright_black(), "─".repeat(48).bright_black());
+    println!(
+        "  {}  {}",
+        "│".bright_black(),
+        "─".repeat(48).bright_black()
+    );
 
     if total == 0 {
         println!(
@@ -141,7 +156,11 @@ fn print_summary(
 
         // Print each severity level with a mini bar chart
         let severity_lines: Vec<(&str, usize, ColoredString)> = vec![
-            ("Critical", counts.critical, "Critical".bright_magenta().bold()),
+            (
+                "Critical",
+                counts.critical,
+                "Critical".bright_magenta().bold(),
+            ),
             ("High", counts.high, "High".red().bold()),
             ("Medium", counts.medium, "Medium".yellow().bold()),
             ("Low", counts.low, "Low".green().bold()),
@@ -183,7 +202,11 @@ fn print_summary(
     }
 
     if let Some(path) = output_path {
-        println!("  {}  {}", "│".bright_black(), "─".repeat(48).bright_black());
+        println!(
+            "  {}  {}",
+            "│".bright_black(),
+            "─".repeat(48).bright_black()
+        );
         println!(
             "  {}  {}     {} ({} findings written)",
             "│".bright_black(),
@@ -210,7 +233,19 @@ pub async fn run_scan(
     state_rx: Option<tokio::sync::watch::Receiver<valayam_engine::scan_state::ScanState>>,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
-    run_scan_with_job_id(args, template_files, is_nuclei, targets, http_client, rate_limiter, grpc_client, state_rx, cancel, None).await
+    run_scan_with_job_id(
+        args,
+        template_files,
+        is_nuclei,
+        targets,
+        http_client,
+        rate_limiter,
+        grpc_client,
+        state_rx,
+        cancel,
+        None,
+    )
+    .await
 }
 
 /// Extended entrypoint that accepts a platform-assigned `job_id`.
@@ -250,7 +285,7 @@ pub async fn run_scan_with_job_id(
 
     let state_rx_to_use = state_rx;
     let cancel_for_handler = cancel.clone();
-    
+
     // We will still handle ctrl-c to save state
     let db = valayam_state::StateDB::new(".valayam_state").expect("Failed to initialize state DB");
     let state_id = args.resume.unwrap_or_else(|| {
@@ -260,7 +295,7 @@ pub async fn run_scan_with_job_id(
             .as_secs()
             .to_string()
     });
-    
+
     let mut actual_targets = targets.clone();
     if let Some((pending, _completed)) = db.load_state(&state_id).unwrap_or(None) {
         spinner.suspend(|| {
@@ -281,25 +316,40 @@ pub async fn run_scan_with_job_id(
             );
         });
     }
-    
+
     // ── Target Liveness Pre-flight Check ──
     let mut online_targets = Vec::new();
     for target in actual_targets {
         if let Ok(url) = reqwest::Url::parse(&target) {
             if let Some(host) = url.host_str() {
-                let port = url.port().unwrap_or_else(|| if url.scheme() == "https" { 443 } else { 80 });
+                let port =
+                    url.port()
+                        .unwrap_or_else(|| if url.scheme() == "https" { 443 } else { 80 });
                 let addr_str = format!("{}:{}", host, port);
-                let is_online = if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&addr_str) {
-                    if let Some(addr) = addrs.next() {
-                        std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)).is_ok()
-                    } else { false }
-                } else { false };
-                
+                let is_online =
+                    if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&addr_str) {
+                        if let Some(addr) = addrs.next() {
+                            std::net::TcpStream::connect_timeout(
+                                &addr,
+                                std::time::Duration::from_secs(2),
+                            )
+                            .is_ok()
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
                 if is_online {
                     online_targets.push(target.clone());
                 } else {
                     tracing::error!("Target {} is offline, skipping scan", target);
-                    eprintln!("{} Target {} is offline, skipping scan", "[-]".red().bold(), target);
+                    eprintln!(
+                        "{} Target {} is offline, skipping scan",
+                        "[-]".red().bold(),
+                        target
+                    );
                 }
             } else {
                 online_targets.push(target); // Fallback
@@ -311,10 +361,13 @@ pub async fn run_scan_with_job_id(
     let actual_targets = online_targets;
     if actual_targets.is_empty() {
         tracing::error!("No targets are online. Aborting scan.");
-        eprintln!("{} No targets are online. Aborting scan.", "[-]".red().bold());
+        eprintln!(
+            "{} No targets are online. Aborting scan.",
+            "[-]".red().bold()
+        );
         return Ok(());
     }
-    
+
     let pending_for_shutdown = actual_targets.clone();
     tokio::spawn(async move {
         if tokio::signal::ctrl_c().await.is_ok() {
@@ -331,9 +384,10 @@ pub async fn run_scan_with_job_id(
     let (registry, _watcher) = {
         // Resolve trusted public key for plugin signature verification
         let pub_key: Option<[u8; 32]> = if args.require_signed_plugins {
-            let pk_hex = std::env::var("VALAYAM_PUBLIC_KEY")
-                .unwrap_or_default();
-            if pk_hex.is_empty() || pk_hex == "0000000000000000000000000000000000000000000000000000000000000000" {
+            let pk_hex = std::env::var("VALAYAM_PUBLIC_KEY").unwrap_or_default();
+            if pk_hex.is_empty()
+                || pk_hex == "0000000000000000000000000000000000000000000000000000000000000000"
+            {
                 anyhow::bail!("--require-signed-plugins requires VALAYAM_PUBLIC_KEY env var set to a valid 32-byte hex key");
             }
             let decoded = hex::decode(&pk_hex).expect("Invalid VALAYAM_PUBLIC_KEY hex");
@@ -354,13 +408,18 @@ pub async fn run_scan_with_job_id(
                             let mut arr = [0u8; 32];
                             arr.copy_from_slice(&bytes);
                             Some(arr)
-                        } else { None }
+                        } else {
+                            None
+                        }
                     })
                 }
             })
         };
         if pub_key.is_some() {
-            println!("{} Plugin signature verification enabled", "[+]".green().bold());
+            println!(
+                "{} Plugin signature verification enabled",
+                "[+]".green().bold()
+            );
         }
 
         let mut reg = PluginRegistry::with_key(pub_key);
@@ -385,9 +444,9 @@ pub async fn run_scan_with_job_id(
 
         // Core protocols
         reg.register(HttpScanPlugin::new(http_client.clone()));
-    // Scripting and Fuzzer moved to Wasm
+        // Scripting and Fuzzer moved to Wasm
         // Cloud & Extended moved to Wasm
-    // Batch 8 (Threat Audit) moved to Wasm
+        // Batch 8 (Threat Audit) moved to Wasm
         reg.register(SchemaDriftPlugin::new(http_client.clone()));
         reg.register(DnsAuditPlugin);
         reg.register(PortScanPlugin);
@@ -426,11 +485,14 @@ pub async fn run_scan_with_job_id(
         }
 
         // Initialize ThreatIntelMatcher and register
-        let matcher = Arc::new(valayam_core::features::threat_intel::ioc_matcher::IocMatcher::new());
+        let matcher =
+            Arc::new(valayam_core::features::threat_intel::ioc_matcher::IocMatcher::new());
         reg.register(ThreatIntelPlugin { matcher });
 
         // Initialize OOB Server and register
-        let oob_server = Arc::new(valayam_oob::server::OobServer::new(valayam_oob::server::OobServer::config_from_env()));
+        let oob_server = Arc::new(valayam_oob::server::OobServer::new(
+            valayam_oob::server::OobServer::config_from_env(),
+        ));
         reg.register(OobPlugin { server: oob_server });
         // DependencyAudit moved to Wasm
 
@@ -462,15 +524,18 @@ pub async fn run_scan_with_job_id(
     if let Some(ref path) = args.output {
         let scanner_version = env!("CARGO_PKG_VERSION").to_string();
         if path.ends_with(".sarif") {
-            let sarif_reporter = valayam_reporter::sarif::SarifReporter::new(
-                path.to_string(),
-                scanner_version
-            )?;
+            let sarif_reporter =
+                valayam_reporter::sarif::SarifReporter::new(path.to_string(), scanner_version)?;
             reporters.push(Box::new(sarif_reporter));
         } else {
             let plugins = registry.list_plugins();
-            let templates = template_files.iter().map(|p| p.to_string_lossy().into_owned()).collect();
-            let scan_id = job_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let templates = template_files
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            let scan_id = job_id
+                .clone()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             let start_time = chrono::Utc::now().to_rfc3339();
             let targets: Vec<String> = actual_targets.to_vec();
             let mut json_reporter = JsonReporter::new(
@@ -480,7 +545,7 @@ pub async fn run_scan_with_job_id(
                 plugins,
                 templates,
                 targets,
-                scanner_version
+                scanner_version,
             )?;
             // Propagate platform job_id into the output envelope
             if let Some(ref jid) = job_id {
@@ -528,10 +593,7 @@ pub async fn run_scan_with_job_id(
             count += 1;
 
             // Update spinner with progress
-            spinner_for_consumer.set_message(format!(
-                "Scanning... {} finding(s) so far",
-                count
-            ));
+            spinner_for_consumer.set_message(format!("Scanning... {} finding(s) so far", count));
         }
         let _ = composite.flush().await;
         count
@@ -603,7 +665,7 @@ pub async fn run_scan_with_job_id(
                             return;
                         }
                     };
-                    
+
                     let metrics = exec.execute(&target_url, template).await;
                     for m in metrics {
                         tracing::debug!(
@@ -733,23 +795,33 @@ mod tests {
 #[tracing::instrument]
 pub async fn sync_vulndb(cdn: &str, output: &str) -> anyhow::Result<()> {
     use colored::*;
-    println!("{} Syncing vulnerability database from {}...", "[*]".blue().bold(), cdn);
-    
+    println!(
+        "{} Syncing vulnerability database from {}...",
+        "[*]".blue().bold(),
+        cdn
+    );
+
     let db_url = format!("{}/vuln-db.sqlite", cdn);
     let sig_url = format!("{}/vuln-db.sqlite.sig", cdn);
-    
+
     println!("{} Fetching {}...", "[*]".blue().bold(), db_url);
     let db_bytes = reqwest::get(&db_url).await?.bytes().await?;
     println!("{} Fetching {}...", "[*]".blue().bold(), sig_url);
     let sig_hex = reqwest::get(&sig_url).await?.text().await?;
-    
+
     let config = crate::config::CliConfig::from_env();
     let public_key_hex = config.valayam_public_key;
-    
-    println!("{} Verifying Ed25519 signature against public key...", "[*]".blue().bold());
+
+    println!(
+        "{} Verifying Ed25519 signature against public key...",
+        "[*]".blue().bold()
+    );
     if public_key_hex == "0000000000000000000000000000000000000000000000000000000000000000" {
-         println!("{} WARNING: Using zeroed public key (Insecure). Please set VALAYAM_PUBLIC_KEY.", "[!]".yellow().bold());
-         // Skip verification for the zeroed dummy key
+        println!(
+            "{} WARNING: Using zeroed public key (Insecure). Please set VALAYAM_PUBLIC_KEY.",
+            "[!]".yellow().bold()
+        );
+        // Skip verification for the zeroed dummy key
     } else {
         let pk_bytes = hex::decode(public_key_hex.trim())?;
         let mut pk_arr = [0u8; 32];
@@ -757,29 +829,33 @@ pub async fn sync_vulndb(cdn: &str, output: &str) -> anyhow::Result<()> {
             anyhow::bail!("Invalid public key length");
         }
         pk_arr.copy_from_slice(&pk_bytes);
-        
+
         let sig_bytes = hex::decode(sig_hex.trim())?;
         let mut sig_arr = [0u8; 64];
         if sig_bytes.len() != 64 {
             anyhow::bail!("Invalid signature length");
         }
         sig_arr.copy_from_slice(&sig_bytes);
-        
+
         let is_valid = valayam_crypto::PluginCrypto::verify(&pk_arr, &db_bytes, &sig_arr)?;
         if !is_valid {
             anyhow::bail!("Signature verification failed!");
         }
     }
-    
+
     // Atomic write
     if let Some(parent) = std::path::Path::new(output).parent() {
         std::fs::create_dir_all(parent)?;
     }
-    
+
     let temp_name = format!("{}.tmp", output);
     std::fs::write(&temp_name, &db_bytes)?;
     std::fs::rename(&temp_name, output)?;
-    
-    println!("{} Vulnerability database successfully synced to {}", "[+]".green().bold(), output);
+
+    println!(
+        "{} Vulnerability database successfully synced to {}",
+        "[+]".green().bold(),
+        output
+    );
     Ok(())
 }

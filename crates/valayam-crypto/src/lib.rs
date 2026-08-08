@@ -25,7 +25,11 @@ impl PluginCrypto {
     }
 
     /// Verifies a signature for a payload against a public key
-    pub fn verify(public_key: &[u8; 32], message: &[u8], signature_bytes: &[u8; 64]) -> anyhow::Result<bool> {
+    pub fn verify(
+        public_key: &[u8; 32],
+        message: &[u8],
+        signature_bytes: &[u8; 64],
+    ) -> anyhow::Result<bool> {
         let verifying_key = VerifyingKey::from_bytes(public_key)
             .map_err(|e| anyhow::anyhow!("Invalid public key format: {}", e))?;
         let signature = Signature::from_bytes(signature_bytes);

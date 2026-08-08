@@ -11,9 +11,9 @@ use walkdir::WalkDir;
 
 use valayam_core::network::http::StealthHttpClient;
 use valayam_core::network::ssrf_filter::SsrfConfig;
+use valayam_core::rpc::scanner_client::ScannerClient;
 use valayam_core::stealth::proxy::ProxyRotator;
 use valayam_engine::rate_limiter::RateLimiter;
-use valayam_core::rpc::scanner_client::ScannerClient;
 
 /// Result of the scan setup phase. Everything needed for `orchestrator::run_scan`.
 #[allow(dead_code)]
@@ -95,7 +95,10 @@ network:
       - "8080"
 "#;
         let _ = std::fs::write(template_path, demo_yaml.trim());
-        println!("{} Demo template created successfully.\n", "[+]".green().bold());
+        println!(
+            "{} Demo template created successfully.\n",
+            "[+]".green().bold()
+        );
     }
 }
 
@@ -132,8 +135,16 @@ pub fn print_scan_config(
     target_online: bool,
 ) {
     let bar = "─".repeat(54);
-    println!("  {}", format!("┌─ Scan Configuration {}┐", "─".repeat(32)).bright_black());
-    println!("  {}  {}     {}", "│".bright_black(), "Target:".bright_black(), target.cyan().bold());
+    println!(
+        "  {}",
+        format!("┌─ Scan Configuration {}┐", "─".repeat(32)).bright_black()
+    );
+    println!(
+        "  {}  {}     {}",
+        "│".bright_black(),
+        "Target:".bright_black(),
+        target.cyan().bold()
+    );
     println!(
         "  {}  {}  {} {} {}",
         "│".bright_black(),
@@ -164,7 +175,7 @@ pub fn print_scan_config(
         "Target Status:".bright_black(),
         conn_status
     );
-    
+
     let telemetry_status = if otlp_active {
         "OTLP Enabled".green().to_string()
     } else {
@@ -176,7 +187,7 @@ pub fn print_scan_config(
         "Telemetry:".bright_black(),
         telemetry_status
     );
-    
+
     let oob_status = if oob_dns_active {
         "Active / Listening".green().to_string()
     } else {
@@ -190,9 +201,20 @@ pub fn print_scan_config(
     );
 
     if let Some(out) = output {
-        println!("  {}  {}     {} {}", "│".bright_black(), "Output:".bright_black(), "console".white(), format!("+ {}", out).bright_black());
+        println!(
+            "  {}  {}     {} {}",
+            "│".bright_black(),
+            "Output:".bright_black(),
+            "console".white(),
+            format!("+ {}", out).bright_black()
+        );
     } else {
-        println!("  {}  {}     {}", "│".bright_black(), "Output:".bright_black(), "console".white());
+        println!(
+            "  {}  {}     {}",
+            "│".bright_black(),
+            "Output:".bright_black(),
+            "console".white()
+        );
     }
     println!("  {}", format!("└{}┘", bar).bright_black());
     println!();
@@ -216,7 +238,11 @@ pub fn init_proxy_rotator(proxy_file: Option<&str>) -> Option<ProxyRotator> {
 }
 
 /// Initialize the stealth HTTP client.
-pub fn init_http_client(proxy_rotator: &Option<ProxyRotator>, random_agent: bool, allow_internal: bool) -> anyhow::Result<Arc<StealthHttpClient>> {
+pub fn init_http_client(
+    proxy_rotator: &Option<ProxyRotator>,
+    random_agent: bool,
+    allow_internal: bool,
+) -> anyhow::Result<Arc<StealthHttpClient>> {
     Ok(Arc::new(StealthHttpClient::new_with_options(
         proxy_rotator.is_some(),
         random_agent,
@@ -230,7 +256,11 @@ pub fn init_http_client(proxy_rotator: &Option<ProxyRotator>, random_agent: bool
 }
 
 /// Load TLS configuration from PEM files.
-pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>, tls_ca: Option<&str>) -> anyhow::Result<Option<valayam_api::TlsConfig>> {
+pub fn load_tls_config(
+    tls_cert: Option<&str>,
+    tls_key: Option<&str>,
+    tls_ca: Option<&str>,
+) -> anyhow::Result<Option<valayam_api::TlsConfig>> {
     match (tls_cert, tls_key) {
         (Some(cert_path), Some(key_path)) => {
             let cert_pem = std::fs::read(cert_path)?;
@@ -240,11 +270,20 @@ pub fn load_tls_config(tls_cert: Option<&str>, tls_key: Option<&str>, tls_ca: Op
                 None => None,
             };
             if ca_pem.is_some() {
-                println!("{} TLS mTLS enabled for gRPC control plane (cert: {}, key: {}, ca: {})",
-                    "[+]".green().bold(), cert_path, key_path, tls_ca.unwrap());
+                println!(
+                    "{} TLS mTLS enabled for gRPC control plane (cert: {}, key: {}, ca: {})",
+                    "[+]".green().bold(),
+                    cert_path,
+                    key_path,
+                    tls_ca.unwrap()
+                );
             } else {
-                println!("{} TLS enabled for gRPC control plane (cert: {}, key: {})",
-                    "[+]".green().bold(), cert_path, key_path);
+                println!(
+                    "{} TLS enabled for gRPC control plane (cert: {}, key: {})",
+                    "[+]".green().bold(),
+                    cert_path,
+                    key_path
+                );
             }
             Ok(Some(valayam_api::TlsConfig {
                 cert_pem,
@@ -264,7 +303,11 @@ pub async fn run_crawler(
     rate_limiter: Option<Arc<RateLimiter>>,
     crawl_headers: Option<&str>,
 ) -> Vec<String> {
-    println!("{} Starting Web Crawler discovery on {}...", "[*]".blue().bold(), target);
+    println!(
+        "{} Starting Web Crawler discovery on {}...",
+        "[*]".blue().bold(),
+        target
+    );
 
     let hdrs = crawl_headers.map(|s| {
         let mut map = std::collections::HashMap::new();
@@ -278,17 +321,15 @@ pub async fn run_crawler(
     });
 
     use valayam_core::features::crawler::Crawler;
-    let crawler = Crawler::new(
-        http_client,
-        target,
-        crawl_depth,
-        rate_limiter,
-        hdrs,
-    );
+    let crawler = Crawler::new(http_client, target, crawl_depth, rate_limiter, hdrs);
     match crawler {
         Ok(c) => {
             let discovered = c.run().await;
-            println!("{} Crawler discovered {} page(s) on target domain.", "[+]".green().bold(), discovered.len());
+            println!(
+                "{} Crawler discovered {} page(s) on target domain.",
+                "[+]".green().bold(),
+                discovered.len()
+            );
             if !discovered.is_empty() {
                 return discovered.into_iter().collect();
             }

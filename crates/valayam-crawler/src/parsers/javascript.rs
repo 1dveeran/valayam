@@ -6,9 +6,11 @@ pub fn extract_js_endpoints(js_content: &str) -> HashSet<String> {
     let mut endpoints = HashSet::new();
 
     let path_regex =
-        Regex::new(r#"(?:"|')((?:/[a-zA-Z0-9_\-\.\?\,\'\/\+&\$#\=~\|\!]*){2,})(?:"|')"#).expect("static regex: relative paths");
+        Regex::new(r#"(?:"|')((?:/[a-zA-Z0-9_\-\.\?\,\'\/\+&\$#\=~\|\!]*){2,})(?:"|')"#)
+            .expect("static regex: relative paths");
 
-    let url_regex = Regex::new(r#"(https?|wss?|grpc)://[a-zA-Z0-9_\-\.:/\?&\$#\=~\|]+"#).expect("static regex: absolute urls");
+    let url_regex = Regex::new(r#"(https?|wss?|grpc)://[a-zA-Z0-9_\-\.:/\?&\$#\=~\|]+"#)
+        .expect("static regex: absolute urls");
 
     for cap in path_regex.captures_iter(js_content) {
         if let Some(matched) = cap.get(1) {
@@ -37,14 +39,16 @@ pub fn extract_js_endpoints(js_content: &str) -> HashSet<String> {
 pub fn extract_js_parameters(js_content: &str) -> HashSet<String> {
     let mut params = HashSet::new();
 
-    let query_param_regex = Regex::new(r#"[?&]([a-zA-Z0-9_\-]+)="#).expect("static regex: query params");
+    let query_param_regex =
+        Regex::new(r#"[?&]([a-zA-Z0-9_\-]+)="#).expect("static regex: query params");
     for cap in query_param_regex.captures_iter(js_content) {
         if let Some(matched) = cap.get(1) {
             params.insert(matched.as_str().to_string());
         }
     }
 
-    let object_key_regex = Regex::new(r#"(?:"|')([a-zA-Z0-9_\-]+)(?:"|')\s*:"#).expect("static regex: object keys");
+    let object_key_regex =
+        Regex::new(r#"(?:"|')([a-zA-Z0-9_\-]+)(?:"|')\s*:"#).expect("static regex: object keys");
     for cap in object_key_regex.captures_iter(js_content) {
         if let Some(matched) = cap.get(1) {
             params.insert(matched.as_str().to_string());
@@ -52,9 +56,22 @@ pub fn extract_js_parameters(js_content: &str) -> HashSet<String> {
     }
 
     let ignore_words = [
-        "default", "name", "type", "id", "true", "false", "null",
-        "undefined", "const", "let", "var", "function", "return",
-        "class", "import", "export",
+        "default",
+        "name",
+        "type",
+        "id",
+        "true",
+        "false",
+        "null",
+        "undefined",
+        "const",
+        "let",
+        "var",
+        "function",
+        "return",
+        "class",
+        "import",
+        "export",
     ];
     params.retain(|p| !ignore_words.contains(&p.as_str()) && !p.is_empty());
 

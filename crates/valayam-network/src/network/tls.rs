@@ -1,7 +1,7 @@
+use rustls::pki_types::ServerName;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use rustls::pki_types::ServerName;
 
 /// TLS certificate information extracted from a connection.
 #[derive(Debug, Clone)]
@@ -94,7 +94,8 @@ pub async fn scan_tls(host: &str, port: u16) -> Option<TlsConnectionInfo> {
     let supported_versions = test_protocol_versions(host, port).await;
 
     // Get the actual negotiated version and cipher suite from a full connection
-    let (protocol_version, cipher_suite, validation_result) = get_connection_details(host, port).await;
+    let (protocol_version, cipher_suite, validation_result) =
+        get_connection_details(host, port).await;
 
     Some(TlsConnectionInfo {
         cert_info,
@@ -126,7 +127,7 @@ pub async fn inspect_certificate(host: &str, port: u16) -> Option<CertInfo> {
     let config = rustls::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(std::sync::Arc::new(
-            crate::stealth::tls::NoCertVerification::new()
+            crate::stealth::tls::NoCertVerification::new(),
         ))
         .with_no_client_auth();
 
@@ -137,15 +138,18 @@ pub async fn inspect_certificate(host: &str, port: u16) -> Option<CertInfo> {
 
     let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
 
-    let tls_stream = match timeout(connect_timeout, connector.connect(server_name, tcp_stream)).await {
-        Ok(Ok(s)) => s,
-        _ => return None,
-    };
+    let tls_stream =
+        match timeout(connect_timeout, connector.connect(server_name, tcp_stream)).await {
+            Ok(Ok(s)) => s,
+            _ => return None,
+        };
 
     // Extract the peer certificate
     let (_, server_conn) = tls_stream.get_ref();
     let tls_version = server_conn.protocol_version().map(|v| format!("{:?}", v));
-    let cipher_suite = server_conn.negotiated_cipher_suite().map(|c| format!("{:?}", c.suite()));
+    let cipher_suite = server_conn
+        .negotiated_cipher_suite()
+        .map(|c| format!("{:?}", c.suite()));
 
     let certs = server_conn.peer_certificates()?;
     let cert_der = certs.first()?;
@@ -255,7 +259,12 @@ pub async fn is_version_supported(host: &str, port: u16, version: u16) -> bool {
     }
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let address = format!("{}:{}", host, port);
-    let mut stream = match tokio::time::timeout(Duration::from_secs(3), tokio::net::TcpStream::connect(&address)).await {
+    let mut stream = match tokio::time::timeout(
+        Duration::from_secs(3),
+        tokio::net::TcpStream::connect(&address),
+    )
+    .await
+    {
         Ok(Ok(s)) => s,
         _ => return false,
     };
@@ -295,7 +304,7 @@ pub async fn is_version_supported(host: &str, port: u16, version: u16) -> bool {
     // Cipher suites (empty for now - we'll use a common one)
     hello.push(0x00);
     hello.push(0x02); // 2 bytes for length
-    // TLS_RSA_WITH_AES_128_CBC_SHA256 (0x003C) or TLS 1.3 equivalent
+                      // TLS_RSA_WITH_AES_128_CBC_SHA256 (0x003C) or TLS 1.3 equivalent
     hello.push(0x00);
     hello.push(0x2F); // TLS 1.2
 
@@ -333,10 +342,12 @@ pub async fn is_version_supported(host: &str, port: u16, version: u16) -> bool {
     match tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut buf)).await {
         Ok(Ok(_)) => {
             // Check if we got a handshake message
-            if buf[0] == 0x16 { // Handshake
+            if buf[0] == 0x16 {
+                // Handshake
                 // Read handshake type
                 let mut hs_buf = [0u8; 1];
-                if stream.read_exact(&mut hs_buf).await.is_ok() && hs_buf[0] == 0x02 { // ServerHello
+                if stream.read_exact(&mut hs_buf).await.is_ok() && hs_buf[0] == 0x02 {
+                    // ServerHello
                     return true;
                 }
             }
@@ -356,7 +367,12 @@ pub async fn is_version_supported(host: &str, port: u16, version: u16) -> bool {
 pub async fn test_legacy_protocols(host: &str, port: u16) -> bool {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let address = format!("{}:{}", host, port);
-    let mut stream = match tokio::time::timeout(Duration::from_secs(3), tokio::net::TcpStream::connect(&address)).await {
+    let mut stream = match tokio::time::timeout(
+        Duration::from_secs(3),
+        tokio::net::TcpStream::connect(&address),
+    )
+    .await
+    {
         Ok(Ok(s)) => s,
         _ => return false,
     };
@@ -399,20 +415,37 @@ pub async fn test_legacy_protocols(host: &str, port: u16) -> bool {
 
 /// Analyze a list of cipher suites
 pub fn analyze_cipher_suites(suites: &[String]) -> Vec<CipherSuiteInfo> {
-    suites.iter().map(|suite| {
-        let is_weak = WEAK_CIPHERS.contains(&suite.as_str()) || suite.contains("RC4") || suite.contains("DES") || suite.contains("EXPORT");
-        let weakness = if is_weak { Some("Known weak or obsolete cipher".to_string()) } else { None };
-        CipherSuiteInfo {
-            suite: suite.clone(),
-            is_strong: !is_weak,
-            weakness,
-            recommended_alternative: if is_weak { Some("TLS_AES_128_GCM_SHA256 or TLS_CHACHA20_POLY1305_SHA256".to_string()) } else { None },
-        }
-    }).collect()
+    suites
+        .iter()
+        .map(|suite| {
+            let is_weak = WEAK_CIPHERS.contains(&suite.as_str())
+                || suite.contains("RC4")
+                || suite.contains("DES")
+                || suite.contains("EXPORT");
+            let weakness = if is_weak {
+                Some("Known weak or obsolete cipher".to_string())
+            } else {
+                None
+            };
+            CipherSuiteInfo {
+                suite: suite.clone(),
+                is_strong: !is_weak,
+                weakness,
+                recommended_alternative: if is_weak {
+                    Some("TLS_AES_128_GCM_SHA256 or TLS_CHACHA20_POLY1305_SHA256".to_string())
+                } else {
+                    None
+                },
+            }
+        })
+        .collect()
 }
 
 /// Get connection details including negotiated version and cipher suite
-async fn get_connection_details(host: &str, port: u16) -> (Option<String>, Option<String>, Option<ValidationResult>) {
+async fn get_connection_details(
+    host: &str,
+    port: u16,
+) -> (Option<String>, Option<String>, Option<ValidationResult>) {
     let address = format!("{}:{}", host, port);
     let connect_timeout = Duration::from_secs(5);
 
@@ -429,7 +462,7 @@ async fn get_connection_details(host: &str, port: u16) -> (Option<String>, Optio
     let config = rustls::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(std::sync::Arc::new(
-            crate::stealth::tls::NoCertVerification::new()
+            crate::stealth::tls::NoCertVerification::new(),
         ))
         .with_no_client_auth();
 
@@ -440,15 +473,18 @@ async fn get_connection_details(host: &str, port: u16) -> (Option<String>, Optio
 
     let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
 
-    let tls_stream = match timeout(connect_timeout, connector.connect(server_name, tcp_stream)).await {
-        Ok(Ok(s)) => s,
-        _ => return (None, None, None),
-    };
+    let tls_stream =
+        match timeout(connect_timeout, connector.connect(server_name, tcp_stream)).await {
+            Ok(Ok(s)) => s,
+            _ => return (None, None, None),
+        };
 
     // Extract connection details
     let (_, server_conn) = tls_stream.get_ref();
     let tls_version = server_conn.protocol_version().map(|v| format!("{:?}", v));
-    let cipher_suite = server_conn.negotiated_cipher_suite().map(|c| format!("{:?}", c.suite()));
+    let cipher_suite = server_conn
+        .negotiated_cipher_suite()
+        .map(|c| format!("{:?}", c.suite()));
 
     // Perform basic validation
     let validation_result = validate_connection(server_conn).await;
@@ -596,28 +632,28 @@ pub fn analyze_cipher_suite(suite: &rustls::SupportedCipherSuite) -> Option<Ciph
 fn describe_cipher_weakness(suite_name: &str) -> String {
     match suite_name {
         // RC4-based ciphers
-        n if n.contains("RC4") =>
-            "Uses RC4 which has cryptographic vulnerabilities".to_string(),
+        n if n.contains("RC4") => "Uses RC4 which has cryptographic vulnerabilities".to_string(),
 
         // DES-based ciphers
-        n if n.contains("DES") && !n.contains("3DES") && !n.contains("IDEA") =>
-            "Uses DES which has insufficient key strength (56-bit)".to_string(),
+        n if n.contains("DES") && !n.contains("3DES") && !n.contains("IDEA") => {
+            "Uses DES which has insufficient key strength (56-bit)".to_string()
+        }
 
         // 3DES-based ciphers
-        n if n.contains("3DES") =>
-            "Uses 3DES which is vulnerable to sweet32 attack and has small block size".to_string(),
+        n if n.contains("3DES") => {
+            "Uses 3DES which is vulnerable to sweet32 attack and has small block size".to_string()
+        }
 
         // Export-grade ciphers
-        n if n.contains("EXPORT") || n.contains("DES_40") =>
-            "Export-grade cipher with intentionally weakened security".to_string(),
+        n if n.contains("EXPORT") || n.contains("DES_40") => {
+            "Export-grade cipher with intentionally weakened security".to_string()
+        }
 
         // NULL ciphers (no encryption)
-        n if n.contains("NULL") =>
-            "Provides no encryption (NULL cipher)".to_string(),
+        n if n.contains("NULL") => "Provides no encryption (NULL cipher)".to_string(),
 
         // MD5-based MACs
-        n if n.contains("MD5") =>
-            "Uses MD5 for MAC which is cryptographically broken".to_string(),
+        n if n.contains("MD5") => "Uses MD5 for MAC which is cryptographically broken".to_string(),
 
         // Other cases
         _ => "Unknown or unspecified weakness".to_string(),
@@ -689,33 +725,34 @@ pub fn get_cipher_suite_rankings() -> Vec<(String, i32)> {
         ("TLS_AES_256_GCM_SHA384".to_string(), 100),
         ("TLS_CHACHA20_POLY1305_SHA256".to_string(), 95),
         ("TLS_AES_128_GCM_SHA256".to_string(), 90),
-
         // TLS 1.2 ECDHE suites with strong curves
         ("TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384".to_string(), 85),
         ("TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384".to_string(), 80),
-        ("TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256".to_string(), 85),
-        ("TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256".to_string(), 80),
+        (
+            "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256".to_string(),
+            85,
+        ),
+        (
+            "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256".to_string(),
+            80,
+        ),
         ("TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256".to_string(), 75),
         ("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256".to_string(), 70),
-
         // TLS 1.2 with SHA384
         ("TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384".to_string(), 65),
         ("TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384".to_string(), 60),
         ("TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256".to_string(), 55),
         ("TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256".to_string(), 50),
-
         // Older but still secure if configured correctly
         ("TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA".to_string(), 45),
         ("TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA".to_string(), 40),
         ("TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA".to_string(), 35),
         ("TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA".to_string(), 30),
-
         // Weak but still sometimes seen
         ("TLS_RSA_WITH_AES_256_GCM_SHA384".to_string(), 25),
         ("TLS_RSA_WITH_AES_128_GCM_SHA256".to_string(), 20),
         ("TLS_RSA_WITH_AES_256_CBC_SHA256".to_string(), 15),
         ("TLS_RSA_WITH_AES_128_CBC_SHA256".to_string(), 10),
-
         // Definitely weak
         ("TLS_RSA_WITH_3DES_EDE_CBC_SHA".to_string(), 5),
         ("TLS_RSA_WITH_DES_CBC_SHA".to_string(), 0),
@@ -725,14 +762,15 @@ pub fn get_cipher_suite_rankings() -> Vec<(String, i32)> {
 /// Check if a cipher suite is in the weak category
 #[allow(dead_code)]
 fn is_in_weak_category(suite: &str) -> bool {
-    matches!(suite,
-        "TLS_RSA_WITH_3DES_EDE_CBC_SHA" |
-        "TLS_RSA_WITH_DES_CBC_SHA" |
-        "TLS_RSA_WITH_RC4_128_SHA" |
-        "TLS_RSA_WITH_RC4_128_MD5" |
-        "TLS_RSA_WITH_NULL_MD5" |
-        "TLS_RSA_WITH_NULL_SHA" |
-        "TLS_RSA_WITH_NULL_SHA256"
+    matches!(
+        suite,
+        "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+            | "TLS_RSA_WITH_DES_CBC_SHA"
+            | "TLS_RSA_WITH_RC4_128_SHA"
+            | "TLS_RSA_WITH_RC4_128_MD5"
+            | "TLS_RSA_WITH_NULL_MD5"
+            | "TLS_RSA_WITH_NULL_SHA"
+            | "TLS_RSA_WITH_NULL_SHA256"
     )
 }
 

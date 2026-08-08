@@ -1,14 +1,17 @@
-use valayam_core::core::result::ScanResult;
 use genpdf::{elements, Document, SimplePageDecorator};
 use std::fs::File;
+use valayam_core::core::result::ScanResult;
 
-pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn generate_pdf(
+    results: &[ScanResult],
+    output_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Generate an enhanced PDF report
     let font_paths = [
         ("./fonts", "Roboto"),
         ("/usr/share/fonts/truetype/dejavu", "DejaVuSans"),
-        ("C:\\Windows\\Fonts", "arial"), 
-        ("/System/Library/Fonts", "Helvetica"), 
+        ("C:\\Windows\\Fonts", "arial"),
+        ("/System/Library/Fonts", "Helvetica"),
     ];
 
     let mut font_family = None;
@@ -23,7 +26,7 @@ pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box
         Some(f) => f,
         None => return Err("Could not find any standard fonts on this system. Please provide fonts in ./fonts or use --format json".into()),
     };
-    
+
     let mut doc = Document::new(font_family);
     doc.set_title("Valayam Enterprise Scan Report");
     let mut decorator = SimplePageDecorator::new();
@@ -31,23 +34,30 @@ pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box
     doc.set_page_decorator(decorator);
 
     // Cover Page
-    doc.push(elements::Paragraph::new("Valayam Security Scan Report").aligned(genpdf::Alignment::Center));
+    doc.push(
+        elements::Paragraph::new("Valayam Security Scan Report").aligned(genpdf::Alignment::Center),
+    );
     doc.push(elements::Break::new(2));
-    
-    doc.push(elements::Paragraph::new(format!("Generated at: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")))
-        .aligned(genpdf::Alignment::Center));
+
+    doc.push(
+        elements::Paragraph::new(format!(
+            "Generated at: {}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ))
+        .aligned(genpdf::Alignment::Center),
+    );
     doc.push(elements::Break::new(2));
-    
+
     // Executive Summary
     doc.push(elements::Paragraph::new("Executive Summary").aligned(genpdf::Alignment::Left));
     doc.push(elements::Break::new(1));
-    
+
     let mut critical = 0;
     let mut high = 0;
     let mut medium = 0;
     let mut low = 0;
     let mut info = 0;
-    
+
     for res in results {
         match res.template_severity.to_lowercase().as_str() {
             "critical" => critical += 1,
@@ -57,9 +67,15 @@ pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box
             _ => info += 1,
         }
     }
-    
-    doc.push(elements::Paragraph::new(format!("Total Findings: {}", results.len())));
-    doc.push(elements::Paragraph::new(format!("Critical: {} | High: {} | Medium: {} | Low: {} | Info: {}", critical, high, medium, low, info)));
+
+    doc.push(elements::Paragraph::new(format!(
+        "Total Findings: {}",
+        results.len()
+    )));
+    doc.push(elements::Paragraph::new(format!(
+        "Critical: {} | High: {} | Medium: {} | Low: {} | Info: {}",
+        critical, high, medium, low, info
+    )));
     doc.push(elements::PageBreak::new());
 
     // Detailed Findings
@@ -67,14 +83,25 @@ pub fn generate_pdf(results: &[ScanResult], output_path: &str) -> Result<(), Box
     doc.push(elements::Break::new(1));
 
     for (i, res) in results.iter().enumerate() {
-        doc.push(elements::Paragraph::new(format!("{}. {} ({})", i + 1, res.template_name, res.template_id)));
-        doc.push(elements::Paragraph::new(format!("Severity: {}", res.template_severity.to_uppercase())));
+        doc.push(elements::Paragraph::new(format!(
+            "{}. {} ({})",
+            i + 1,
+            res.template_name,
+            res.template_id
+        )));
+        doc.push(elements::Paragraph::new(format!(
+            "Severity: {}",
+            res.template_severity.to_uppercase()
+        )));
         doc.push(elements::Paragraph::new(format!("Target: {}", res.target)));
-        
+
         if !res.payload.is_empty() {
-            doc.push(elements::Paragraph::new(format!("Matched At: {}", res.payload)));
+            doc.push(elements::Paragraph::new(format!(
+                "Matched At: {}",
+                res.payload
+            )));
         }
-        
+
         doc.push(elements::Break::new(1));
     }
 
@@ -99,7 +126,11 @@ mod tests {
             Ok(()) => assert!(path.exists()),
             Err(e) => {
                 let msg = format!("{}", e);
-                assert!(msg.contains("font") || msg.contains("Font"), "Expected font error: {}", msg);
+                assert!(
+                    msg.contains("font") || msg.contains("Font"),
+                    "Expected font error: {}",
+                    msg
+                );
             }
         }
     }

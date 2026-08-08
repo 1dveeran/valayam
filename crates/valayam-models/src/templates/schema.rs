@@ -1,55 +1,55 @@
-use crate::templates::dns_audit::DnsRequestTemplate;
-use crate::templates::http_scan::HttpRequestTemplate;
-use crate::templates::network_scan::NetworkRequestTemplate;
-use crate::templates::scripting::ScriptTemplate;
-use serde::{Deserialize, Serialize};
-use crate::templates::tls_audit::TlsAuditTemplate;
-use crate::templates::fuzzer::FuzzTemplate;
 use crate::templates::auth_logic::{AuthTemplate, LogicTemplate};
-use crate::templates::cloud_sec::CloudTemplate;
-use crate::templates::deep_analysis::DeepAnalysisTemplate;
-use crate::templates::iac_audit::IacAuditTemplate;
-use crate::templates::sbom_audit::SbomAuditTemplate;
-use crate::templates::grpc_audit::GrpcAuditTemplate;
-use crate::templates::graphql_audit::GraphqlAuditTemplate;
-use crate::templates::drift_detect::DriftDetectTemplate;
-use crate::templates::cred_monitor::CredMonitorTemplate;
-use crate::templates::oauth_audit::OauthAuditTemplate;
-use crate::templates::idp_audit::IdpAuditTemplate;
+use crate::templates::auto_exploit::AutoExploitTemplate;
+use crate::templates::auto_redteam::AutoRedteamTemplate;
 use crate::templates::aws_escalate::AwsEscalateTemplate;
 use crate::templates::azure_gcp_escalate::AzureGcpEscalateTemplate;
 use crate::templates::browser_audit::BrowserAuditTemplate;
-use crate::templates::iot_audit::IotAuditTemplate;
-use crate::templates::scada_audit::ScadaAuditTemplate;
-use crate::templates::auto_redteam::AutoRedteamTemplate;
-use crate::templates::implant_deploy::ImplantDeployTemplate;
-use crate::templates::client_secret_audit::ClientSecretAuditTemplate;
-use crate::templates::dom_redirect_audit::DomRedirectAuditTemplate;
-use crate::templates::cors_audit::CorsAuditTemplate;
-use crate::templates::csp_audit::CspAuditTemplate;
-use crate::templates::waf_bypass_verify::WafBypassVerifyTemplate;
-use crate::templates::header_scorecard::HeaderScorecardTemplate;
-use crate::templates::reputation_audit::ReputationAuditTemplate;
-use crate::templates::ct_log_audit::CtLogAuditTemplate;
-use crate::templates::remediation_gen::RemediationGenTemplate;
-use crate::templates::mitre_mapping::MitreMappingTemplate;
-use crate::templates::container_audit::ContainerAuditTemplate;
-use crate::templates::k8s_audit::K8sAuditTemplate;
-use crate::templates::sast_taint::SastTaintTemplate;
-use crate::templates::sast_secrets::SastSecretsTemplate;
-use crate::templates::subdomain_takeover::SubdomainTakeoverTemplate;
-use crate::templates::port_scan::PortScanTemplate;
-use crate::templates::schema_drift::SchemaDriftTemplate;
-use crate::templates::pii_leak_audit::PiiLeakAuditTemplate;
-use crate::templates::auto_exploit::AutoExploitTemplate;
-use crate::templates::ui_proxy::UiProxyTemplate;
 use crate::templates::cicd_audit::CicdAuditTemplate;
+use crate::templates::client_secret_audit::ClientSecretAuditTemplate;
+use crate::templates::cloud_sec::CloudTemplate;
+use crate::templates::container_audit::ContainerAuditTemplate;
+use crate::templates::cors_audit::CorsAuditTemplate;
+use crate::templates::cred_monitor::CredMonitorTemplate;
+use crate::templates::csp_audit::CspAuditTemplate;
+use crate::templates::ct_log_audit::CtLogAuditTemplate;
+use crate::templates::deep_analysis::DeepAnalysisTemplate;
 use crate::templates::dependency_audit::DependencyAuditTemplate;
+use crate::templates::dns_audit::DnsRequestTemplate;
+use crate::templates::dom_redirect_audit::DomRedirectAuditTemplate;
+use crate::templates::drift_detect::DriftDetectTemplate;
 use crate::templates::easm::EasmTemplate;
+use crate::templates::fuzzer::FuzzTemplate;
+use crate::templates::graphql_audit::GraphqlAuditTemplate;
+use crate::templates::grpc_audit::GrpcAuditTemplate;
+use crate::templates::header_scorecard::HeaderScorecardTemplate;
+use crate::templates::http_scan::HttpRequestTemplate;
+use crate::templates::iac_audit::IacAuditTemplate;
+use crate::templates::idp_audit::IdpAuditTemplate;
+use crate::templates::implant_deploy::ImplantDeployTemplate;
+use crate::templates::iot_audit::IotAuditTemplate;
+use crate::templates::k8s_audit::K8sAuditTemplate;
+use crate::templates::mitre_mapping::MitreMappingTemplate;
 use crate::templates::mobile_audit::MobileAuditTemplate;
-use crate::templates::serverless_audit::ServerlessAuditTemplate;
-use crate::templates::web3_audit::Web3AuditTemplate;
+use crate::templates::network_scan::NetworkRequestTemplate;
+use crate::templates::oauth_audit::OauthAuditTemplate;
+use crate::templates::pii_leak_audit::PiiLeakAuditTemplate;
+use crate::templates::port_scan::PortScanTemplate;
+use crate::templates::remediation_gen::RemediationGenTemplate;
+use crate::templates::reputation_audit::ReputationAuditTemplate;
+use crate::templates::sast_secrets::SastSecretsTemplate;
+use crate::templates::sast_taint::SastTaintTemplate;
+use crate::templates::sbom_audit::SbomAuditTemplate;
+use crate::templates::scada_audit::ScadaAuditTemplate;
+use crate::templates::schema_drift::SchemaDriftTemplate;
+use crate::templates::scripting::ScriptTemplate;
 use crate::templates::section::TemplateSection;
+use crate::templates::serverless_audit::ServerlessAuditTemplate;
+use crate::templates::subdomain_takeover::SubdomainTakeoverTemplate;
+use crate::templates::tls_audit::TlsAuditTemplate;
+use crate::templates::ui_proxy::UiProxyTemplate;
+use crate::templates::waf_bypass_verify::WafBypassVerifyTemplate;
+use crate::templates::web3_audit::Web3AuditTemplate;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Top-level template structure that composes types from all feature slices.
@@ -169,12 +169,24 @@ pub use crate::template_info::TemplateInfo;
 pub use crate::template_info::TemplateMetadata;
 
 impl TemplateMetadata for VulnerabilityTemplate {
-    fn template_name(&self) -> &str { &self.info.name }
-    fn template_severity(&self) -> &str { &self.info.severity }
-    fn description(&self) -> Option<&str> { self.info.description.as_deref() }
-    fn author(&self) -> Option<&str> { self.info.author.as_deref() }
-    fn tags(&self) -> &[String] { &self.info.tags }
-    fn compliance(&self) -> &std::collections::HashMap<String, String> { &self.info.compliance }
+    fn template_name(&self) -> &str {
+        &self.info.name
+    }
+    fn template_severity(&self) -> &str {
+        &self.info.severity
+    }
+    fn description(&self) -> Option<&str> {
+        self.info.description.as_deref()
+    }
+    fn author(&self) -> Option<&str> {
+        self.info.author.as_deref()
+    }
+    fn tags(&self) -> &[String] {
+        &self.info.tags
+    }
+    fn compliance(&self) -> &std::collections::HashMap<String, String> {
+        &self.info.compliance
+    }
 }
 
 impl VulnerabilityTemplate {
@@ -251,57 +263,159 @@ impl VulnerabilityTemplate {
     /// on individual fields.
     pub fn sections(&self) -> Vec<&dyn super::section::TemplateSection> {
         let mut s: Vec<&dyn super::section::TemplateSection> = Vec::new();
-        if let Some(ref a) = self.auth { s.push(a); }
-        for r in &self.requests { s.push(r as &dyn TemplateSection); }
-        for n in &self.network { s.push(n as &dyn TemplateSection); }
-        for r in &self.scripts { s.push(r as &dyn TemplateSection); }
-        for d in &self.dns { s.push(d as &dyn TemplateSection); }
-        for t in &self.tls { s.push(t as &dyn TemplateSection); }
-        for f in &self.fuzz { s.push(f as &dyn TemplateSection); }
-        for c in &self.cloud { s.push(c as &dyn TemplateSection); }
-        for l in &self.logic { s.push(l as &dyn TemplateSection); }
-        for d in &self.deep_analysis { s.push(d as &dyn TemplateSection); }
-        for i in &self.iac_audit { s.push(i as &dyn TemplateSection); }
-        for s_ in &self.sbom_audit { s.push(s_ as &dyn TemplateSection); }
-        for g in &self.grpc_audit { s.push(g as &dyn TemplateSection); }
-        for g in &self.graphql_audit { s.push(g as &dyn TemplateSection); }
-        for d in &self.drift_detect { s.push(d as &dyn TemplateSection); }
-        for c in &self.cred_monitor { s.push(c as &dyn TemplateSection); }
-        for o in &self.oauth_audit { s.push(o as &dyn TemplateSection); }
-        for i in &self.idp_audit { s.push(i as &dyn TemplateSection); }
-        for a in &self.aws_escalate { s.push(a as &dyn TemplateSection); }
-        for a in &self.azure_gcp_escalate { s.push(a as &dyn TemplateSection); }
-        for b in &self.browser_audit { s.push(b as &dyn TemplateSection); }
-        for i in &self.iot_audit { s.push(i as &dyn TemplateSection); }
-        for s_ in &self.scada_audit { s.push(s_ as &dyn TemplateSection); }
-        for a in &self.auto_redteam { s.push(a as &dyn TemplateSection); }
-        for i in &self.implant_deploy { s.push(i as &dyn TemplateSection); }
-        for c in &self.client_secret_audit { s.push(c as &dyn TemplateSection); }
-        for d in &self.dom_redirect_audit { s.push(d as &dyn TemplateSection); }
-        for c in &self.cors_audit { s.push(c as &dyn TemplateSection); }
-        for c in &self.csp_audit { s.push(c as &dyn TemplateSection); }
-        for w in &self.waf_bypass_verify { s.push(w as &dyn TemplateSection); }
-        for h in &self.header_scorecard { s.push(h as &dyn TemplateSection); }
-        for r in &self.reputation_audit { s.push(r as &dyn TemplateSection); }
-        for c in &self.ct_log_audit { s.push(c as &dyn TemplateSection); }
-        for r in &self.remediation_gen { s.push(r as &dyn TemplateSection); }
-        for m in &self.mitre_mapping { s.push(m as &dyn TemplateSection); }
-        for c in &self.container_audit { s.push(c as &dyn TemplateSection); }
-        for k in &self.k8s_audit { s.push(k as &dyn TemplateSection); }
-        for s_ in &self.sast_taint { s.push(s_ as &dyn TemplateSection); }
-        for s_ in &self.sast_secrets { s.push(s_ as &dyn TemplateSection); }
-        for s_ in &self.subdomain_takeover { s.push(s_ as &dyn TemplateSection); }
-        for p in &self.port_scan { s.push(p as &dyn TemplateSection); }
-        for s_ in &self.schema_drift { s.push(s_ as &dyn TemplateSection); }
-        for p in &self.pii_leak_audit { s.push(p as &dyn TemplateSection); }
-        for c in &self.cicd_audit { s.push(c as &dyn TemplateSection); }
-        for d in &self.dependency_audit { s.push(d as &dyn TemplateSection); }
-        for e in &self.easm { s.push(e as &dyn TemplateSection); }
-        for w in &self.web3_audit { s.push(w as &dyn TemplateSection); }
-        for m in &self.mobile_audit { s.push(m as &dyn TemplateSection); }
-        for s_ in &self.serverless_audit { s.push(s_ as &dyn TemplateSection); }
-        for a in &self.auto_exploit { s.push(a as &dyn TemplateSection); }
-        for u in &self.ui_proxy { s.push(u as &dyn TemplateSection); }
+        if let Some(ref a) = self.auth {
+            s.push(a);
+        }
+        for r in &self.requests {
+            s.push(r as &dyn TemplateSection);
+        }
+        for n in &self.network {
+            s.push(n as &dyn TemplateSection);
+        }
+        for r in &self.scripts {
+            s.push(r as &dyn TemplateSection);
+        }
+        for d in &self.dns {
+            s.push(d as &dyn TemplateSection);
+        }
+        for t in &self.tls {
+            s.push(t as &dyn TemplateSection);
+        }
+        for f in &self.fuzz {
+            s.push(f as &dyn TemplateSection);
+        }
+        for c in &self.cloud {
+            s.push(c as &dyn TemplateSection);
+        }
+        for l in &self.logic {
+            s.push(l as &dyn TemplateSection);
+        }
+        for d in &self.deep_analysis {
+            s.push(d as &dyn TemplateSection);
+        }
+        for i in &self.iac_audit {
+            s.push(i as &dyn TemplateSection);
+        }
+        for s_ in &self.sbom_audit {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for g in &self.grpc_audit {
+            s.push(g as &dyn TemplateSection);
+        }
+        for g in &self.graphql_audit {
+            s.push(g as &dyn TemplateSection);
+        }
+        for d in &self.drift_detect {
+            s.push(d as &dyn TemplateSection);
+        }
+        for c in &self.cred_monitor {
+            s.push(c as &dyn TemplateSection);
+        }
+        for o in &self.oauth_audit {
+            s.push(o as &dyn TemplateSection);
+        }
+        for i in &self.idp_audit {
+            s.push(i as &dyn TemplateSection);
+        }
+        for a in &self.aws_escalate {
+            s.push(a as &dyn TemplateSection);
+        }
+        for a in &self.azure_gcp_escalate {
+            s.push(a as &dyn TemplateSection);
+        }
+        for b in &self.browser_audit {
+            s.push(b as &dyn TemplateSection);
+        }
+        for i in &self.iot_audit {
+            s.push(i as &dyn TemplateSection);
+        }
+        for s_ in &self.scada_audit {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for a in &self.auto_redteam {
+            s.push(a as &dyn TemplateSection);
+        }
+        for i in &self.implant_deploy {
+            s.push(i as &dyn TemplateSection);
+        }
+        for c in &self.client_secret_audit {
+            s.push(c as &dyn TemplateSection);
+        }
+        for d in &self.dom_redirect_audit {
+            s.push(d as &dyn TemplateSection);
+        }
+        for c in &self.cors_audit {
+            s.push(c as &dyn TemplateSection);
+        }
+        for c in &self.csp_audit {
+            s.push(c as &dyn TemplateSection);
+        }
+        for w in &self.waf_bypass_verify {
+            s.push(w as &dyn TemplateSection);
+        }
+        for h in &self.header_scorecard {
+            s.push(h as &dyn TemplateSection);
+        }
+        for r in &self.reputation_audit {
+            s.push(r as &dyn TemplateSection);
+        }
+        for c in &self.ct_log_audit {
+            s.push(c as &dyn TemplateSection);
+        }
+        for r in &self.remediation_gen {
+            s.push(r as &dyn TemplateSection);
+        }
+        for m in &self.mitre_mapping {
+            s.push(m as &dyn TemplateSection);
+        }
+        for c in &self.container_audit {
+            s.push(c as &dyn TemplateSection);
+        }
+        for k in &self.k8s_audit {
+            s.push(k as &dyn TemplateSection);
+        }
+        for s_ in &self.sast_taint {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for s_ in &self.sast_secrets {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for s_ in &self.subdomain_takeover {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for p in &self.port_scan {
+            s.push(p as &dyn TemplateSection);
+        }
+        for s_ in &self.schema_drift {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for p in &self.pii_leak_audit {
+            s.push(p as &dyn TemplateSection);
+        }
+        for c in &self.cicd_audit {
+            s.push(c as &dyn TemplateSection);
+        }
+        for d in &self.dependency_audit {
+            s.push(d as &dyn TemplateSection);
+        }
+        for e in &self.easm {
+            s.push(e as &dyn TemplateSection);
+        }
+        for w in &self.web3_audit {
+            s.push(w as &dyn TemplateSection);
+        }
+        for m in &self.mobile_audit {
+            s.push(m as &dyn TemplateSection);
+        }
+        for s_ in &self.serverless_audit {
+            s.push(s_ as &dyn TemplateSection);
+        }
+        for a in &self.auto_exploit {
+            s.push(a as &dyn TemplateSection);
+        }
+        for u in &self.ui_proxy {
+            s.push(u as &dyn TemplateSection);
+        }
         s
     }
 
@@ -319,7 +433,8 @@ impl VulnerabilityTemplate {
     pub fn load_from_str(content: &str) -> Result<Self, crate::error::ScannerError> {
         // Detect and convert OpenAPI/Swagger JSON specifications dynamically
         // OpenAPI/Swagger detected — would convert to template in future
-        let _is_openapi = content.trim().starts_with('{') && (content.contains("\"openapi\"") || content.contains("\"swagger\""));
+        let _is_openapi = content.trim().starts_with('{')
+            && (content.contains("\"openapi\"") || content.contains("\"swagger\""));
 
         let template: VulnerabilityTemplate = serde_yaml::from_str(content)?;
         template.validate()?;
@@ -333,13 +448,13 @@ impl VulnerabilityTemplate {
 
         if self.id.trim().is_empty() {
             return Err(ScannerError::TemplateValidationError(
-                "template id must not be empty".to_string()
+                "template id must not be empty".to_string(),
             ));
         }
 
         if self.info.name.trim().is_empty() {
             return Err(ScannerError::TemplateValidationError(
-                "template info.name must not be empty".to_string()
+                "template info.name must not be empty".to_string(),
             ));
         }
 
@@ -347,9 +462,10 @@ impl VulnerabilityTemplate {
         let valid_severities = ["info", "low", "medium", "high", "critical"];
         let sev = self.info.severity.to_lowercase();
         if !sev.is_empty() && !valid_severities.contains(&sev.as_str()) {
-            return Err(ScannerError::TemplateValidationError(
-                format!("invalid severity '{}'. Must be one of: {:?}", self.info.severity, valid_severities)
-            ));
+            return Err(ScannerError::TemplateValidationError(format!(
+                "invalid severity '{}'. Must be one of: {:?}",
+                self.info.severity, valid_severities
+            )));
         }
 
         // At least one section must be defined (uses trait-based check)
@@ -382,7 +498,11 @@ impl VulnerabilityTemplate {
         }
 
         // ID format check (lowercase alphanumeric and hyphens)
-        if !self.id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        if !self
+            .id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
             warnings.push("Template 'id' should be lowercase, alphanumeric with hyphens".into());
         }
 

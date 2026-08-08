@@ -29,7 +29,10 @@ mod tests {
 
     #[test]
     fn test_sast_taint_serde_roundtrip() {
-        let tmpl = SastTaintTemplate { target_dir: "/project".into(), language: "rust".into() };
+        let tmpl = SastTaintTemplate {
+            target_dir: "/project".into(),
+            language: "rust".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: SastTaintTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target_dir, "/project");

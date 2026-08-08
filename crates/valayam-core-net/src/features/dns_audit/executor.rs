@@ -1,10 +1,10 @@
-use valayam_models::finding::FindingOwned;
-use valayam_engine::variables::resolve_variables;
-use valayam_network::network::dns;
-use valayam_models::TemplateMetadata;
-use valayam_models::templates::dns_audit::DnsRequestTemplate;
 use regex::Regex;
 use std::collections::HashMap;
+use valayam_engine::variables::resolve_variables;
+use valayam_models::finding::FindingOwned;
+use valayam_models::templates::dns_audit::DnsRequestTemplate;
+use valayam_models::TemplateMetadata;
+use valayam_network::network::dns;
 
 /// Executes all DNS audit rules from a template.
 /// Performs DNS lookups and evaluates regex matchers against the results.
@@ -18,9 +18,9 @@ pub async fn execute(
 
     for rule in dns_rules {
         let domain = resolve_variables(&rule.domain, variables).unwrap();
-        
+
         tracing::debug!(target = %domain, query_type = %rule.query_type, "Starting DNS resolution");
-        
+
         // 1. Basic resolution based on template query_type
         let records = match dns::resolve(&domain, &rule.query_type).await {
             Ok(r) => r,
@@ -45,14 +45,19 @@ pub async fn execute(
                 for matcher in &rule.matchers {
                     if matcher.r#type == "regex" {
                         for pattern in &matcher.regex {
-                            let Ok(re) = Regex::new(pattern) else { continue; };
+                            let Ok(re) = Regex::new(pattern) else {
+                                continue;
+                            };
                             if re.is_match(&records_text) {
                                 tracing::debug!(target = %domain, pattern = %pattern, "Vulnerability DNS match found");
                                 findings.push(FindingOwned::from_template_and_info(
                                     template_id,
                                     template_meta,
                                     domain.clone(),
-                                    format!("DNS {} matched '{}': {}", rule.query_type, pattern, records_text),
+                                    format!(
+                                        "DNS {} matched '{}': {}",
+                                        rule.query_type, pattern, records_text
+                                    ),
                                 ));
                             }
                         }
@@ -104,7 +109,10 @@ pub async fn execute(
                 template_id,
                 template_meta,
                 domain.clone(),
-                format!("Zone transfer (AXFR) successful! Recovered {} records.", axfr_records.len()),
+                format!(
+                    "Zone transfer (AXFR) successful! Recovered {} records.",
+                    axfr_records.len()
+                ),
             ));
         }
     }
@@ -113,14 +121,17 @@ pub async fn execute(
 }
 
 fn is_private_ip(ip: &str) -> bool {
-    ip.starts_with("127.") || ip.starts_with("192.168.") || ip.starts_with("10.") || (ip.starts_with("172.") && {
-        // Crude check for 172.16.x.x - 172.31.x.x
-        if let Some(second_octet) = ip.split('.').nth(1).and_then(|s| s.parse::<u8>().ok()) {
-            (16..=31).contains(&second_octet)
-        } else {
-            false
-        }
-    })
+    ip.starts_with("127.")
+        || ip.starts_with("192.168.")
+        || ip.starts_with("10.")
+        || (ip.starts_with("172.") && {
+            // Crude check for 172.16.x.x - 172.31.x.x
+            if let Some(second_octet) = ip.split('.').nth(1).and_then(|s| s.parse::<u8>().ok()) {
+                (16..=31).contains(&second_octet)
+            } else {
+                false
+            }
+        })
 }
 
 #[cfg(test)]
@@ -210,9 +221,7 @@ matchers:
 
     #[test]
     fn test_regex_no_match_on_dns_records() {
-        let records = vec![
-            "10 mail.example.com".to_string(),
-        ];
+        let records = vec!["10 mail.example.com".to_string()];
         let records_text = records.join("\n");
 
         let re = Regex::new(r"evil\.com").unwrap();
@@ -221,9 +230,7 @@ matchers:
 
     #[test]
     fn test_regex_match_spf_record() {
-        let records = vec![
-            "v=spf1 include:_spf.example.com ~all".to_string(),
-        ];
+        let records = vec!["v=spf1 include:_spf.example.com ~all".to_string()];
         let records_text = records.join("\n");
 
         let re = Regex::new(r"v=spf1").unwrap();
@@ -232,9 +239,7 @@ matchers:
 
     #[test]
     fn test_regex_match_cname_record() {
-        let records = vec![
-            "app.example.com.".to_string(),
-        ];
+        let records = vec!["app.example.com.".to_string()];
         let records_text = records.join("\n");
 
         let re = Regex::new(r"example\.com").unwrap();

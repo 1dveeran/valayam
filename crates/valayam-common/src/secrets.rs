@@ -24,9 +24,16 @@ pub fn detect_secrets(content: &str) -> Vec<SecretMatch> {
         DB_PASSWORD.get_or_init(|| Regex::new(r"(?i)DB_PASSWORD=").expect("static regex")),
         JSON_ARGS.get_or_init(|| Regex::new(r#"\"args\":\s*\{"#).expect("static regex")),
         AWS_ACCESS_KEY.get_or_init(|| Regex::new(r"(?i)AKIA[0-9A-Z]{16}").expect("static regex")),
-        JWT_TOKEN.get_or_init(|| Regex::new(r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*").expect("static regex")),
-        API_KEY.get_or_init(|| Regex::new(r#"(?i)api[_-]?key[\s=:"']+[A-Za-z0-9_=-]+"#).expect("static regex")),
-        PRIVATE_KEY.get_or_init(|| Regex::new(r"(?i)BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY").expect("static regex")),
+        JWT_TOKEN.get_or_init(|| {
+            Regex::new(r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*")
+                .expect("static regex")
+        }),
+        API_KEY.get_or_init(|| {
+            Regex::new(r#"(?i)api[_-]?key[\s=:"']+[A-Za-z0-9_=-]+"#).expect("static regex")
+        }),
+        PRIVATE_KEY.get_or_init(|| {
+            Regex::new(r"(?i)BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY").expect("static regex")
+        }),
     ];
 
     for re in &patterns {

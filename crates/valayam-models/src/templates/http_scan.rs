@@ -1,5 +1,5 @@
-use crate::templates::matcher::ResponseMatcher;
 use crate::templates::extractors::Extractor;
+use crate::templates::matcher::ResponseMatcher;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

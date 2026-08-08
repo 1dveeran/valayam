@@ -5,10 +5,10 @@
 //! extraction, and TOR proxy support.
 pub mod dns;
 pub mod http;
-pub mod tcp;
-pub mod tls;
-pub mod udp;
 pub mod raw;
-pub mod tor;
 pub mod resilience;
 pub mod ssrf_filter;
+pub mod tcp;
+pub mod tls;
+pub mod tor;
+pub mod udp;

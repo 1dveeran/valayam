@@ -17,7 +17,5 @@ fn test_cli_missing_target() {
     // #[arg(short = 'u', long, default_value = "https://httpbin.org")]
     // So running without args shouldn't fail due to missing target, but might fail due to something else.
     // Let's test the version flag instead.
-    cmd.arg("--version")
-        .assert()
-        .success();
+    cmd.arg("--version").assert().success();
 }

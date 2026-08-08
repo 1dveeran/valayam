@@ -18,8 +18,8 @@ pub mod agent;
 pub mod cli;
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 /// Top-level Valayam configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,61 +219,151 @@ impl ValayamConfig {
     /// Merge all set fields from `other` into `self`.
     fn merge(&mut self, other: ValayamConfig) {
         // Non-Option fields with non-trivial defaults
-        if other.target != default_target() { self.target = other.target; }
-        if other.output_format != "json" { self.output_format = other.output_format; }
-        if other.concurrency != 500 { self.concurrency = other.concurrency; }
-        if other.random_agent { self.random_agent = true; }
-        if other.waf_detect { self.waf_detect = true; }
-        if other.crawl { self.crawl = true; }
-        if other.crawl_depth != 3 { self.crawl_depth = other.crawl_depth; }
-        if other.log_level != "info" { self.log_level = other.log_level; }
-        if other.require_signed_plugins { self.require_signed_plugins = true; }
+        if other.target != default_target() {
+            self.target = other.target;
+        }
+        if other.output_format != "json" {
+            self.output_format = other.output_format;
+        }
+        if other.concurrency != 500 {
+            self.concurrency = other.concurrency;
+        }
+        if other.random_agent {
+            self.random_agent = true;
+        }
+        if other.waf_detect {
+            self.waf_detect = true;
+        }
+        if other.crawl {
+            self.crawl = true;
+        }
+        if other.crawl_depth != 3 {
+            self.crawl_depth = other.crawl_depth;
+        }
+        if other.log_level != "info" {
+            self.log_level = other.log_level;
+        }
+        if other.require_signed_plugins {
+            self.require_signed_plugins = true;
+        }
 
         // Option<T> fields — override only when Some
-        if other.template.is_some() { self.template = other.template; }
-        if other.nuclei_template.is_some() { self.nuclei_template = other.nuclei_template; }
-        if other.output.is_some() { self.output = other.output; }
-        if other.rate_limit.is_some() { self.rate_limit = other.rate_limit; }
-        if other.proxy_file.is_some() { self.proxy_file = other.proxy_file; }
-        if other.log_file.is_some() { self.log_file = other.log_file; }
-        if other.worker.is_some() { self.worker = other.worker; }
-        if other.mitm_proxy.is_some() { self.mitm_proxy = other.mitm_proxy; }
-        if other.control_port.is_some() { self.control_port = other.control_port; }
-        if other.tls_cert.is_some() { self.tls_cert = other.tls_cert; }
-        if other.tls_key.is_some() { self.tls_key = other.tls_key; }
-        if other.resume.is_some() { self.resume = other.resume; }
-        if other.crawl_headers.is_some() { self.crawl_headers = other.crawl_headers; }
+        if other.template.is_some() {
+            self.template = other.template;
+        }
+        if other.nuclei_template.is_some() {
+            self.nuclei_template = other.nuclei_template;
+        }
+        if other.output.is_some() {
+            self.output = other.output;
+        }
+        if other.rate_limit.is_some() {
+            self.rate_limit = other.rate_limit;
+        }
+        if other.proxy_file.is_some() {
+            self.proxy_file = other.proxy_file;
+        }
+        if other.log_file.is_some() {
+            self.log_file = other.log_file;
+        }
+        if other.worker.is_some() {
+            self.worker = other.worker;
+        }
+        if other.mitm_proxy.is_some() {
+            self.mitm_proxy = other.mitm_proxy;
+        }
+        if other.control_port.is_some() {
+            self.control_port = other.control_port;
+        }
+        if other.tls_cert.is_some() {
+            self.tls_cert = other.tls_cert;
+        }
+        if other.tls_key.is_some() {
+            self.tls_key = other.tls_key;
+        }
+        if other.resume.is_some() {
+            self.resume = other.resume;
+        }
+        if other.crawl_headers.is_some() {
+            self.crawl_headers = other.crawl_headers;
+        }
 
-        if other.config_file.is_some() { self.config_file = other.config_file; }
+        if other.config_file.is_some() {
+            self.config_file = other.config_file;
+        }
     }
 
     /// Merge only fields that differ from `None`/default in `other` (CLI overrides).
     fn merge_non_default(&mut self, other: ValayamConfig) {
         // For Option<T> fields, if other has Some, override
-        if other.template.is_some() { self.template = other.template; }
-        if other.nuclei_template.is_some() { self.nuclei_template = other.nuclei_template; }
-        if other.output.is_some() { self.output = other.output; }
-        if other.rate_limit.is_some() { self.rate_limit = other.rate_limit; }
-        if other.proxy_file.is_some() { self.proxy_file = other.proxy_file; }
-        if other.log_file.is_some() { self.log_file = other.log_file; }
-        if other.worker.is_some() { self.worker = other.worker; }
-        if other.mitm_proxy.is_some() { self.mitm_proxy = other.mitm_proxy; }
-        if other.control_port.is_some() { self.control_port = other.control_port; }
-        if other.tls_cert.is_some() { self.tls_cert = other.tls_cert; }
-        if other.tls_key.is_some() { self.tls_key = other.tls_key; }
-        if other.resume.is_some() { self.resume = other.resume; }
-        if other.crawl_headers.is_some() { self.crawl_headers = other.crawl_headers; }
+        if other.template.is_some() {
+            self.template = other.template;
+        }
+        if other.nuclei_template.is_some() {
+            self.nuclei_template = other.nuclei_template;
+        }
+        if other.output.is_some() {
+            self.output = other.output;
+        }
+        if other.rate_limit.is_some() {
+            self.rate_limit = other.rate_limit;
+        }
+        if other.proxy_file.is_some() {
+            self.proxy_file = other.proxy_file;
+        }
+        if other.log_file.is_some() {
+            self.log_file = other.log_file;
+        }
+        if other.worker.is_some() {
+            self.worker = other.worker;
+        }
+        if other.mitm_proxy.is_some() {
+            self.mitm_proxy = other.mitm_proxy;
+        }
+        if other.control_port.is_some() {
+            self.control_port = other.control_port;
+        }
+        if other.tls_cert.is_some() {
+            self.tls_cert = other.tls_cert;
+        }
+        if other.tls_key.is_some() {
+            self.tls_key = other.tls_key;
+        }
+        if other.resume.is_some() {
+            self.resume = other.resume;
+        }
+        if other.crawl_headers.is_some() {
+            self.crawl_headers = other.crawl_headers;
+        }
 
         // For non-Option fields, always override (CLI picks explicit values)
-        if other.target != default_target() { self.target = other.target; }
-        if other.output_format != "json" { self.output_format = other.output_format; }
-        if other.concurrency != 500 { self.concurrency = other.concurrency; }
-        if other.random_agent { self.random_agent = true; }
-        if other.waf_detect { self.waf_detect = true; }
-        if other.crawl { self.crawl = true; }
-        if other.crawl_depth != 3 { self.crawl_depth = other.crawl_depth; }
-        if other.log_level != "info" { self.log_level = other.log_level; }
-        if other.require_signed_plugins { self.require_signed_plugins = true; }
+        if other.target != default_target() {
+            self.target = other.target;
+        }
+        if other.output_format != "json" {
+            self.output_format = other.output_format;
+        }
+        if other.concurrency != 500 {
+            self.concurrency = other.concurrency;
+        }
+        if other.random_agent {
+            self.random_agent = true;
+        }
+        if other.waf_detect {
+            self.waf_detect = true;
+        }
+        if other.crawl {
+            self.crawl = true;
+        }
+        if other.crawl_depth != 3 {
+            self.crawl_depth = other.crawl_depth;
+        }
+        if other.log_level != "info" {
+            self.log_level = other.log_level;
+        }
+        if other.require_signed_plugins {
+            self.require_signed_plugins = true;
+        }
     }
 
     /// Apply environment variable overrides. Uses `VALAYAM_*` prefix.

@@ -1,5 +1,5 @@
-use valayam_models::error::ScannerError;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use valayam_models::error::ScannerError;
 
 /// Configuration for SSRF (Server-Side Request Forgery) protection.
 #[derive(Clone, Default)]
@@ -72,11 +72,11 @@ fn is_private_ip(ip: &IpAddr) -> bool {
 fn is_private_v4(ip: &Ipv4Addr) -> bool {
     let octets = ip.octets();
     match octets[0] {
-        10 => true,                         // 10.0.0.0/8
-        127 => true,                         // 127.0.0.0/8 (loopback)
-        169 => octets[1] == 254,             // 169.254.0.0/16 (link-local)
+        10 => true,                            // 10.0.0.0/8
+        127 => true,                           // 127.0.0.0/8 (loopback)
+        169 => octets[1] == 254,               // 169.254.0.0/16 (link-local)
         172 => (16..=31).contains(&octets[1]), // 172.16.0.0/12
-        192 => octets[1] == 168,             // 192.168.0.0/16
+        192 => octets[1] == 168,               // 192.168.0.0/16
         _ => false,
     }
 }
@@ -84,9 +84,14 @@ fn is_private_v4(ip: &Ipv4Addr) -> bool {
 fn is_private_v6(ip: &Ipv6Addr) -> bool {
     let segments = ip.segments();
     // ::1 (loopback)
-    if segments[0] == 0 && segments[1] == 0 && segments[2] == 0
-        && segments[3] == 0 && segments[4] == 0 && segments[5] == 0
-        && segments[6] == 0 && segments[7] == 1
+    if segments[0] == 0
+        && segments[1] == 0
+        && segments[2] == 0
+        && segments[3] == 0
+        && segments[4] == 0
+        && segments[5] == 0
+        && segments[6] == 0
+        && segments[7] == 1
     {
         return true;
     }
@@ -121,7 +126,9 @@ fn resolve_dotted_host(host: &str) -> Result<IpAddr, ()> {
         octets[i] = val;
     }
 
-    Ok(IpAddr::V4(Ipv4Addr::new(octets[0], octets[1], octets[2], octets[3])))
+    Ok(IpAddr::V4(Ipv4Addr::new(
+        octets[0], octets[1], octets[2], octets[3],
+    )))
 }
 
 #[cfg(test)]
@@ -131,7 +138,9 @@ mod tests {
     #[test]
     fn test_allow_internal_bypass() {
         let config_block = SsrfConfig::default();
-        let config_allow = SsrfConfig { allow_internal: true };
+        let config_allow = SsrfConfig {
+            allow_internal: true,
+        };
 
         assert!(reject_private_ip("http://127.0.0.1:8080", &config_block).is_err());
         assert!(reject_private_ip("http://127.0.0.1:8080", &config_allow).is_ok());
@@ -196,7 +205,10 @@ mod tests {
     #[test]
     fn test_cloud_metadata_hostnames() {
         let config = SsrfConfig::default();
-        assert!(reject_private_ip("http://metadata.google.internal", &config).is_err(), "should block GCP metadata hostname");
+        assert!(
+            reject_private_ip("http://metadata.google.internal", &config).is_err(),
+            "should block GCP metadata hostname"
+        );
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use zip::ZipArchive;
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Documentation for this item.
@@ -39,20 +39,31 @@ pub enum VpaError {
 }
 
 impl From<std::io::Error> for VpaError {
-    fn from(e: std::io::Error) -> Self { VpaError::IoError(e) }
+    fn from(e: std::io::Error) -> Self {
+        VpaError::IoError(e)
+    }
 }
 impl From<zip::result::ZipError> for VpaError {
-    fn from(e: zip::result::ZipError) -> Self { VpaError::ZipError(e) }
+    fn from(e: zip::result::ZipError) -> Self {
+        VpaError::ZipError(e)
+    }
 }
 impl From<serde_yaml::Error> for VpaError {
-    fn from(e: serde_yaml::Error) -> Self { VpaError::YamlError(e) }
+    fn from(e: serde_yaml::Error) -> Self {
+        VpaError::YamlError(e)
+    }
 }
 
 /// Extract a VPA archive securely to the given cache directory, and return the loaded Manifest and extraction path.
 /// If `pub_key` is provided, it enforces that `signature.sig` exists and is valid.
 /// If `skip_extract_if_cache_hit` is true and the entrypoint WASM matching the manifest hash exists in the wasm_cache,
 /// it returns the cached path without extracting.
-pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&[u8; 32]>, skip_extract_if_cache_hit: bool) -> Result<(PluginManifest, PathBuf), VpaError> {
+pub fn extract_vpa(
+    archive_path: &Path,
+    cache_base_dir: &Path,
+    pub_key: Option<&[u8; 32]>,
+    skip_extract_if_cache_hit: bool,
+) -> Result<(PluginManifest, PathBuf), VpaError> {
     // First, read the manifest from the VPA without fully extracting to check cache
     let file = fs::File::open(archive_path)?;
     let mut archive = ZipArchive::new(file)?;
@@ -68,14 +79,18 @@ pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&
         }
     }
 
-    let manifest_bytes = manifest_bytes.ok_or_else(|| VpaError::InvalidManifest("plugin.yaml is missing from the VPA archive".to_string()))?;
+    let manifest_bytes = manifest_bytes.ok_or_else(|| {
+        VpaError::InvalidManifest("plugin.yaml is missing from the VPA archive".to_string())
+    })?;
     let manifest: PluginManifest = serde_yaml::from_slice(&manifest_bytes)?;
 
     // Check cache-hit: if offline mode and wasm entrypoint exists in cache with matching hash
     if skip_extract_if_cache_hit {
         let wasm_cache_dir = cache_base_dir.join("wasm_cache");
         let manifest_hash = hex::encode(Sha256::digest(&manifest_bytes));
-        let cached_entrypoint = wasm_cache_dir.join(&manifest_hash).join(&manifest.entrypoint);
+        let cached_entrypoint = wasm_cache_dir
+            .join(&manifest_hash)
+            .join(&manifest.entrypoint);
 
         if cached_entrypoint.exists() {
             // Return manifest and the cached extraction directory (minimal, just for compat)
@@ -92,10 +107,15 @@ pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&
     let mut archive = ZipArchive::new(file)?;
 
     // Create a unique extraction directory for this VPA
-    let file_stem = archive_path.file_stem()
+    let file_stem = archive_path
+        .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("plugin");
-    let extract_dir = cache_base_dir.join(format!("{}_{}", file_stem, &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]));
+    let extract_dir = cache_base_dir.join(format!(
+        "{}_{}",
+        file_stem,
+        &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]
+    ));
 
     fs::create_dir_all(&extract_dir)?;
 
@@ -138,21 +158,30 @@ pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&
     }
 
     if let Some(pk) = pub_key {
-        let sig = signature_bytes.ok_or_else(|| VpaError::ExtractionError("VPA requires a signature.sig but none was found".to_string()))?;
+        let sig = signature_bytes.ok_or_else(|| {
+            VpaError::ExtractionError("VPA requires a signature.sig but none was found".to_string())
+        })?;
         if sig.len() != 64 {
-            return Err(VpaError::ExtractionError("Invalid signature length".to_string()));
+            return Err(VpaError::ExtractionError(
+                "Invalid signature length".to_string(),
+            ));
         }
 
         // We verify the signature against the raw bytes of plugin.yaml
         let manifest_content = fs::read(extract_dir.join("plugin.yaml"))?;
-        let sig_array: [u8; 64] = sig.try_into()
-            .map_err(|_: Vec<u8>| VpaError::ExtractionError("signature length mismatch after validation".to_string()))?;
+        let sig_array: [u8; 64] = sig.try_into().map_err(|_: Vec<u8>| {
+            VpaError::ExtractionError("signature length mismatch after validation".to_string())
+        })?;
 
         let is_valid = valayam_crypto::PluginCrypto::verify(pk, &manifest_content, &sig_array)
-            .map_err(|e| VpaError::ExtractionError(format!("Signature verification failed: {}", e)))?;
+            .map_err(|e| {
+                VpaError::ExtractionError(format!("Signature verification failed: {}", e))
+            })?;
 
         if !is_valid {
-            return Err(VpaError::ExtractionError("Signature validation failed: untrusted plugin".to_string()));
+            return Err(VpaError::ExtractionError(
+                "Signature validation failed: untrusted plugin".to_string(),
+            ));
         }
     }
 
@@ -167,7 +196,10 @@ pub fn extract_vpa(archive_path: &Path, cache_base_dir: &Path, pub_key: Option<&
             fs::create_dir_all(&cache_target_dir)?;
             fs::copy(&entrypoint_src, cache_target_dir.join(&manifest.entrypoint))?;
             // Also copy plugin.yaml for verification
-            fs::copy(extract_dir.join("plugin.yaml"), cache_target_dir.join("plugin.yaml"))?;
+            fs::copy(
+                extract_dir.join("plugin.yaml"),
+                cache_target_dir.join("plugin.yaml"),
+            )?;
         }
     }
 

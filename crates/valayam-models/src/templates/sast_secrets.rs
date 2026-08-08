@@ -25,7 +25,9 @@ mod tests {
 
     #[test]
     fn test_sast_secrets_serde_roundtrip() {
-        let tmpl = SastSecretsTemplate { target_dir: "/tmp/test".into() };
+        let tmpl = SastSecretsTemplate {
+            target_dir: "/tmp/test".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: SastSecretsTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target_dir, "/tmp/test");

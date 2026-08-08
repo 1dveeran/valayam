@@ -79,7 +79,10 @@ mod tests {
             metadata: Default::default(),
         };
         let json = serde_json::to_string(&f).expect("serialize");
-        assert!(!json.contains("description"), "None fields should be skipped");
+        assert!(
+            !json.contains("description"),
+            "None fields should be skipped"
+        );
         assert!(!json.contains("solution"), "None fields should be skipped");
         let back: Finding = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.template_id, "t1");

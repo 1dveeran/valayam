@@ -1,30 +1,30 @@
 #![allow(clippy::if_same_then_else)]
-use valayam_network::network::tcp;
-use valayam_network::network::udp;
-use valayam_models::finding::FindingOwned;
 use crate::features::network_scan::parser::parse_port_ranges;
-use valayam_models::TemplateMetadata;
-use valayam_models::templates::network_scan::NetworkRequestTemplate;
 use regex::bytes::Regex;
 use std::collections::HashMap;
+use valayam_models::finding::FindingOwned;
+use valayam_models::templates::network_scan::NetworkRequestTemplate;
+use valayam_models::TemplateMetadata;
+use valayam_network::network::tcp;
+use valayam_network::network::udp;
 
 const SENSITIVE_PORTS: &[u16] = &[
-    22,   // SSH
-    23,   // Telnet
-    25,   // SMTP
-    53,   // DNS
-    135,  // MS RPC
-    139,  // NetBIOS
-    445,  // SMB
-    1433, // MSSQL
-    1434, // MSSQL Monitor
-    1521, // Oracle
-    3306, // MySQL
-    3389, // RDP
-    5432, // PostgreSQL
-    5900, // VNC
-    5901, // VNC
-    6379, // Redis
+    22,    // SSH
+    23,    // Telnet
+    25,    // SMTP
+    53,    // DNS
+    135,   // MS RPC
+    139,   // NetBIOS
+    445,   // SMB
+    1433,  // MSSQL
+    1434,  // MSSQL Monitor
+    1521,  // Oracle
+    3306,  // MySQL
+    3389,  // RDP
+    5432,  // PostgreSQL
+    5900,  // VNC
+    5901,  // VNC
+    6379,  // Redis
     27017, // MongoDB
     11211, // Memcached
 ];
@@ -49,9 +49,12 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             }
         }
         25 => {
-            if banner.contains("ESMTP") || banner.contains("Sendmail") ||
-               banner.contains("Postfix") || banner.contains("Exim") ||
-               banner.contains("Exchange") {
+            if banner.contains("ESMTP")
+                || banner.contains("Sendmail")
+                || banner.contains("Postfix")
+                || banner.contains("Exim")
+                || banner.contains("Exchange")
+            {
                 let service_name = if banner.contains("Microsoft") || banner.contains("Exchange") {
                     "Microsoft SMTP"
                 } else if banner.contains("Sendmail") {
@@ -63,7 +66,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
                 } else {
                     "SMTP Server"
                 };
-                (service_name.to_string(), extract_version_from_banner(banner))
+                (
+                    service_name.to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else if banner_lower.contains("smtp") || banner_lower.contains("mail") {
                 ("SMTP".to_string(), extract_version_from_banner(banner))
             } else {
@@ -102,7 +108,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         }
         1434 => {
             if banner.contains("Microsoft") || banner.contains("SQL Server") {
-                ("MSSQL Monitor".to_string(), extract_version_from_banner(banner))
+                (
+                    "MSSQL Monitor".to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else {
                 ("MSSQL Monitor".to_string(), None)
             }
@@ -132,13 +141,16 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         }
         5432 => {
             if banner.contains("PostgreSQL") {
-                ("PostgreSQL".to_string(), extract_version_from_banner(banner))
+                (
+                    "PostgreSQL".to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else {
                 ("PostgreSQL".to_string(), None)
             }
         }
         5900 | 5901 => {
-            if banner.contains("RFB") { 
+            if banner.contains("RFB") {
                 ("VNC".to_string(), extract_version_from_banner(banner))
             } else {
                 ("VNC".to_string(), None)
@@ -147,12 +159,11 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         6379 => {
             if banner.contains("Redis") {
                 let version = extract_version_from_banner(banner);
-                if version.is_none()
-                    && banner.lines().count() > 1 {
-                        let lines: Vec<&str> = banner.lines().collect();
-                        if lines.len() > 1 {
-                            return ( "Redis".to_string(), extract_version_from_banner(lines[1]) );
-                        }
+                if version.is_none() && banner.lines().count() > 1 {
+                    let lines: Vec<&str> = banner.lines().collect();
+                    if lines.len() > 1 {
+                        return ("Redis".to_string(), extract_version_from_banner(lines[1]));
+                    }
                 }
                 ("Redis".to_string(), version)
             } else {
@@ -187,7 +198,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             } else if banner_lower.contains("mysql") {
                 ("MySQL".to_string(), extract_version_from_banner(banner))
             } else if banner_lower.contains("postgres") {
-                ("PostgreSQL".to_string(), extract_version_from_banner(banner))
+                (
+                    "PostgreSQL".to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else if banner_lower.contains("mongodb") {
                 ("MongoDB".to_string(), extract_version_from_banner(banner))
             } else if banner_lower.contains("redis") {
@@ -228,13 +242,38 @@ fn check_vulnerability(service: &str, version: &Option<String>) -> Option<String
     let version_str = version.as_ref()?;
 
     let vuln_patterns: Vec<(&str, Vec<&str>)> = vec![
-        ("SSH", vec!["OpenSSH_5", "OpenSSH_6", "OpenSSH_7.0", "OpenSSH_7.1", "OpenSSH_7.2"]),
-        ("HTTP", vec!["Apache/2.2", "Apache/2.0", "nginx/1.0", "nginx/1.1", "nginx/1.2", "nginx/1.3", "nginx/1.4", "nginx/1.5", "nginx/1.6"]),
+        (
+            "SSH",
+            vec![
+                "OpenSSH_5",
+                "OpenSSH_6",
+                "OpenSSH_7.0",
+                "OpenSSH_7.1",
+                "OpenSSH_7.2",
+            ],
+        ),
+        (
+            "HTTP",
+            vec![
+                "Apache/2.2",
+                "Apache/2.0",
+                "nginx/1.0",
+                "nginx/1.1",
+                "nginx/1.2",
+                "nginx/1.3",
+                "nginx/1.4",
+                "nginx/1.5",
+                "nginx/1.6",
+            ],
+        ),
         ("MySQL", vec!["5.0", "5.1", "5.5"]),
         ("MariaDB", vec!["5.0", "5.1", "5.5"]),
         ("PostgreSQL", vec!["9.0", "9.1", "9.2", "9.3", "9.4"]),
         ("MongoDB", vec!["1.", "2.0", "2.2", "2.4", "2.6"]),
-        ("Redis", vec!["1.", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.8"]),
+        (
+            "Redis",
+            vec!["1.", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.8"],
+        ),
         ("RDP", vec![]),
         ("SMB", vec![]),
     ];
@@ -243,7 +282,10 @@ fn check_vulnerability(service: &str, version: &Option<String>) -> Option<String
         if service.eq_ignore_ascii_case(service_name) {
             for pattern in patterns {
                 if version_str.contains(pattern) {
-                    return Some(format!("Potentially vulnerable {} version detected", service));
+                    return Some(format!(
+                        "Potentially vulnerable {} version detected",
+                        service
+                    ));
                 }
             }
         }
@@ -323,9 +365,13 @@ pub async fn execute(
         }
 
         let protocol_lower = net_rule.protocol.to_lowercase();
-        let run_tcp = protocol_lower.contains("tcp") || protocol_lower == "all" || protocol_lower == "both" || protocol_lower.is_empty();
-        let run_udp = protocol_lower.contains("udp") || protocol_lower == "all" || protocol_lower == "both";
-        
+        let run_tcp = protocol_lower.contains("tcp")
+            || protocol_lower == "all"
+            || protocol_lower == "both"
+            || protocol_lower.is_empty();
+        let run_udp =
+            protocol_lower.contains("udp") || protocol_lower == "all" || protocol_lower == "both";
+
         // Parse ports using the new parser to support ranges
         let ports_str = net_rule.ports.join(",");
         let parsed_ports = match parse_port_ranges(&ports_str) {
@@ -348,7 +394,7 @@ pub async fn execute(
                 net_rule.banner_timeout_ms,
                 false,
             );
-            
+
             let tcp_future = tcp::scan_ports(
                 &host_to_scan,
                 &ports_as_strings,
@@ -357,16 +403,20 @@ pub async fn execute(
                 net_rule.send_probe.clone(),
                 false, // stealth_syn_scan
             );
-            
+
             let (udp_res, tcp_res) = tokio::join!(udp_future, tcp_future);
-            
-            port_results.extend(udp_res.unwrap_or_default().into_iter().map(|r| ScanPortResult {
-                port: r.port,
-                banner_text: r.response.as_ref()
-                    .map(|v| String::from_utf8_lossy(v).to_string())
-                    .unwrap_or_default(),
+
+            port_results.extend(udp_res.unwrap_or_default().into_iter().map(|r| {
+                ScanPortResult {
+                    port: r.port,
+                    banner_text: r
+                        .response
+                        .as_ref()
+                        .map(|v| String::from_utf8_lossy(v).to_string())
+                        .unwrap_or_default(),
+                }
             }));
-            
+
             port_results.extend(tcp_res.into_iter().map(|r| ScanPortResult {
                 port: r.port,
                 banner_text: r.banner.unwrap_or_default(),
@@ -379,11 +429,15 @@ pub async fn execute(
                 false,
             )
             .await;
-            port_results.extend(results.unwrap_or_default().into_iter().map(|r| ScanPortResult {
-                port: r.port,
-                banner_text: r.response.as_ref()
-                    .map(|v| String::from_utf8_lossy(v).to_string())
-                    .unwrap_or_default(),
+            port_results.extend(results.unwrap_or_default().into_iter().map(|r| {
+                ScanPortResult {
+                    port: r.port,
+                    banner_text: r
+                        .response
+                        .as_ref()
+                        .map(|v| String::from_utf8_lossy(v).to_string())
+                        .unwrap_or_default(),
+                }
             }));
         } else if run_tcp {
             let results = tcp::scan_ports(
@@ -392,7 +446,7 @@ pub async fn execute(
                 net_rule.banner_timeout_ms,
                 false,
                 net_rule.send_probe.clone(), // Pass send_probe here
-                false, // stealth_syn_scan
+                false,                       // stealth_syn_scan
             )
             .await;
             port_results.extend(results.into_iter().map(|r| ScanPortResult {
@@ -406,16 +460,17 @@ pub async fn execute(
         }
 
         for port_result in &port_results {
-            let (service, version) = identify_service_from_banner(port_result.port, &port_result.banner_text);
+            let (service, version) =
+                identify_service_from_banner(port_result.port, &port_result.banner_text);
             let vuln_check = check_vulnerability(&service, &version);
             let solution = get_service_solution(&service, port_result.port);
             let cvss_score = get_cvss_score(&service, port_result.port);
-            
+
             let service_desc = match &version {
                 Some(v) => format!("{} {}", service, v),
                 None => service.clone(),
             };
-            
+
             let is_critical = SENSITIVE_PORTS.contains(&port_result.port);
             let base_finding = format!("Port {} open - {}", port_result.port, service_desc);
             let mut finding_details = String::new();
@@ -443,18 +498,27 @@ pub async fn execute(
             if net_rule.matchers.is_empty() {
                 let severity = template_meta.template_severity().to_string();
                 let _adjusted_severity = if is_critical && !vuln_check.is_none() {
-                    if severity == "Info" { "Medium".to_string() }
-                    else if severity == "Low" { "High".to_string() }
-                    else if severity == "Medium" { "High".to_string() }
-                    else { severity }
+                    if severity == "Info" {
+                        "Medium".to_string()
+                    } else if severity == "Low" {
+                        "High".to_string()
+                    } else if severity == "Medium" {
+                        "High".to_string()
+                    } else {
+                        severity
+                    }
                 } else if is_critical {
-                    if severity == "Info" { "Low".to_string() }
-                    else if severity == "Low" { "Medium".to_string() }
-                    else { severity }
+                    if severity == "Info" {
+                        "Low".to_string()
+                    } else if severity == "Low" {
+                        "Medium".to_string()
+                    } else {
+                        severity
+                    }
                 } else {
                     severity
                 };
-                
+
                 let result = FindingOwned::from_template_and_info(
                     template_id,
                     template_meta,
@@ -478,32 +542,54 @@ pub async fn execute(
                             if re.is_match(banner_text.as_bytes()) {
                                 matched = true;
                                 tracing::debug!(port = %port_result.port, pattern = %pattern, "Vulnerability banner match found");
-                                let mut payload = format!("Port {} matched '{}' — {}", port_result.port, pattern, banner_text.trim());
+                                let mut payload = format!(
+                                    "Port {} matched '{}' — {}",
+                                    port_result.port,
+                                    pattern,
+                                    banner_text.trim()
+                                );
                                 if service != "Unknown" {
-                                    payload.push_str(format!(", Service: {} {}", service, version.as_deref().unwrap_or("")).as_str());
+                                    payload.push_str(
+                                        format!(
+                                            ", Service: {} {}",
+                                            service,
+                                            version.as_deref().unwrap_or("")
+                                        )
+                                        .as_str(),
+                                    );
                                 }
-                                compliance.insert("matched_pattern".to_string(), pattern.to_string());
+                                compliance
+                                    .insert("matched_pattern".to_string(), pattern.to_string());
                                 break 'matcher_loop;
                             }
                         }
                     }
                 }
-                
+
                 if matched {
                     let severity = template_meta.template_severity().to_string();
                     let _adjusted_severity = if is_critical && !vuln_check.is_none() {
-                        if severity == "Info" { "Medium".to_string() }
-                        else if severity == "Low" { "High".to_string() }
-                        else if severity == "Medium" { "High".to_string() }
-                        else { severity }
+                        if severity == "Info" {
+                            "Medium".to_string()
+                        } else if severity == "Low" {
+                            "High".to_string()
+                        } else if severity == "Medium" {
+                            "High".to_string()
+                        } else {
+                            severity
+                        }
                     } else if is_critical {
-                        if severity == "Info" { "Low".to_string() }
-                        else if severity == "Low" { "Medium".to_string() }
-                        else { severity }
+                        if severity == "Info" {
+                            "Low".to_string()
+                        } else if severity == "Low" {
+                            "Medium".to_string()
+                        } else {
+                            severity
+                        }
                     } else {
                         severity
                     };
-                    
+
                     let result = FindingOwned::from_template_and_info(
                         template_id,
                         template_meta,
@@ -518,7 +604,7 @@ pub async fn execute(
                 }
             }
         }
-        
+
         all_findings.extend(critical_findings);
         all_findings.extend(findings);
     }
@@ -536,10 +622,22 @@ mod tests {
 
     #[test]
     fn test_sensitive_ports_contains_known_services() {
-        assert!(SENSITIVE_PORTS.contains(&22), "SSH port 22 should be sensitive");
-        assert!(SENSITIVE_PORTS.contains(&3306), "MySQL port 3306 should be sensitive");
-        assert!(SENSITIVE_PORTS.contains(&3389), "RDP port 3389 should be sensitive");
-        assert!(SENSITIVE_PORTS.contains(&6379), "Redis port 6379 should be sensitive");
+        assert!(
+            SENSITIVE_PORTS.contains(&22),
+            "SSH port 22 should be sensitive"
+        );
+        assert!(
+            SENSITIVE_PORTS.contains(&3306),
+            "MySQL port 3306 should be sensitive"
+        );
+        assert!(
+            SENSITIVE_PORTS.contains(&3389),
+            "RDP port 3389 should be sensitive"
+        );
+        assert!(
+            SENSITIVE_PORTS.contains(&6379),
+            "Redis port 6379 should be sensitive"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -548,7 +646,8 @@ mod tests {
 
     #[test]
     fn test_identify_ssh_on_port_22() {
-        let (service, _version) = identify_service_from_banner(22, "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3");
+        let (service, _version) =
+            identify_service_from_banner(22, "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3");
         assert_eq!(service, "SSH");
     }
 
@@ -572,7 +671,8 @@ mod tests {
 
     #[test]
     fn test_identify_smtp_postfix_on_port_25() {
-        let (service, _version) = identify_service_from_banner(25, "220 Postfix ESMTP server ready");
+        let (service, _version) =
+            identify_service_from_banner(25, "220 Postfix ESMTP server ready");
         assert_eq!(service, "Postfix");
     }
 

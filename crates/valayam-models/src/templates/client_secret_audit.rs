@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::templates::matcher::ResponseMatcher;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClientSecretAuditTemplate {
@@ -29,7 +29,10 @@ mod tests {
 
     #[test]
     fn test_client_secret_serde_roundtrip() {
-        let tmpl = ClientSecretAuditTemplate { target: "https://api.example.com".into(), matchers: vec![] };
+        let tmpl = ClientSecretAuditTemplate {
+            target: "https://api.example.com".into(),
+            matchers: vec![],
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: ClientSecretAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target, "https://api.example.com");

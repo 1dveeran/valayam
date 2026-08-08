@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::templates::matcher::ResponseMatcher;
+use serde::{Deserialize, Serialize};
 
 //
 // Required Crates:
@@ -45,13 +45,30 @@ use crate::templates::matcher::ResponseMatcher;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum BrowserAction {
-    Navigate { url: String },
-    Click { selector: String },
-    FillForm { selector: String, value: String },
-    ExecuteJs { code: String },
-    WaitForSelector { selector: String, timeout_ms: u64 },
-    Screenshot { path: Option<String> },
-    EvaluateAndMatch { js: String, matchers: Vec<ResponseMatcher> },
+    Navigate {
+        url: String,
+    },
+    Click {
+        selector: String,
+    },
+    FillForm {
+        selector: String,
+        value: String,
+    },
+    ExecuteJs {
+        code: String,
+    },
+    WaitForSelector {
+        selector: String,
+        timeout_ms: u64,
+    },
+    Screenshot {
+        path: Option<String>,
+    },
+    EvaluateAndMatch {
+        js: String,
+        matchers: Vec<ResponseMatcher>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,24 +82,26 @@ pub struct DomCondition {
     pub text_contains: Option<String>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BrowserAuditTemplate {
     pub target: String,
-    
+
     #[serde(default)]
     pub script: String,
-    
+
     #[serde(default)]
     pub matchers: Vec<ResponseMatcher>,
-    
+
     #[serde(default)]
     pub actions: Vec<BrowserAction>,
-    
+
     #[serde(default)]
     pub expected_console: Vec<String>,
-    
+
     #[serde(default)]
     pub dom_conditions: Vec<DomCondition>,
 }
@@ -118,18 +137,20 @@ mod tests {
             script: "script.py".into(),
             matchers: vec![],
             actions: vec![
-                BrowserAction::Navigate { url: "https://site.com".into() },
-                BrowserAction::Click { selector: "#submit".into() }
+                BrowserAction::Navigate {
+                    url: "https://site.com".into(),
+                },
+                BrowserAction::Click {
+                    selector: "#submit".into(),
+                },
             ],
             expected_console: vec!["error".into()],
-            dom_conditions: vec![
-                DomCondition {
-                    selector: ".success".into(),
-                    attribute: None,
-                    exists: true,
-                    text_contains: Some("Success!".into()),
-                }
-            ],
+            dom_conditions: vec![DomCondition {
+                selector: ".success".into(),
+                attribute: None,
+                exists: true,
+                text_contains: Some("Success!".into()),
+            }],
         };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: BrowserAuditTemplate = serde_json::from_str(&json).unwrap();

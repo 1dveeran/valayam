@@ -29,7 +29,10 @@ mod tests {
 
     #[test]
     fn test_sbom_audit_serde_roundtrip() {
-        let tmpl = SbomAuditTemplate { target: "package.json".into(), r#type: "package.json".into() };
+        let tmpl = SbomAuditTemplate {
+            target: "package.json".into(),
+            r#type: "package.json".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: SbomAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target, "package.json");

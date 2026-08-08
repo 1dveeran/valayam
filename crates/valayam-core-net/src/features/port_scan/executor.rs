@@ -1,26 +1,26 @@
 use valayam_models::finding::FindingOwned;
-use valayam_network::network::tcp;
-use valayam_models::TemplateMetadata;
 use valayam_models::templates::port_scan::PortScanTemplate;
+use valayam_models::TemplateMetadata;
+use valayam_network::network::tcp;
 
 /// Define commonly exposed administrative/dangerous services that should not be publicly accessible
 const SENSITIVE_PORTS: &[u16] = &[
-    22,   // SSH
-    23,   // Telnet
-    25,   // SMTP
-    53,   // DNS
-    135,  // MS RPC
-    139,  // NetBIOS
-    445,  // SMB
-    1433, // MSSQL
-    1434, // MSSQL Monitor
-    1521, // Oracle
-    3306, // MySQL
-    3389, // RDP
-    5432, // PostgreSQL
-    5900, // VNC
-    5901, // VNC
-    6379, // Redis
+    22,    // SSH
+    23,    // Telnet
+    25,    // SMTP
+    53,    // DNS
+    135,   // MS RPC
+    139,   // NetBIOS
+    445,   // SMB
+    1433,  // MSSQL
+    1434,  // MSSQL Monitor
+    1521,  // Oracle
+    3306,  // MySQL
+    3389,  // RDP
+    5432,  // PostgreSQL
+    5900,  // VNC
+    5901,  // VNC
+    6379,  // Redis
     27017, // MongoDB
     11211, // Memcached
 ];
@@ -33,10 +33,10 @@ fn extract_version_from_banner(banner: &str) -> Option<String> {
 
     // Common version patterns
     let patterns = [
-        r"[\d]+\.[\d]+\.[\d]+",           // X.Y.Z
-        r"[\d]+\.[\d]+",                  // X.Y
-        r"version[\s_-]*[\d]+\.[\d]+",    // version X.Y
-        r"v[\d]+\.[\d]+",                 // vX.Y
+        r"[\d]+\.[\d]+\.[\d]+",        // X.Y.Z
+        r"[\d]+\.[\d]+",               // X.Y
+        r"version[\s_-]*[\d]+\.[\d]+", // version X.Y
+        r"v[\d]+\.[\d]+",              // vX.Y
     ];
 
     for pattern in &patterns {
@@ -75,9 +75,12 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         }
         25 => {
             // SMTP banners often contain server info
-            if banner.contains("ESMTP") || banner.contains("Sendmail") ||
-               banner.contains("Postfix") || banner.contains("Exim") ||
-               banner.contains("Exchange") {
+            if banner.contains("ESMTP")
+                || banner.contains("Sendmail")
+                || banner.contains("Postfix")
+                || banner.contains("Exim")
+                || banner.contains("Exchange")
+            {
                 let service_name = if banner.contains("Microsoft") || banner.contains("Exchange") {
                     "Microsoft SMTP"
                 } else if banner.contains("Sendmail") {
@@ -89,7 +92,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
                 } else {
                     "SMTP Server"
                 };
-                (service_name.to_string(), extract_version_from_banner(banner))
+                (
+                    service_name.to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else if banner_lower.contains("smtp") || banner_lower.contains("mail") {
                 ("SMTP".to_string(), extract_version_from_banner(banner))
             } else {
@@ -112,7 +118,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             }
         }
         139 | 445 => {
-            if banner.contains("Samba") || banner.contains("Microsoft") || banner.contains("Windows") {
+            if banner.contains("Samba")
+                || banner.contains("Microsoft")
+                || banner.contains("Windows")
+            {
                 ("SMB".to_string(), extract_version_from_banner(banner))
             } else {
                 ("SMB".to_string(), None)
@@ -127,7 +136,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         }
         1434 => {
             if banner.contains("Microsoft") || banner.contains("SQL Server") {
-                ("MSSQL Monitor".to_string(), extract_version_from_banner(banner))
+                (
+                    "MSSQL Monitor".to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else {
                 ("MSSQL Monitor".to_string(), None)
             }
@@ -151,13 +163,17 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
         3389 => ("RDP".to_string(), None),
         5432 => {
             if banner.contains("PostgreSQL") {
-                ("PostgreSQL".to_string(), extract_version_from_banner(banner))
+                (
+                    "PostgreSQL".to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else {
                 ("PostgreSQL".to_string(), None)
             }
         }
         5900 | 5901 => {
-            if banner.contains("RFB") { // VNC protocol identifier
+            if banner.contains("RFB") {
+                // VNC protocol identifier
                 ("VNC".to_string(), extract_version_from_banner(banner))
             } else {
                 ("VNC".to_string(), None)
@@ -167,12 +183,11 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             if banner.contains("Redis") {
                 let version = extract_version_from_banner(banner);
                 // Redis often sends just "Redis" followed by version on newline
-                if version.is_none()
-                    && banner.lines().count() > 1 {
-                        let lines: Vec<&str> = banner.lines().collect();
-                        if lines.len() > 1 {
-                            return ( "Redis".to_string(), extract_version_from_banner(lines[1]) );
-                        }
+                if version.is_none() && banner.lines().count() > 1 {
+                    let lines: Vec<&str> = banner.lines().collect();
+                    if lines.len() > 1 {
+                        return ("Redis".to_string(), extract_version_from_banner(lines[1]));
+                    }
                 }
                 ("Redis".to_string(), version)
             } else {
@@ -208,7 +223,10 @@ fn identify_service_from_banner(port: u16, banner: &str) -> (String, Option<Stri
             } else if banner_lower.contains("mysql") {
                 ("MySQL".to_string(), extract_version_from_banner(banner))
             } else if banner_lower.contains("postgres") {
-                ("PostgreSQL".to_string(), extract_version_from_banner(banner))
+                (
+                    "PostgreSQL".to_string(),
+                    extract_version_from_banner(banner),
+                )
             } else if banner_lower.contains("mongodb") {
                 ("MongoDB".to_string(), extract_version_from_banner(banner))
             } else if banner_lower.contains("redis") {
@@ -228,13 +246,38 @@ fn check_vulnerability(service: &str, version: &Option<String>) -> Option<String
 
     // Define version patterns that might indicate vulnerable versions
     let vuln_patterns: Vec<(&str, Vec<&str>)> = vec![
-        ("SSH", vec!["OpenSSH_5", "OpenSSH_6", "OpenSSH_7.0", "OpenSSH_7.1", "OpenSSH_7.2"]),
-        ("HTTP", vec!["Apache/2.2", "Apache/2.0", "nginx/1.0", "nginx/1.1", "nginx/1.2", "nginx/1.3", "nginx/1.4", "nginx/1.5", "nginx/1.6"]),
+        (
+            "SSH",
+            vec![
+                "OpenSSH_5",
+                "OpenSSH_6",
+                "OpenSSH_7.0",
+                "OpenSSH_7.1",
+                "OpenSSH_7.2",
+            ],
+        ),
+        (
+            "HTTP",
+            vec![
+                "Apache/2.2",
+                "Apache/2.0",
+                "nginx/1.0",
+                "nginx/1.1",
+                "nginx/1.2",
+                "nginx/1.3",
+                "nginx/1.4",
+                "nginx/1.5",
+                "nginx/1.6",
+            ],
+        ),
         ("MySQL", vec!["5.0", "5.1", "5.5"]),
         ("MariaDB", vec!["5.0", "5.1", "5.5"]),
         ("PostgreSQL", vec!["9.0", "9.1", "9.2", "9.3", "9.4"]),
         ("MongoDB", vec!["1.", "2.0", "2.2", "2.4", "2.6"]),
-        ("Redis", vec!["1.", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.8"]),
+        (
+            "Redis",
+            vec!["1.", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.8"],
+        ),
         ("RDP", vec![]), // RDP version checking is complex, skip for now
         ("SMB", vec![]), // SMB version checking via banner is limited
     ];
@@ -243,7 +286,10 @@ fn check_vulnerability(service: &str, version: &Option<String>) -> Option<String
         if service.eq_ignore_ascii_case(service_name) {
             for pattern in patterns {
                 if version_str.contains(pattern) {
-                    return Some(format!("Potentially vulnerable {} version detected", service));
+                    return Some(format!(
+                        "Potentially vulnerable {} version detected",
+                        service
+                    ));
                 }
             }
         }
@@ -268,10 +314,17 @@ pub async fn execute(
         // Filter to only scan sensitive ports if specific ports weren't provided
         let ports_to_scan = if template.ports.is_empty() {
             // Use our predefined sensitive ports
-            SENSITIVE_PORTS.iter().map(|p| p.to_string()).collect::<Vec<String>>()
+            SENSITIVE_PORTS
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<String>>()
         } else {
             // Use the ports specified in the template (convert u16 to String)
-            template.ports.iter().map(|p| p.to_string()).collect::<Vec<String>>()
+            template
+                .ports
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<String>>()
         };
 
         tracing::debug!(target = %host_to_scan, ports = ?ports_to_scan,
@@ -285,7 +338,8 @@ pub async fn execute(
             true,       // Enable service detection
             None,       // send_probe
             false,      // stealth_syn_scan
-        ).await;
+        )
+        .await;
 
         if port_results.is_empty() {
             // No sensitive ports found open
@@ -297,8 +351,10 @@ pub async fn execute(
         let mut critical_findings = Vec::new();
 
         for port_result in &port_results {
-            let (service, version) = identify_service_from_banner(port_result.port,
-                                                                port_result.banner.as_deref().unwrap_or(""));
+            let (service, version) = identify_service_from_banner(
+                port_result.port,
+                port_result.banner.as_deref().unwrap_or(""),
+            );
 
             // Check for potential vulnerabilities
             let vuln_check = check_vulnerability(&service, &version);
@@ -313,8 +369,10 @@ pub async fn execute(
             let finding = format!("Port {} open - {}", port_result.port, service_desc);
 
             // Check if this is a particularly sensitive service
-            let is_critical = matches!(port_result.port,
-                22 | 23 | 135 | 139 | 445 | 1433 | 1434 | 3389 | 27017 | 6379 | 11211);
+            let is_critical = matches!(
+                port_result.port,
+                22 | 23 | 135 | 139 | 445 | 1433 | 1434 | 3389 | 27017 | 6379 | 11211
+            );
 
             if is_critical {
                 critical_findings.push(finding.clone());
@@ -335,7 +393,12 @@ pub async fn execute(
         all_findings.extend(findings);
 
         if !all_findings.is_empty() {
-            return Some(FindingOwned::from_template_and_info(template_id, template_meta, host_to_scan, format!("Sensitive services detected: {}", all_findings.join("; "))));
+            return Some(FindingOwned::from_template_and_info(
+                template_id,
+                template_meta,
+                host_to_scan,
+                format!("Sensitive services detected: {}", all_findings.join("; ")),
+            ));
         }
     }
 

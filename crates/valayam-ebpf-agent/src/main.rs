@@ -1,14 +1,14 @@
-pub mod telemetry;
 pub mod grpc;
+pub mod telemetry;
 
 use crate::grpc::valayam::scanner_client::ScannerClient;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[cfg(target_os = "linux")]
-use aya::Ebpf;
-#[cfg(target_os = "linux")]
 use aya::programs::KProbe;
+#[cfg(target_os = "linux")]
+use aya::Ebpf;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // let program: &mut KProbe = bpf.program_mut("sys_execve").unwrap().try_into()?;
         // program.load()?;
         // program.attach("sys_execve", 0)?;
-        // 
+        //
         // Then we'd read from a PerfEventArray and send to the `tx` channel.
         // For now, this is a placeholder.
     }

@@ -1,7 +1,6 @@
-use valayam_models::error::ScannerError;
-use crate::traits::{FindingOwned, PluginOutcome, ScanContext, ScanPlugin};
 use crate::plugin_rpc::plugin_service_client::PluginServiceClient;
 use crate::plugin_rpc::{ExecuteRequest, InitRequest, ShutdownRequest};
+use crate::traits::{FindingOwned, PluginOutcome, ScanContext, ScanPlugin};
 use rand::Rng;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -9,6 +8,7 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tonic::transport::Channel;
+use valayam_models::error::ScannerError;
 
 /// Documentation for this item.
 pub struct GrpcPluginBridge {
@@ -43,15 +43,27 @@ impl ScanPlugin for GrpcPluginBridge {
         &self.name
     }
 
-    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+    fn validate_config(
+        &self,
+        _template: &valayam_models::templates::schema::VulnerabilityTemplate,
+    ) -> Result<(), valayam_models::error::ScannerError> {
         Ok(())
     }
 
-    fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
+    fn is_applicable(
+        &self,
+        template: &valayam_models::templates::schema::VulnerabilityTemplate,
+    ) -> bool {
         // Attempt to read capabilities synchronously
-        let Ok(protocols) = self.supported_protocols.try_read() else { return true; };
-        let Ok(ids) = self.supported_template_ids.try_read() else { return true; };
-        let Ok(tags) = self.supported_tags.try_read() else { return true; };
+        let Ok(protocols) = self.supported_protocols.try_read() else {
+            return true;
+        };
+        let Ok(ids) = self.supported_template_ids.try_read() else {
+            return true;
+        };
+        let Ok(tags) = self.supported_tags.try_read() else {
+            return true;
+        };
 
         // If capabilities haven't been populated yet (e.g. init still running), assume applicable
         if protocols.is_empty() && ids.is_empty() && tags.is_empty() {
@@ -64,10 +76,14 @@ impl ScanPlugin for GrpcPluginBridge {
         }
 
         // Check protocol match
-        if !template.requests.is_empty() && (protocols.contains(&"http".to_string()) || protocols.contains(&"https".to_string())) {
+        if !template.requests.is_empty()
+            && (protocols.contains(&"http".to_string()) || protocols.contains(&"https".to_string()))
+        {
             return true;
         }
-        if !template.network.is_empty() && (protocols.contains(&"tcp".to_string()) || protocols.contains(&"udp".to_string())) {
+        if !template.network.is_empty()
+            && (protocols.contains(&"tcp".to_string()) || protocols.contains(&"udp".to_string()))
+        {
             return true;
         }
         if !template.grpc_audit.is_empty() && protocols.contains(&"grpc".to_string()) {
@@ -84,19 +100,24 @@ impl ScanPlugin for GrpcPluginBridge {
         if let Some(ext) = self.exe_path.extension().and_then(|e| e.to_str()) {
             if ext == "py" {
                 #[cfg(target_os = "windows")]
-                { cmd = Command::new("python"); }
+                {
+                    cmd = Command::new("python");
+                }
                 #[cfg(not(target_os = "windows"))]
-                { cmd = Command::new("python3"); }
+                {
+                    cmd = Command::new("python3");
+                }
 
                 cmd.arg(&self.exe_path);
             } else if ext == "bat" || ext == "cmd" {
                 cmd = Command::new("cmd");
                 let exe_str = self.exe_path.to_str().ok_or_else(|| {
-                ScannerError::PluginInitializationError(
-                    format!("plugin path is not valid UTF-8: {:?}", self.exe_path)
-                )
-            })?;
-            cmd.args(["/C", exe_str]);
+                    ScannerError::PluginInitializationError(format!(
+                        "plugin path is not valid UTF-8: {:?}",
+                        self.exe_path
+                    ))
+                })?;
+                cmd.args(["/C", exe_str]);
             } else {
                 cmd = Command::new(&self.exe_path);
             }
@@ -109,24 +130,28 @@ impl ScanPlugin for GrpcPluginBridge {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| ScannerError::PluginInitializationError(format!("Failed to spawn plugin: {}", e)))?;
+            .map_err(|e| {
+                ScannerError::PluginInitializationError(format!("Failed to spawn plugin: {}", e))
+            })?;
 
         let stdout = child.stdout.take().ok_or_else(|| {
-                ScannerError::PluginInitializationError(
-                    "failed to capture plugin stdout — stdio was not piped".into()
-                )
-            })?;
+            ScannerError::PluginInitializationError(
+                "failed to capture plugin stdout — stdio was not piped".into(),
+            )
+        })?;
         let mut reader = BufReader::new(stdout).lines();
 
         // Wait for the HashiCorp-style handshake line
         // Format: 1|plugin|tcp|127.0.0.1:<PORT>|grpc
         let mut port = None;
-        while let Ok(Some(line)) = tokio::time::timeout(
-            Duration::from_secs(10),
-            reader.next_line(),
-        ).await.map_err(|_| {
-            ScannerError::PluginInitializationError("Timeout waiting for plugin handshake".into())
-        })? {
+        while let Ok(Some(line)) = tokio::time::timeout(Duration::from_secs(10), reader.next_line())
+            .await
+            .map_err(|_| {
+                ScannerError::PluginInitializationError(
+                    "Timeout waiting for plugin handshake".into(),
+                )
+            })?
+        {
             if line.starts_with("1|") && line.contains("|grpc") {
                 let parts: Vec<&str> = line.split('|').collect();
                 if parts.len() >= 4 {
@@ -149,14 +174,21 @@ impl ScanPlugin for GrpcPluginBridge {
 
         // Verify plugin with Init RPC
         let mut client = PluginServiceClient::new(channel.clone());
-        let res = client.init(InitRequest {
-            engine_version: env!("CARGO_PKG_VERSION").to_string(),
-        }).await
-            .map_err(|e| ScannerError::PluginInitializationError(format!("RPC Init failed: {}", e)))?;
+        let res = client
+            .init(InitRequest {
+                engine_version: env!("CARGO_PKG_VERSION").to_string(),
+            })
+            .await
+            .map_err(|e| {
+                ScannerError::PluginInitializationError(format!("RPC Init failed: {}", e))
+            })?;
 
         let response = res.into_inner();
         if !response.success {
-            return Err(ScannerError::PluginInitializationError(format!("Plugin rejected init: {}", response.error_message)));
+            return Err(ScannerError::PluginInitializationError(format!(
+                "Plugin rejected init: {}",
+                response.error_message
+            )));
         }
 
         // Store capabilities
@@ -202,9 +234,9 @@ impl ScanPlugin for GrpcPluginBridge {
         });
 
         // OpenTelemetry context propagation
-        use tracing_opentelemetry::OpenTelemetrySpanExt;
         use opentelemetry::global;
         use opentelemetry::propagation::Injector;
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
 
         struct MetadataInjector<'a>(&'a mut tonic::metadata::MetadataMap);
 
@@ -274,37 +306,38 @@ async fn connect_with_retry(endpoint: &str) -> Result<Channel, ScannerError> {
 
     for attempt in 0..max_attempts {
         match Channel::from_shared(endpoint.to_string()) {
-            Ok(ch) => {
-                match ch.connect().await {
-                    Ok(connected) => return Ok(connected),
-                    Err(e) if attempt < max_attempts - 1 => {
-                        let delay = base_delay_ms * 2u64.pow(attempt);
-                        let jitter = rand::thread_rng().gen_range(0..100);
-                        tracing::warn!(
-                            attempt = attempt + 1,
-                            max_attempts,
-                            delay_ms = delay + jitter,
-                            error = %e,
-                            "gRPC connection failed, retrying"
-                        );
-                        tokio::time::sleep(Duration::from_millis(delay + jitter)).await;
-                    }
-                    Err(e) => {
-                        return Err(ScannerError::PluginInitializationError(
-                            format!("Failed to connect to gRPC plugin after {} attempts: {}", max_attempts, e)
-                        ));
-                    }
+            Ok(ch) => match ch.connect().await {
+                Ok(connected) => return Ok(connected),
+                Err(e) if attempt < max_attempts - 1 => {
+                    let delay = base_delay_ms * 2u64.pow(attempt);
+                    let jitter = rand::thread_rng().gen_range(0..100);
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_attempts,
+                        delay_ms = delay + jitter,
+                        error = %e,
+                        "gRPC connection failed, retrying"
+                    );
+                    tokio::time::sleep(Duration::from_millis(delay + jitter)).await;
                 }
-            }
+                Err(e) => {
+                    return Err(ScannerError::PluginInitializationError(format!(
+                        "Failed to connect to gRPC plugin after {} attempts: {}",
+                        max_attempts, e
+                    )));
+                }
+            },
             Err(e) => {
-                return Err(ScannerError::PluginInitializationError(
-                    format!("Invalid gRPC endpoint '{}': {}", endpoint, e)
-                ));
+                return Err(ScannerError::PluginInitializationError(format!(
+                    "Invalid gRPC endpoint '{}': {}",
+                    endpoint, e
+                )));
             }
         }
     }
 
-    Err(ScannerError::PluginInitializationError(
-        format!("Failed to connect to gRPC plugin at '{}' after {} attempts", endpoint, max_attempts)
-    ))
+    Err(ScannerError::PluginInitializationError(format!(
+        "Failed to connect to gRPC plugin at '{}' after {} attempts",
+        endpoint, max_attempts
+    )))
 }

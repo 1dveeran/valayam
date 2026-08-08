@@ -8,8 +8,9 @@
 //! All scan execution flows through this crate.
 #![warn(missing_docs)]
 
-
 pub mod executor;
+/// Documentation for this item.
+pub mod grpc_plugin;
 pub mod matchers;
 pub mod metrics;
 pub mod plugin_macro;
@@ -22,12 +23,9 @@ pub mod unwind_safe;
 /// Documentation for this item.
 pub mod variables;
 /// Documentation for this item.
-pub mod grpc_plugin;
+pub mod vpa;
 /// Documentation for this item.
 pub mod wasm_plugin;
-/// Documentation for this item.
-pub mod vpa;
-
 
 // Re-exported from valayam-proto (single source of truth)
 pub use valayam_proto::plugin as plugin_rpc;

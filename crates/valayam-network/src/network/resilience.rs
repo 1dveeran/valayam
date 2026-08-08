@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
-use std::time::{Instant, Duration};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 /// A simple Circuit Breaker to prevent overwhelming a target that is failing.
 pub struct CircuitBreaker {
@@ -54,8 +54,8 @@ impl CircuitBreaker {
     }
 }
 
-use tokio::sync::Mutex;
 use rand::Rng;
+use tokio::sync::Mutex;
 
 struct TokenBucketState {
     tokens: f64,
@@ -73,7 +73,12 @@ pub struct AdaptiveRateLimiter {
 }
 
 impl AdaptiveRateLimiter {
-    pub fn new(initial_delay_ms: u64, min_delay_ms: u64, max_delay_ms: u64, max_burst: u32) -> Self {
+    pub fn new(
+        initial_delay_ms: u64,
+        min_delay_ms: u64,
+        max_delay_ms: u64,
+        max_burst: u32,
+    ) -> Self {
         let sys_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -146,7 +151,8 @@ impl AdaptiveRateLimiter {
         };
 
         let clamped_delay = new_delay.clamp(self.min_delay_ms, self.max_delay_ms);
-        self.current_delay_ms.store(clamped_delay, Ordering::Relaxed);
+        self.current_delay_ms
+            .store(clamped_delay, Ordering::Relaxed);
     }
 
     pub fn handle_success(&self) {
@@ -192,14 +198,19 @@ mod tests {
         let cb = CircuitBreaker::new(5, 1000);
         cb.record_success();
         cb.record_success();
-        assert_eq!(cb.success_count.load(std::sync::atomic::Ordering::Relaxed), 2);
+        assert_eq!(
+            cb.success_count.load(std::sync::atomic::Ordering::Relaxed),
+            2
+        );
     }
 
     #[test]
     fn test_adaptive_rate_limiter_handles_backoff() {
         let rl = AdaptiveRateLimiter::new(10, 5, 1000, 10);
         rl.handle_too_many_requests();
-        let delay = rl.current_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
+        let delay = rl
+            .current_delay_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
         assert!(delay >= 10, "delay should increase on 429");
     }
 
@@ -207,7 +218,9 @@ mod tests {
     fn test_adaptive_rate_limiter_success_reduces_delay() {
         let rl = AdaptiveRateLimiter::new(500, 100, 1000, 10);
         rl.handle_success();
-        let delay = rl.current_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
+        let delay = rl
+            .current_delay_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
         assert!(delay < 500, "success should reduce delay");
     }
 
@@ -215,7 +228,9 @@ mod tests {
     fn test_adaptive_rate_limiter_respects_min_delay() {
         let rl = AdaptiveRateLimiter::new(100, 100, 1000, 5);
         rl.handle_success();
-        let delay = rl.current_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
+        let delay = rl
+            .current_delay_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
         assert_eq!(delay, 100, "delay should not go below min");
     }
 }

@@ -13,7 +13,8 @@ mod tests {
 
     #[test]
     fn test_iot_audit_template_deser() {
-        let json = r#"{"target": "mqtt://broker.local", "protocol": "mqtt", "topics": ["sensor/temp"]}"#;
+        let json =
+            r#"{"target": "mqtt://broker.local", "protocol": "mqtt", "topics": ["sensor/temp"]}"#;
         let tmpl: IotAuditTemplate = serde_json::from_str(json).unwrap();
         assert_eq!(tmpl.target, "mqtt://broker.local");
         assert_eq!(tmpl.protocol, "mqtt");

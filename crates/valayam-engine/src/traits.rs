@@ -1,12 +1,12 @@
 //! Core trait definitions for the Valayam plugin architecture.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use std::collections::HashMap;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
-pub use valayam_models::finding::{FindingOwned, PluginOutcomeKind, PluginMetrics, PluginHealth};
+pub use valayam_models::finding::{FindingOwned, PluginHealth, PluginMetrics, PluginOutcomeKind};
 pub use valayam_models::template_info::TemplateMetadata;
 pub use valayam_models::ScanResult;
 /// Documentation for this item.
@@ -23,7 +23,10 @@ pub struct VariableScope {
 impl VariableScope {
     /// Documentation for this item.
     pub fn new(globals: HashMap<String, String>) -> Self {
-        Self { global: globals, scoped: HashMap::new() }
+        Self {
+            global: globals,
+            scoped: HashMap::new(),
+        }
     }
     /// Documentation for this item.
     pub fn set_global(&mut self, key: impl Into<String>, value: impl Into<String>) {
@@ -31,13 +34,20 @@ impl VariableScope {
     }
     /// Documentation for this item.
     pub fn set(&mut self, plugin: &str, key: impl Into<String>, value: impl Into<String>) {
-        self.scoped.entry(plugin.to_string()).or_default().insert(key.into(), value.into());
+        self.scoped
+            .entry(plugin.to_string())
+            .or_default()
+            .insert(key.into(), value.into());
     }
     /// Documentation for this item.
     pub fn get(&self, key: &str) -> Option<&String> {
-        if let Some(v) = self.global.get(key) { return Some(v); }
+        if let Some(v) = self.global.get(key) {
+            return Some(v);
+        }
         for scope in self.scoped.values() {
-            if let Some(v) = scope.get(key) { return Some(v); }
+            if let Some(v) = scope.get(key) {
+                return Some(v);
+            }
         }
         None
     }
@@ -96,7 +106,10 @@ impl ScanContext {
         self.variables.write().await.set(plugin_name, key, value);
     }
     /// Documentation for this item.
-    pub async fn emit_finding(&self, mut finding: FindingOwned) -> Result<(), mpsc::error::SendError<FindingOwned>> {
+    pub async fn emit_finding(
+        &self,
+        mut finding: FindingOwned,
+    ) -> Result<(), mpsc::error::SendError<FindingOwned>> {
         // Auto-inject description if the plugin omitted it
         if finding.description.is_none() {
             finding.description = self.template.description().map(|s| s.to_string());
@@ -117,21 +130,21 @@ pub enum PluginOutcome {
     /// Documentation for this item.
     NoMatch,
     /// Documentation for this item.
-    Matched { 
+    Matched {
         /// Number of matched vulnerabilities
-        count: usize 
+        count: usize,
     },
     /// Documentation for this item.
-    Skipped { 
+    Skipped {
         /// Reason for skipping
-        reason: String 
+        reason: String,
     },
     /// Documentation for this item.
-    Failed { 
+    Failed {
         /// The error that occurred
-        error: valayam_models::error::ScannerError, 
+        error: valayam_models::error::ScannerError,
         /// Whether the failure can be retried
-        retryable: bool 
+        retryable: bool,
     },
 }
 
@@ -144,15 +157,25 @@ pub trait ScanPlugin: Send + Sync {
     /// Documentation for this item.
     fn name(&self) -> &str;
     /// Documentation for this item.
-    fn version(&self) -> &str { "0.1.0" }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
     /// Documentation for this item.
-    fn api_version(&self) -> &str { "1.0" }
+    fn api_version(&self) -> &str {
+        "1.0"
+    }
 
     /// Documentation for this item.
-    fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool;
+    fn is_applicable(
+        &self,
+        template: &valayam_models::templates::schema::VulnerabilityTemplate,
+    ) -> bool;
 
     /// Validate the plugin's configuration against a template.
-    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError>;
+    fn validate_config(
+        &self,
+        _template: &valayam_models::templates::schema::VulnerabilityTemplate,
+    ) -> Result<(), valayam_models::error::ScannerError>;
     /// Documentation for this item.
     async fn init(&self) -> Result<(), valayam_models::error::ScannerError>;
 
@@ -164,12 +187,18 @@ pub trait ScanPlugin: Send + Sync {
 
     /// Perform a health check. Returns `Ok(())` if healthy, or an error describing
     /// what is wrong. Called by `PluginRegistry::health_check_all()`.
-    async fn health_check(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+    async fn health_check(&self) -> Result<(), valayam_models::error::ScannerError> {
+        Ok(())
+    }
 
     /// Documentation for this item.
-    fn depends_on(&self) -> &[&'static str] { &[] }
+    fn depends_on(&self) -> &[&'static str] {
+        &[]
+    }
     /// Documentation for this item.
-    fn timeout(&self) -> Duration { Duration::from_secs(60) }
+    fn timeout(&self) -> Duration {
+        Duration::from_secs(60)
+    }
 }
 
 // ─── Matcher Trait (zero-copy on &[u8]) ─────────────────────────────────
@@ -180,7 +209,9 @@ pub trait Matcher: Send + Sync {
     /// Returns `true` if the response matches the vulnerability signature.
     fn evaluate(&self, response_buffer: &[u8]) -> bool;
     /// Human-readable name for diagnostics.
-    fn name(&self) -> &str { "unnamed" }
+    fn name(&self) -> &str {
+        "unnamed"
+    }
 }
 
 // ─── Reporter Trait (async-safe) ────────────────────────────────────────
@@ -208,7 +239,8 @@ mod tests {
 
     #[test]
     fn test_finding_owned_dedup_key() {
-        let f = FindingOwned { scan_id: uuid::Uuid::default(), 
+        let f = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-001".into(),
             template_name: "Test Finding".into(),
             severity: "high".into(),
@@ -220,24 +252,34 @@ mod tests {
             metadata: Default::default(),
         };
         let key = f.dedup_key();
-        assert_eq!(key, ("test-001".into(), "https://example.com".into(), "/login".into()));
+        assert_eq!(
+            key,
+            (
+                "test-001".into(),
+                "https://example.com".into(),
+                "/login".into()
+            )
+        );
     }
 
     #[test]
     fn test_finding_owned_dedup_key_differentiates() {
-        let f1 = FindingOwned { scan_id: uuid::Uuid::default(), 
+        let f1 = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-001".into(),
             target: "https://example.com".into(),
             matched_at: "/login".into(),
             ..default_finding()
         };
-        let f2 = FindingOwned { scan_id: uuid::Uuid::default(), 
+        let f2 = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-002".into(),
             target: "https://example.com".into(),
             matched_at: "/login".into(),
             ..default_finding()
         };
-        let f3 = FindingOwned { scan_id: uuid::Uuid::default(), 
+        let f3 = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-001".into(),
             target: "https://other.com".into(),
             matched_at: "/login".into(),
@@ -249,7 +291,8 @@ mod tests {
 
     #[test]
     fn test_finding_owned_into_scan_result() {
-        let f = FindingOwned { scan_id: uuid::Uuid::default(), 
+        let f = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "cve-2024-1234".into(),
             template_name: "SQL Injection Test".into(),
             severity: "critical".into(),
@@ -276,7 +319,10 @@ mod tests {
         let mut globals = HashMap::new();
         globals.insert("BaseURL".into(), "https://example.com".into());
         let scope = VariableScope::new(globals);
-        assert_eq!(scope.get("BaseURL").map(|s| s.as_str()), Some("https://example.com"));
+        assert_eq!(
+            scope.get("BaseURL").map(|s| s.as_str()),
+            Some("https://example.com")
+        );
         assert!(scope.get("missing").is_none());
         Ok(())
     }
@@ -285,7 +331,10 @@ mod tests {
     fn test_variable_scope_set_global() -> anyhow::Result<()> {
         let mut scope = VariableScope::new(HashMap::new());
         scope.set_global("Hostname", "example.com");
-        assert_eq!(scope.get("Hostname").map(|s| s.as_str()), Some("example.com"));
+        assert_eq!(
+            scope.get("Hostname").map(|s| s.as_str()),
+            Some("example.com")
+        );
         Ok(())
     }
 
@@ -381,7 +430,10 @@ mod tests {
         };
 
         let snapshot = ctx.snapshot_variables().await;
-        assert_eq!(snapshot.get("BaseURL").map(|s| s.as_str()), Some("https://example.com"));
+        assert_eq!(
+            snapshot.get("BaseURL").map(|s| s.as_str()),
+            Some("https://example.com")
+        );
         Ok(())
     }
 
@@ -398,9 +450,13 @@ mod tests {
             cancellation: CancellationToken::new(),
         };
 
-        ctx.set_variable("test_plugin", "extracted", "secret_value".to_string()).await;
+        ctx.set_variable("test_plugin", "extracted", "secret_value".to_string())
+            .await;
         let snapshot = ctx.snapshot_variables().await;
-        assert_eq!(snapshot.get("extracted").map(|s| s.as_str()), Some("secret_value"));
+        assert_eq!(
+            snapshot.get("extracted").map(|s| s.as_str()),
+            Some("secret_value")
+        );
         Ok(())
     }
 
@@ -445,7 +501,8 @@ mod tests {
             cancellation: CancellationToken::new(),
         };
 
-        let finding = FindingOwned { scan_id: uuid::Uuid::default(), 
+        let finding = FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: "test-001".into(),
             template_name: "Test".into(),
             severity: "info".into(),
@@ -543,7 +600,8 @@ mod tests {
     // ── Helpers ────────────────────────────────────────────────────────────
 
     fn default_finding() -> FindingOwned {
-        FindingOwned { scan_id: uuid::Uuid::default(), 
+        FindingOwned {
+            scan_id: uuid::Uuid::default(),
             template_id: String::new(),
             template_name: String::new(),
             severity: valayam_models::finding::Severity::Unknown,

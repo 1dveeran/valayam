@@ -24,7 +24,9 @@ pub struct ProxyState {
 
 impl Default for ProxyState {
     fn default() -> Self {
-        Self { pending_requests: Arc::new(DashMap::new()) }
+        Self {
+            pending_requests: Arc::new(DashMap::new()),
+        }
     }
 }
 

@@ -1,6 +1,6 @@
-use valayam_core::core::result::ScanResult;
-use serde_json::json;
 use crate::reporting::compliance::ComplianceMapper;
+use serde_json::json;
+use valayam_core::core::result::ScanResult;
 
 fn map_severity_to_sarif_level(severity: &str) -> &'static str {
     match severity.to_ascii_lowercase().as_str() {
@@ -80,25 +80,26 @@ mod tests {
     use valayam_core::core::result::ScanResult;
 
     fn sample_results() -> Vec<ScanResult> {
-        vec![
-            ScanResult {
-                template_id: "test-001".into(),
-                template_name: "SQLi Test".into(),
-                template_severity: "high".into(),
-                target: "https://example.com/login".into(),
-                payload: "detected".into(),
-                cvss_score: Some(9.8),
-                solution: Some("Use prepared statements".into()),
-                tags: vec!["sqli".into()],
-                ..Default::default()
-            },
-        ]
+        vec![ScanResult {
+            template_id: "test-001".into(),
+            template_name: "SQLi Test".into(),
+            template_severity: "high".into(),
+            target: "https://example.com/login".into(),
+            payload: "detected".into(),
+            cvss_score: Some(9.8),
+            solution: Some("Use prepared statements".into()),
+            tags: vec!["sqli".into()],
+            ..Default::default()
+        }]
     }
 
     #[test]
     fn test_sarif_has_correct_schema() {
         let sarif = generate_sarif(&sample_results());
-        assert_eq!(sarif["$schema"], "https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json");
+        assert_eq!(
+            sarif["$schema"],
+            "https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json"
+        );
         assert_eq!(sarif["version"], "2.1.0");
     }
 
@@ -116,7 +117,8 @@ mod tests {
     #[test]
     fn test_sarif_target_in_locations() {
         let sarif = generate_sarif(&sample_results());
-        let location = &sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"];
+        let location =
+            &sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"];
         assert_eq!(location["uri"], "https://example.com/login");
     }
 
@@ -130,8 +132,16 @@ mod tests {
     #[test]
     fn test_sarif_multiple_results() {
         let results = vec![
-            ScanResult { template_id: "a".into(), template_name: "A".into(), ..Default::default() },
-            ScanResult { template_id: "b".into(), template_name: "B".into(), ..Default::default() },
+            ScanResult {
+                template_id: "a".into(),
+                template_name: "A".into(),
+                ..Default::default()
+            },
+            ScanResult {
+                template_id: "b".into(),
+                template_name: "B".into(),
+                ..Default::default()
+            },
         ];
         let sarif = generate_sarif(&results);
         assert_eq!(sarif["runs"][0]["results"].as_array().unwrap().len(), 2);
@@ -149,13 +159,13 @@ mod tests {
     fn test_sarif_properties_and_compliance() {
         let sarif = generate_sarif(&sample_results());
         let result = &sarif["runs"][0]["results"][0];
-        
+
         assert_eq!(result["level"], "error"); // mapped from "high"
-        
+
         let props = &result["properties"];
         assert_eq!(props["cvss_score"], json!(9.8f32));
         assert_eq!(props["solution"], "Use prepared statements");
-        
+
         let compliance = &props["compliance"];
         assert_eq!(compliance["OWASP"], "A03:2021-Injection");
         assert_eq!(compliance["CWE"], "CWE-89");

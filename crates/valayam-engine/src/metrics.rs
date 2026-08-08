@@ -51,7 +51,12 @@ lazy_static::lazy_static! {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /// Record a single plugin execution outcome.
-pub fn record_plugin_outcome(plugin: &str, outcome_kind: &str, duration_secs: f64, finding_count: usize) {
+pub fn record_plugin_outcome(
+    plugin: &str,
+    outcome_kind: &str,
+    duration_secs: f64,
+    finding_count: usize,
+) {
     PLUGIN_DURATION_SECONDS
         .with_label_values(&[plugin, outcome_kind])
         .observe(duration_secs);

@@ -33,7 +33,8 @@ mod tests {
 
     #[test]
     fn test_dependency_audit_template_local_mode() -> anyhow::Result<()> {
-        let json = r#"{"target_repo": "/repo", "cve_mode": "local", "local_db_path": "/db/osv.db"}"#;
+        let json =
+            r#"{"target_repo": "/repo", "cve_mode": "local", "local_db_path": "/db/osv.db"}"#;
         let tmpl: DependencyAuditTemplate = serde_json::from_str(json)?;
         assert_eq!(tmpl.cve_mode.as_deref(), Some("local"));
         assert_eq!(tmpl.local_db_path.as_deref(), Some("/db/osv.db"));

@@ -20,7 +20,10 @@ mod tests {
 
     #[test]
     fn test_idp_template_serde_roundtrip() {
-        let tmpl = IdpAuditTemplate { target: "https://okta.example.com".into(), provider: "okta".into() };
+        let tmpl = IdpAuditTemplate {
+            target: "https://okta.example.com".into(),
+            provider: "okta".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: IdpAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.provider, "okta");

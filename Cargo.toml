@@ -96,7 +96,11 @@ prometheus = { version = "0.13" }
 parking_lot = "0.12"
 
 [profile.release]
+incremental = false
 strip = true      # Automatically strip debug symbols from the binary
 opt-level = "z"   # Optimize for size rather than speed
 lto = true        # Link Time Optimization (removes dead code across dependencies)
 codegen-units = 1 # Better optimizations at the cost of slower compile times
+
+[profile.test]
+incremental = false

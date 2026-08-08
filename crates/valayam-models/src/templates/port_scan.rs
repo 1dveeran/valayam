@@ -29,7 +29,10 @@ mod tests {
 
     #[test]
     fn test_port_scan_template_serde_roundtrip() {
-        let tmpl = PortScanTemplate { target: Some("10.0.0.1".into()), ports: vec![22, 443] };
+        let tmpl = PortScanTemplate {
+            target: Some("10.0.0.1".into()),
+            ports: vec![22, 443],
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: PortScanTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.ports, vec![22, 443]);

@@ -15,14 +15,18 @@ mod tests {
     fn test_web3_audit_template_deser() {
         let json = r#"{"rpc_endpoint": "https://eth-mainnet.g.alchemy.com/v2/xxx", "bytecode": null, "action": "fuzz_rpc"}"#;
         let tmpl: Web3AuditTemplate = serde_json::from_str(json).unwrap();
-        assert_eq!(tmpl.rpc_endpoint, Some("https://eth-mainnet.g.alchemy.com/v2/xxx".into()));
+        assert_eq!(
+            tmpl.rpc_endpoint,
+            Some("https://eth-mainnet.g.alchemy.com/v2/xxx".into())
+        );
         assert!(tmpl.bytecode.is_none());
         assert_eq!(tmpl.action, "fuzz_rpc");
     }
 
     #[test]
     fn test_web3_audit_variants() {
-        let json = r#"{"rpc_endpoint": null, "bytecode": "0x60806040", "action": "static_analyze"}"#;
+        let json =
+            r#"{"rpc_endpoint": null, "bytecode": "0x60806040", "action": "static_analyze"}"#;
         let tmpl: Web3AuditTemplate = serde_json::from_str(json).unwrap();
         assert!(tmpl.rpc_endpoint.is_none());
         assert_eq!(tmpl.bytecode, Some("0x60806040".into()));

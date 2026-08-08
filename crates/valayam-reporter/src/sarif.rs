@@ -2,11 +2,11 @@
 //!
 //! Outputs vulnerability findings in the Static Analysis Results Interchange Format (SARIF).
 
+use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter};
 use std::sync::Mutex;
 use valayam_engine::traits::{FindingOwned, Reporter};
-use serde_json::json;
 
 pub struct SarifReporter {
     path: String,
@@ -40,50 +40,57 @@ impl Drop for SarifReporter {
             return; // Don't write empty SARIF
         }
 
-        let rules: Vec<_> = findings.iter().map(|f| {
-            json!({
-                "id": f.template_id,
-                "name": f.template_name,
-                "shortDescription": {
-                    "text": f.template_name
-                },
-                "fullDescription": {
-                    "text": f.description.clone().unwrap_or_else(|| "".to_string())
-                },
-                "properties": {
-                    "severity": f.severity.to_string(),
-                    "solution": f.solution.clone().unwrap_or_else(|| "".to_string()),
-                }
+        let rules: Vec<_> = findings
+            .iter()
+            .map(|f| {
+                json!({
+                    "id": f.template_id,
+                    "name": f.template_name,
+                    "shortDescription": {
+                        "text": f.template_name
+                    },
+                    "fullDescription": {
+                        "text": f.description.clone().unwrap_or_else(|| "".to_string())
+                    },
+                    "properties": {
+                        "severity": f.severity.to_string(),
+                        "solution": f.solution.clone().unwrap_or_else(|| "".to_string()),
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
-        let results: Vec<_> = findings.iter().map(|f| {
-            let level = match f.severity {
-                valayam_models::finding::Severity::Critical | valayam_models::finding::Severity::High => "error",
-                valayam_models::finding::Severity::Medium => "warning",
-                _ => "note",
-            };
+        let results: Vec<_> = findings
+            .iter()
+            .map(|f| {
+                let level = match f.severity {
+                    valayam_models::finding::Severity::Critical
+                    | valayam_models::finding::Severity::High => "error",
+                    valayam_models::finding::Severity::Medium => "warning",
+                    _ => "note",
+                };
 
-            json!({
-                "ruleId": f.template_id,
-                "level": level,
-                "message": {
-                    "text": format!("Vulnerability found in {}", f.target)
-                },
-                "locations": [{
-                    "physicalLocation": {
-                        "artifactLocation": {
-                            "uri": f.target
-                        },
-                        "region": {
-                            "snippet": {
-                                "text": f.matched_at
+                json!({
+                    "ruleId": f.template_id,
+                    "level": level,
+                    "message": {
+                        "text": format!("Vulnerability found in {}", f.target)
+                    },
+                    "locations": [{
+                        "physicalLocation": {
+                            "artifactLocation": {
+                                "uri": f.target
+                            },
+                            "region": {
+                                "snippet": {
+                                    "text": f.matched_at
+                                }
                             }
                         }
-                    }
-                }]
+                    }]
+                })
             })
-        }).collect();
+            .collect();
 
         let sarif_log = json!({
             "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
@@ -101,7 +108,7 @@ impl Drop for SarifReporter {
         });
 
         let path = self.path.clone();
-        
+
         let _ = std::thread::spawn(move || {
             if let Ok(file) = File::create(&path) {
                 let writer = BufWriter::new(file);
@@ -111,6 +118,7 @@ impl Drop for SarifReporter {
             } else {
                 tracing::error!("Failed to create SARIF report file: {}", path);
             }
-        }).join();
+        })
+        .join();
     }
 }

@@ -22,7 +22,8 @@ mod tests {
 
     #[test]
     fn test_get_proxy_custom_port() {
-        let _proxy = TorRouter::get_proxy(9150).expect("should create proxy for Tor Browser Bundle port");
+        let _proxy =
+            TorRouter::get_proxy(9150).expect("should create proxy for Tor Browser Bundle port");
     }
 
     #[test]

@@ -25,7 +25,9 @@ mod tests {
 
     #[test]
     fn test_mitre_mapping_serde_roundtrip() {
-        let tmpl = MitreMappingTemplate { enable_mapping: true };
+        let tmpl = MitreMappingTemplate {
+            enable_mapping: true,
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let deser: MitreMappingTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(tmpl.enable_mapping, deser.enable_mapping);

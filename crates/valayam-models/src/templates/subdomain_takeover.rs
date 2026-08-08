@@ -18,7 +18,9 @@ mod tests {
 
     #[test]
     fn test_subdomain_takeover_serde_roundtrip() {
-        let tmpl = SubdomainTakeoverTemplate { target: "api.example.com".into() };
+        let tmpl = SubdomainTakeoverTemplate {
+            target: "api.example.com".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: SubdomainTakeoverTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target, "api.example.com");

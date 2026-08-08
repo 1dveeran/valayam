@@ -192,10 +192,7 @@ impl StorageConfig {
         let config = StorageConfig {
             backend,
             plugin_home: env_path("VALAYAM_PLUGIN_HOME", resolve_plugin_home_default()),
-            plugin_cache: env_path(
-                "VALAYAM_PLUGIN_CACHE",
-                PathBuf::from("./data/plugin_cache"),
-            ),
+            plugin_cache: env_path("VALAYAM_PLUGIN_CACHE", PathBuf::from("./data/plugin_cache")),
             template_home: env_path("VALAYAM_TEMPLATE_HOME", PathBuf::from("./data/templates")),
             offline,
             worker_plugin_source,
@@ -441,7 +438,11 @@ mod s3_backend {
     }
 
     impl S3ArtifactStore {
-        pub fn new(client: Arc<S3Client>, bucket: impl Into<String>, backend_kind: StorageBackend) -> Self {
+        pub fn new(
+            client: Arc<S3Client>,
+            bucket: impl Into<String>,
+            backend_kind: StorageBackend,
+        ) -> Self {
             Self {
                 client,
                 bucket: bucket.into(),
@@ -465,10 +466,20 @@ mod s3_backend {
         }
 
         async fn get(&self, key: &str) -> Result<Vec<u8>, ArtifactStoreError> {
-            let resp = self.client.get_object().bucket(&self.bucket).key(key).send().await
+            let resp = self
+                .client
+                .get_object()
+                .bucket(&self.bucket)
+                .key(key)
+                .send()
+                .await
                 .map_err(|e| ArtifactStoreError::S3(Box::new(e)))?;
-            let body = resp.body.collect().await
-                .map_err(|e| ArtifactStoreError::S3(Box::new(e)))?.into_bytes();
+            let body = resp
+                .body
+                .collect()
+                .await
+                .map_err(|e| ArtifactStoreError::S3(Box::new(e)))?
+                .into_bytes();
             Ok(body.to_vec())
         }
 
@@ -484,7 +495,14 @@ mod s3_backend {
         }
 
         async fn exists(&self, key: &str) -> Result<bool, ArtifactStoreError> {
-            match self.client.head_object().bucket(&self.bucket).key(key).send().await {
+            match self
+                .client
+                .head_object()
+                .bucket(&self.bucket)
+                .key(key)
+                .send()
+                .await
+            {
                 Ok(_) => Ok(true),
                 Err(e) => {
                     let s = format!("{e}");
@@ -506,8 +524,11 @@ mod s3_backend {
                 .into_paginator()
                 .send();
             let mut keys = Vec::new();
-            while let Some(page) = resp.try_next().await
-                .map_err(|e| ArtifactStoreError::S3(Box::new(e)))? {
+            while let Some(page) = resp
+                .try_next()
+                .await
+                .map_err(|e| ArtifactStoreError::S3(Box::new(e)))?
+            {
                 for obj in page.contents() {
                     if let Some(k) = obj.key() {
                         keys.push(k.to_string());
@@ -518,7 +539,13 @@ mod s3_backend {
         }
 
         async fn stat(&self, key: &str) -> Result<ArtifactMetadata, ArtifactStoreError> {
-            let resp = self.client.head_object().bucket(&self.bucket).key(key).send().await
+            let resp = self
+                .client
+                .head_object()
+                .bucket(&self.bucket)
+                .key(key)
+                .send()
+                .await
                 .map_err(|e| ArtifactStoreError::S3(Box::new(e)))?;
             let size = resp.content_length().unwrap_or(0) as u64;
             let modified = resp.last_modified().and_then(|t| {
@@ -552,8 +579,11 @@ pub struct EncryptedArtifactStore {
 
 impl EncryptedArtifactStore {
     /// Create a new encrypted wrapper around `inner` using the provided base64 key.
-    pub fn new(inner: std::sync::Arc<dyn ArtifactStore>, key_b64: &str) -> Result<Self, ArtifactStoreError> {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+    pub fn new(
+        inner: std::sync::Arc<dyn ArtifactStore>,
+        key_b64: &str,
+    ) -> Result<Self, ArtifactStoreError> {
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
         let decoded = STANDARD.decode(key_b64).map_err(|e| {
             ArtifactStoreError::InvalidKey(format!("invalid base64 encryption key: {e}"))
         })?;
@@ -570,11 +600,16 @@ impl EncryptedArtifactStore {
 
     /// Encrypt plaintext using AES-256-GCM with a random 12-byte nonce.
     fn encrypt(&self, plaintext: &[u8]) -> Vec<u8> {
-        use aes_gcm::{Aes256Gcm, KeyInit, aead::{Aead, AeadCore, OsRng}};
         use aes_gcm::aead::generic_array::GenericArray;
+        use aes_gcm::{
+            aead::{Aead, AeadCore, OsRng},
+            Aes256Gcm, KeyInit,
+        };
         let cipher = Aes256Gcm::new(GenericArray::from_slice(&self.key));
         let nonce = <Aes256Gcm as AeadCore>::generate_nonce(&mut OsRng); // 12 bytes
-        let mut ciphertext = cipher.encrypt(&nonce, plaintext).expect("encryption failed");
+        let mut ciphertext = cipher
+            .encrypt(&nonce, plaintext)
+            .expect("encryption failed");
         // Prepend nonce to ciphertext for storage: nonce || ciphertext
         let mut out = Vec::with_capacity(12 + ciphertext.len());
         out.extend_from_slice(&nonce);
@@ -584,17 +619,32 @@ impl EncryptedArtifactStore {
 
     /// Decrypt data encrypted by `encrypt` (nonce || ciphertext).
     fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, ArtifactStoreError> {
-        use aes_gcm::{Aes256Gcm, KeyInit, aead::{Aead, Payload}};
         use aes_gcm::aead::generic_array::GenericArray;
+        use aes_gcm::{
+            aead::{Aead, Payload},
+            Aes256Gcm, KeyInit,
+        };
         if data.len() < 12 {
-            return Err(ArtifactStoreError::InvalidKey("ciphertext too short".into()));
+            return Err(ArtifactStoreError::InvalidKey(
+                "ciphertext too short".into(),
+            ));
         }
         let nonce = GenericArray::from_slice(&data[..12]);
         let ciphertext = &data[12..];
         let cipher = Aes256Gcm::new(GenericArray::from_slice(&self.key));
         cipher
-            .decrypt(nonce, Payload { msg: ciphertext, aad: b"" })
-            .map_err(|_| ArtifactStoreError::InvalidKey("decryption failed (wrong key or corrupt data)".into()))
+            .decrypt(
+                nonce,
+                Payload {
+                    msg: ciphertext,
+                    aad: b"",
+                },
+            )
+            .map_err(|_| {
+                ArtifactStoreError::InvalidKey(
+                    "decryption failed (wrong key or corrupt data)".into(),
+                )
+            })
     }
 }
 
@@ -662,7 +712,9 @@ impl StorageConfig {
                 let shared = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                     handle.block_on(cfg_loader.load())
                 } else {
-                    tokio::runtime::Runtime::new().unwrap().block_on(cfg_loader.load())
+                    tokio::runtime::Runtime::new()
+                        .unwrap()
+                        .block_on(cfg_loader.load())
                 };
                 let mut s3_cfg = aws_sdk_s3::Config::from(&shared);
                 s3_cfg = s3_cfg
@@ -670,7 +722,11 @@ impl StorageConfig {
                     .force_path_style(s3.force_path_style)
                     .build();
                 let client = std::sync::Arc::new(aws_sdk_s3::Client::from_conf(s3_cfg));
-                std::sync::Arc::new(S3ArtifactStore::new(client, s3.bucket.clone(), self.backend.clone()))
+                std::sync::Arc::new(S3ArtifactStore::new(
+                    client,
+                    s3.bucket.clone(),
+                    self.backend.clone(),
+                ))
             }
             #[cfg(not(feature = "s3"))]
             StorageBackend::S3 | StorageBackend::Minio => {
@@ -683,10 +739,10 @@ impl StorageConfig {
         };
         // Wrap with encryption if key is configured
         if let Some(ref key) = self.plugin_enc_key {
-            std::sync::Arc::new(EncryptedArtifactStore::new(
-                std::sync::Arc::clone(&store),
-                key,
-            ).expect("failed to create encrypted artifact store"))
+            std::sync::Arc::new(
+                EncryptedArtifactStore::new(std::sync::Arc::clone(&store), key)
+                    .expect("failed to create encrypted artifact store"),
+            )
         } else {
             store
         }
@@ -746,7 +802,7 @@ mod tests {
 
     #[tokio::test]
     async fn encrypted_store_roundtrip() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
         let key = [42u8; 32];
         let key_b64 = STANDARD.encode(&key);
 
@@ -765,7 +821,7 @@ mod tests {
 
     #[tokio::test]
     async fn encrypted_store_invalid_key_rejected() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
         let store = temp_store();
         let result = EncryptedArtifactStore::new(std::sync::Arc::new(store), "not-base64!");
         assert!(result.is_err());

@@ -1,5 +1,5 @@
-use tokio::net::TcpListener;
 use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
 
 /// Handler for catching remote shells.
 pub struct ShellHandler;
@@ -15,7 +15,9 @@ impl ShellHandler {
         tokio::spawn(async move {
             if let Ok((mut socket, peer_addr)) = listener.accept().await {
                 tracing::warn!("Caught shell from {}!", peer_addr);
-                let _ = socket.write_all(b"Connected to Valayam Shell Handler\n").await;
+                let _ = socket
+                    .write_all(b"Connected to Valayam Shell Handler\n")
+                    .await;
             }
         });
 

@@ -2,8 +2,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use valayam_crawler::Crawler;
-use valayam_network::network::http::StealthHttpClient;
 use valayam_engine::rate_limiter::RateLimiter;
+use valayam_network::network::http::StealthHttpClient;
 
 fn crawler_benchmark(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();

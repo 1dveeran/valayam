@@ -191,24 +191,44 @@ mod tests {
 
     #[test]
     fn test_severity_badge_renders() {
-        let critical = ConsoleReporter::severity_badge(valayam_models::finding::Severity::from("critical"));
+        let critical =
+            ConsoleReporter::severity_badge(valayam_models::finding::Severity::from("critical"));
         assert!(!critical.to_string().is_empty());
 
         let high = ConsoleReporter::severity_badge(valayam_models::finding::Severity::from("high"));
         assert!(!high.to_string().is_empty());
 
-        let unknown = ConsoleReporter::severity_badge(valayam_models::finding::Severity::from("unknown"));
+        let unknown =
+            ConsoleReporter::severity_badge(valayam_models::finding::Severity::from("unknown"));
         assert!(!unknown.to_string().is_empty());
     }
 
     #[test]
     fn test_severity_icon_returns_expected() {
-        assert_eq!(ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("critical")), "💀");
-        assert_eq!(ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("high")), "🔴");
-        assert_eq!(ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("medium")), "🟡");
-        assert_eq!(ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("low")), "🟢");
-        assert_eq!(ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("info")), "🔵");
-        assert_eq!(ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("unknown")), "⚪");
+        assert_eq!(
+            ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("critical")),
+            "💀"
+        );
+        assert_eq!(
+            ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("high")),
+            "🔴"
+        );
+        assert_eq!(
+            ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("medium")),
+            "🟡"
+        );
+        assert_eq!(
+            ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("low")),
+            "🟢"
+        );
+        assert_eq!(
+            ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("info")),
+            "🔵"
+        );
+        assert_eq!(
+            ConsoleReporter::severity_icon(valayam_models::finding::Severity::from("unknown")),
+            "⚪"
+        );
     }
 
     #[test]

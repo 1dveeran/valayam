@@ -4,9 +4,9 @@
 //! It provides fine-grained variants for every feature module, retryability
 //! classification, and SIEM-compatible serialization.
 
-use thiserror::Error;
 use std::io;
 use std::net::AddrParseError;
+use thiserror::Error;
 
 /// Unified error enum for all scanner operations.
 /// Production-grade error handling with fine-grained variants for every
@@ -289,7 +289,10 @@ mod tests {
     #[test]
     fn test_template_validation_error() {
         let err = ScannerError::TemplateValidationError("missing id field".into());
-        assert_eq!(err.to_string(), "Template validation failed: missing id field");
+        assert_eq!(
+            err.to_string(),
+            "Template validation failed: missing id field"
+        );
         assert_eq!(err.error_code(), "TEMPLATE_VALIDATION_ERROR");
         assert!(!err.is_retryable());
     }
@@ -305,7 +308,7 @@ mod tests {
                 .timeout(std::time::Duration::from_millis(10))
                 .send()
                 .await
-                .unwrap_err()
+                .unwrap_err(),
         );
         assert_eq!(err.error_code(), "HTTP_CLIENT_ERROR");
         assert!(!err.is_retryable());
@@ -314,7 +317,10 @@ mod tests {
     #[test]
     fn test_invalid_http_method() {
         let err = ScannerError::InvalidHttpMethod("INVALID".into());
-        assert_eq!(err.to_string(), "Invalid HTTP Method defined in template: INVALID");
+        assert_eq!(
+            err.to_string(),
+            "Invalid HTTP Method defined in template: INVALID"
+        );
         assert_eq!(err.error_code(), "INVALID_HTTP_METHOD");
         assert!(!err.is_retryable());
     }
@@ -383,7 +389,10 @@ mod tests {
             port: 5353,
             error: "timeout".into(),
         };
-        assert_eq!(err.to_string(), "UDP timeout or failure for 10.0.0.1:5353: timeout");
+        assert_eq!(
+            err.to_string(),
+            "UDP timeout or failure for 10.0.0.1:5353: timeout"
+        );
         assert_eq!(err.error_code(), "UDP_ERROR");
         assert!(err.is_retryable());
     }
@@ -406,7 +415,10 @@ mod tests {
     #[test]
     fn test_tls_cert_parse_error() {
         let err = ScannerError::TlsCertParseError("invalid ASN1".into());
-        assert_eq!(err.to_string(), "TLS certificate parsing failed: invalid ASN1");
+        assert_eq!(
+            err.to_string(),
+            "TLS certificate parsing failed: invalid ASN1"
+        );
         assert_eq!(err.error_code(), "TLS_CERT_PARSE_ERROR");
         assert!(!err.is_retryable());
     }
@@ -414,7 +426,10 @@ mod tests {
     #[test]
     fn test_invalid_target_and_port() {
         let target_err = ScannerError::InvalidTarget("not a url".into());
-        assert_eq!(target_err.to_string(), "Invalid target specification: not a url");
+        assert_eq!(
+            target_err.to_string(),
+            "Invalid target specification: not a url"
+        );
         assert_eq!(target_err.error_code(), "INVALID_TARGET");
         assert!(!target_err.is_retryable());
 
@@ -438,7 +453,10 @@ mod tests {
     #[test]
     fn test_parse_error() {
         let err = ScannerError::ParseError("invalid json".into());
-        assert_eq!(err.to_string(), "Failed to parse response data: invalid json");
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse response data: invalid json"
+        );
         assert_eq!(err.error_code(), "PARSE_ERROR");
         assert!(!err.is_retryable());
     }
@@ -463,7 +481,9 @@ mod tests {
 
     #[test]
     fn test_address_parse_error_from_std() {
-        let addr_err = "not a socket addr".parse::<std::net::SocketAddr>().unwrap_err();
+        let addr_err = "not a socket addr"
+            .parse::<std::net::SocketAddr>()
+            .unwrap_err();
         let err: ScannerError = addr_err.into();
         assert_eq!(err.error_code(), "ADDRESS_PARSE_ERROR");
         assert!(!err.is_retryable());
@@ -521,7 +541,9 @@ mod tests {
             ScannerError::ParseError("".into()),
             ScannerError::CertificateValidationError("".into()),
             ScannerError::InvalidCipherSuite("".into()),
-            ScannerError::AddressParseError("0.0.0.0:99999".parse::<std::net::SocketAddr>().unwrap_err()),
+            ScannerError::AddressParseError(
+                "0.0.0.0:99999".parse::<std::net::SocketAddr>().unwrap_err(),
+            ),
             ScannerError::Utf8Error(String::from_utf8(vec![0xFF]).unwrap_err()),
             ScannerError::PluginNotFound("".into()),
             ScannerError::PluginInitializationError("".into()),
@@ -529,7 +551,11 @@ mod tests {
             ScannerError::Other(Box::new(io::Error::new(io::ErrorKind::Other, ""))),
         ];
         for err in &cases {
-            assert!(!err.is_retryable(), "Expected non-retryable for: {:?}", err.error_code());
+            assert!(
+                !err.is_retryable(),
+                "Expected non-retryable for: {:?}",
+                err.error_code()
+            );
         }
     }
 
@@ -540,8 +566,14 @@ mod tests {
         assert!(json.contains("Template validation failed: bad template"));
 
         let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse JSON");
-        assert_eq!(parsed["error_type"], "Template validation failed: bad template");
-        assert_eq!(parsed["message"], "Template validation failed: bad template");
+        assert_eq!(
+            parsed["error_type"],
+            "Template validation failed: bad template"
+        );
+        assert_eq!(
+            parsed["message"],
+            "Template validation failed: bad template"
+        );
         assert_eq!(parsed["is_retryable"], false);
     }
 

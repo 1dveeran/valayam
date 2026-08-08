@@ -20,5 +20,5 @@ pub enum TelemetryEvent {
         pid: u32,
         file_path: String,
         access_type: String, // "READ", "WRITE", "EXECUTE"
-    }
+    },
 }

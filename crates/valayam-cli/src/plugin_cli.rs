@@ -12,7 +12,10 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
 
     let manifest_path = dir_path.join("plugin.yaml");
     if !manifest_path.exists() {
-        anyhow::bail!("Missing plugin.yaml in '{}'. A valid Valayam plugin requires a manifest.", dir);
+        anyhow::bail!(
+            "Missing plugin.yaml in '{}'. A valid Valayam plugin requires a manifest.",
+            dir
+        );
     }
 
     // Read manifest to determine default output name
@@ -25,7 +28,12 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
         None => Path::new(".").join(format!("{}.vpa", manifest.name)),
     };
 
-    println!("Packaging plugin '{}' (v{}) into {}...", manifest.name, manifest.version, out_file_path.display());
+    println!(
+        "Packaging plugin '{}' (v{}) into {}...",
+        manifest.name,
+        manifest.version,
+        out_file_path.display()
+    );
 
     let file = File::create(&out_file_path)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -39,7 +47,10 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
         let name = path.strip_prefix(dir_path)?;
 
         // Skip the root dir itself, the output file, and any existing signature.sig
-        if name.as_os_str().is_empty() || path == out_file_path || name.to_string_lossy() == "signature.sig" {
+        if name.as_os_str().is_empty()
+            || path == out_file_path
+            || name.to_string_lossy() == "signature.sig"
+        {
             continue;
         }
 
@@ -65,7 +76,7 @@ pub fn package_plugin(dir: &str, output: Option<&str>, sign: Option<&str>) -> an
         priv_key.copy_from_slice(&priv_key_bytes[0..32]);
         let manifest_bytes = std::fs::read(&manifest_path)?;
         let signature = valayam_crypto::PluginCrypto::sign(&priv_key, &manifest_bytes)?;
-        
+
         zip.start_file("signature.sig", options)?;
         zip.write_all(&signature)?;
     }
@@ -81,10 +92,10 @@ pub fn init_plugin(name: &str, lang: &str, runtime: &str) -> anyhow::Result<()> 
     if dir_path.exists() {
         anyhow::bail!("Directory '{}' already exists.", name);
     }
-    
+
     std::fs::create_dir_all(dir_path)?;
     println!("\nCreating Valayam Plugin '{}'...", name);
-    
+
     // Create plugin.yaml
     let manifest = format!(
         "name: \"{}\"\nversion: \"1.0.0\"\nauthor: \"SecurityTeam\"\nruntime: \"{}\"\nlanguage: \"{}\"\nentrypoint: \"run.bat\"\ncapabilities:\n  - \"network_scan\"\n",
@@ -95,8 +106,9 @@ pub fn init_plugin(name: &str, lang: &str, runtime: &str) -> anyhow::Result<()> 
 
     match lang {
         "python" => {
-            std::fs::write(dir_path.join("plugin.py"), 
-r#"import json
+            std::fs::write(
+                dir_path.join("plugin.py"),
+                r#"import json
 from extism_pdk import plugin_fn, Host
 
 @plugin_fn
@@ -111,16 +123,22 @@ def run_scan():
     }]
     
     Host.output_string(json.dumps(findings))
-"#)?;
+"#,
+            )?;
             println!("- Created plugin.py");
             std::fs::write(dir_path.join("requirements.txt"), "extism-pdk\n")?;
             println!("- Created requirements.txt");
-            std::fs::write(dir_path.join("build.sh"), "extism-py plugin.py -o plugin.wasm\n")?;
+            std::fs::write(
+                dir_path.join("build.sh"),
+                "extism-py plugin.py -o plugin.wasm\n",
+            )?;
             println!("- Created build.sh");
         }
         "rust" => {
-            std::fs::write(dir_path.join("Cargo.toml"), format!(
-r#"[package]
+            std::fs::write(
+                dir_path.join("Cargo.toml"),
+                format!(
+                    r#"[package]
 name = "{}"
 version = "0.1.0"
 edition = "2021"
@@ -132,12 +150,16 @@ crate-type = ["cdylib"]
 extism-pdk = "1.0.0"
 serde = {{ version = "1.0", features = ["derive"] }}
 serde_json = "1.0"
-"#, name))?;
+"#,
+                    name
+                ),
+            )?;
             println!("- Created Cargo.toml");
 
             std::fs::create_dir_all(dir_path.join("src"))?;
-            std::fs::write(dir_path.join("src/lib.rs"), 
-r#"use extism_pdk::*;
+            std::fs::write(
+                dir_path.join("src/lib.rs"),
+                r#"use extism_pdk::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -167,23 +189,30 @@ pub fn run_scan(input: String) -> FnResult<String> {
     let output = serde_json::to_string(&findings)?;
     Ok(output)
 }
-"#)?;
+"#,
+            )?;
             println!("- Created src/lib.rs");
             std::fs::write(dir_path.join("build.sh"), "cargo build --target wasm32-wasi --release\ncp target/wasm32-wasi/release/*.wasm plugin.wasm\n")?;
             println!("- Created build.sh");
         }
         "go" => {
-            std::fs::write(dir_path.join("go.mod"), format!(
-r#"module {}
+            std::fs::write(
+                dir_path.join("go.mod"),
+                format!(
+                    r#"module {}
 
 go 1.21
 
 require github.com/extism/go-pdk v1.0.0
-"#, name))?;
+"#,
+                    name
+                ),
+            )?;
             println!("- Created go.mod");
 
-            std::fs::write(dir_path.join("main.go"),
-r#"package main
+            std::fs::write(
+                dir_path.join("main.go"),
+                r#"package main
 
 import (
 	"encoding/json"
@@ -220,25 +249,35 @@ func run_scan() int32 {
 }
 
 func main() {}
-"#)?;
+"#,
+            )?;
             println!("- Created main.go");
-            std::fs::write(dir_path.join("build.sh"), "tinygo build -o plugin.wasm -target wasi main.go\n")?;
+            std::fs::write(
+                dir_path.join("build.sh"),
+                "tinygo build -o plugin.wasm -target wasi main.go\n",
+            )?;
             println!("- Created build.sh");
         }
         "ts" | "javascript" => {
-            std::fs::write(dir_path.join("package.json"), format!(
-r#"{{
+            std::fs::write(
+                dir_path.join("package.json"),
+                format!(
+                    r#"{{
   "name": "{}",
   "version": "1.0.0",
   "dependencies": {{
     "@extism/js-pdk": "^1.0.0"
   }}
 }}
-"#, name))?;
+"#,
+                    name
+                ),
+            )?;
             println!("- Created package.json");
-            
-            std::fs::write(dir_path.join("index.js"),
-r#"const { Host } = require("@extism/js-pdk");
+
+            std::fs::write(
+                dir_path.join("index.js"),
+                r#"const { Host } = require("@extism/js-pdk");
 
 function run_scan() {
     let input = Host.inputString();
@@ -256,21 +295,29 @@ function run_scan() {
 }
 
 module.exports = { run_scan };
-"#)?;
+"#,
+            )?;
             println!("- Created index.js");
-            std::fs::write(dir_path.join("build.sh"), "npm install\nextism-js index.js -i index.d.ts -o plugin.wasm\n")?;
+            std::fs::write(
+                dir_path.join("build.sh"),
+                "npm install\nextism-js index.js -i index.d.ts -o plugin.wasm\n",
+            )?;
             println!("- Created build.sh");
         }
         _ => {
-            println!("- Note: Boilerplate generation for language '{}' is currently minimal.", lang);
+            println!(
+                "- Note: Boilerplate generation for language '{}' is currently minimal.",
+                lang
+            );
         }
     }
 
-    println!("\nRun `valayam plugin package {}` to package your plugin into {}.vpa!", name, name);
+    println!(
+        "\nRun `valayam plugin package {}` to package your plugin into {}.vpa!",
+        name, name
+    );
     Ok(())
 }
-
-
 
 pub trait CapitalizeExt {
     fn capitalize_first_letter(&self) -> String;
@@ -295,10 +342,16 @@ mod tests {
     fn test_init_plugin_creates_directory() -> anyhow::Result<()> {
         let dir = tempfile::tempdir()?;
         let plugin_dir = dir.path().join("test-plugin");
-        let name = plugin_dir.to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
+        let name = plugin_dir
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
 
         let result = init_plugin(name, "python", "grpc");
-        assert!(result.is_ok(), "init_plugin should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "init_plugin should succeed: {:?}",
+            result.err()
+        );
         assert!(plugin_dir.exists());
         assert!(plugin_dir.join("plugin.yaml").exists());
         assert!(plugin_dir.join("plugin.py").exists());
@@ -311,12 +364,19 @@ mod tests {
     fn test_init_plugin_existing_dir_fails() -> anyhow::Result<()> {
         // Use a path that already exists on disk
         let dir = tempfile::tempdir()?;
-        let path = dir.path().to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
+        let path = dir
+            .path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
         // Temp dir already exists, so init should fail
         let result = init_plugin(path, "python", "grpc");
         assert!(result.is_err(), "init on existing dir should fail");
         let err = format!("{}", result.unwrap_err());
-        assert!(err.contains("already exists"), "Error should mention 'already exists': {}", err);
+        assert!(
+            err.contains("already exists"),
+            "Error should mention 'already exists': {}",
+            err
+        );
         Ok(())
     }
 
@@ -332,7 +392,9 @@ mod tests {
     fn test_generate_key_creates_files() -> anyhow::Result<()> {
         let dir = tempfile::tempdir()?;
         let prefix = dir.path().join("test_key");
-        let prefix_str = prefix.to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
+        let prefix_str = prefix
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 path"))?;
         let result = generate_key(prefix_str);
         assert!(result.is_ok());
         assert!(Path::new(&format!("{}.pem", prefix_str)).exists());
@@ -393,10 +455,13 @@ pub async fn install_plugin(name: &str, url: &str, pubkey_hex: Option<&str>) -> 
         anyhow::bail!("Cannot install plugin: VALAYAM_OFFLINE_MODE is set. Use 'valayam bundle' to create/verify offline bundles.");
     }
 
-    let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
-    
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("valayam/plugins_cache");
+
     let pk_bytes = if let Some(hex_str) = pubkey_hex {
-        let decoded = hex::decode(hex_str).map_err(|e| anyhow::anyhow!("Invalid hex in pubkey: {}", e))?;
+        let decoded =
+            hex::decode(hex_str).map_err(|e| anyhow::anyhow!("Invalid hex in pubkey: {}", e))?;
         if decoded.len() != 32 {
             anyhow::bail!("Public key must be exactly 32 bytes (64 hex characters)");
         }
@@ -410,13 +475,18 @@ pub async fn install_plugin(name: &str, url: &str, pubkey_hex: Option<&str>) -> 
 
     println!("Installing plugin '{}' from {}...", name, url);
     let puller = PluginPuller::new(cache_dir, pk_bytes.as_ref())?;
-    
+
     let path = puller.pull(name, url).await?;
     println!("Successfully installed plugin to {}", path.display());
     Ok(())
 }
 
-pub async fn push_plugin(file: &str, repo: &str, tag: &str, signature: Option<&str>) -> anyhow::Result<()> {
+pub async fn push_plugin(
+    file: &str,
+    repo: &str,
+    tag: &str,
+    signature: Option<&str>,
+) -> anyhow::Result<()> {
     use valayam_core::distribution::publisher::PluginPublisher;
 
     // Air-gapped mode guard: block network operations
@@ -428,32 +498,39 @@ pub async fn push_plugin(file: &str, repo: &str, tag: &str, signature: Option<&s
     if !file_path.exists() {
         anyhow::bail!("Plugin file '{}' does not exist.", file);
     }
-    
+
     let registry = if let Some(idx) = repo.find('/') {
         &repo[..idx]
     } else {
-        anyhow::bail!("Repository format must be <registry>/<repo_name> (e.g. localhost:5000/my-plugin)");
+        anyhow::bail!(
+            "Repository format must be <registry>/<repo_name> (e.g. localhost:5000/my-plugin)"
+        );
     };
-    
-    let repo_name = &repo[registry.len()+1..];
-    
+
+    let repo_name = &repo[registry.len() + 1..];
+
     let config = crate::config::CliConfig::from_env();
     let username = config.valayam_registry_user;
     let password = config.valayam_registry_pass;
-    
-    println!("Pushing '{}' to registry '{}', repo '{}', tag '{}'", file, registry, repo_name, tag);
-    
+
+    println!(
+        "Pushing '{}' to registry '{}', repo '{}', tag '{}'",
+        file, registry, repo_name, tag
+    );
+
     let publisher = PluginPublisher::new(registry, username.as_deref(), password.as_deref())?;
     publisher.push(repo_name, tag, file_path, signature).await?;
-    
+
     println!("Successfully pushed OCI artifact to {}", repo);
     Ok(())
 }
 
 pub fn uninstall_plugin(name: &str) -> anyhow::Result<()> {
-    let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("valayam/plugins_cache");
     let plugin_path = cache_dir.join(format!("{}.wasm", name));
-    
+
     if plugin_path.exists() {
         std::fs::remove_file(&plugin_path)?;
         println!("Successfully uninstalled plugin '{}'.", name);
@@ -464,27 +541,29 @@ pub fn uninstall_plugin(name: &str) -> anyhow::Result<()> {
 }
 
 pub fn list_plugins() -> anyhow::Result<()> {
-    let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
-    
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("valayam/plugins_cache");
+
     if !cache_dir.exists() {
         println!("No plugins installed.");
         return Ok(());
     }
-    
+
     let entries = std::fs::read_dir(cache_dir)?;
     let mut count = 0;
-    
+
     println!("Installed plugins:");
     for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() && path.extension().is_some_and(|e| e == "wasm") {
-                if let Some(stem) = path.file_stem() {
-                    println!("- {}", stem.to_string_lossy());
-                    count += 1;
-                }
+        let path = entry.path();
+        if path.is_file() && path.extension().is_some_and(|e| e == "wasm") {
+            if let Some(stem) = path.file_stem() {
+                println!("- {}", stem.to_string_lossy());
+                count += 1;
             }
         }
-    
+    }
+
     if count == 0 {
         println!("No plugins installed.");
     }

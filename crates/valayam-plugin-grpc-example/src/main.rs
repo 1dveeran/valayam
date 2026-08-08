@@ -1,9 +1,12 @@
-use valayam_proto::plugin::plugin_service_server::{PluginService, PluginServiceServer};
-use valayam_proto::plugin::{ExecuteRequest, ExecuteResponse, InitRequest, InitResponse, ShutdownRequest, ShutdownResponse, ValidateConfigRequest, ValidateConfigResponse};
 use std::net::SocketAddr;
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
-use tokio::sync::mpsc;
+use valayam_proto::plugin::plugin_service_server::{PluginService, PluginServiceServer};
+use valayam_proto::plugin::{
+    ExecuteRequest, ExecuteResponse, InitRequest, InitResponse, ShutdownRequest, ShutdownResponse,
+    ValidateConfigRequest, ValidateConfigResponse,
+};
 
 #[derive(Default)]
 pub struct ExamplePlugin {}
@@ -20,7 +23,10 @@ impl PluginService for ExamplePlugin {
         }))
     }
 
-    async fn validate_config(&self, _request: Request<ValidateConfigRequest>) -> Result<Response<ValidateConfigResponse>, Status> {
+    async fn validate_config(
+        &self,
+        _request: Request<ValidateConfigRequest>,
+    ) -> Result<Response<ValidateConfigResponse>, Status> {
         Ok(Response::new(ValidateConfigResponse {
             valid: true,
             error_message: String::new(),
@@ -29,7 +35,10 @@ impl PluginService for ExamplePlugin {
 
     type ExecuteStream = ReceiverStream<Result<ExecuteResponse, Status>>;
 
-    async fn execute(&self, request: Request<ExecuteRequest>) -> Result<Response<Self::ExecuteStream>, Status> {
+    async fn execute(
+        &self,
+        request: Request<ExecuteRequest>,
+    ) -> Result<Response<Self::ExecuteStream>, Status> {
         let req = request.into_inner();
         let (tx, rx) = mpsc::channel(4);
 
@@ -52,7 +61,7 @@ impl PluginService for ExamplePlugin {
                     serde_json::json!({
                         "resolved_ips": ips
                     })
-                },
+                }
                 Err(e) => {
                     serde_json::json!({
                         "error": e.to_string()
@@ -68,7 +77,7 @@ impl PluginService for ExamplePlugin {
                 "matched_at": "DNS resolution",
                 "metadata": metadata
             });
-            
+
             let finding_json = finding.to_string();
             let _ = tx.send(Ok(ExecuteResponse { finding_json })).await;
         });
@@ -76,7 +85,10 @@ impl PluginService for ExamplePlugin {
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 
-    async fn shutdown(&self, _request: Request<ShutdownRequest>) -> Result<Response<ShutdownResponse>, Status> {
+    async fn shutdown(
+        &self,
+        _request: Request<ShutdownRequest>,
+    ) -> Result<Response<ShutdownResponse>, Status> {
         // Exit process cleanly
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -90,17 +102,19 @@ impl PluginService for ExamplePlugin {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Bind to any available port
     let addr: SocketAddr = "127.0.0.1:0".parse()?;
-    
+
     // Create server and bind to get the dynamic port
     let server = Server::builder().add_service(PluginServiceServer::new(ExamplePlugin::default()));
     let incoming = tokio::net::TcpListener::bind(addr).await?;
     let local_addr = incoming.local_addr()?;
-    
+
     // HashiCorp go-plugin protocol handshake
     println!("1|plugin|tcp|{}|grpc", local_addr);
-    
+
     // Run the server
-    server.serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(incoming)).await?;
-    
+    server
+        .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(incoming))
+        .await?;
+
     Ok(())
 }

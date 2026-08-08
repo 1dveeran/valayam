@@ -12,10 +12,10 @@ use tracker::BackoffTracker;
 
 // - Benchmark `governor` under 10k+ concurrent async tasks.
 // - Implement dynamic backoff integration for 429 Too Many Requests.
+use governor::{clock, middleware, state, Quota, RateLimiter as GovLimiter};
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use governor::{Quota, RateLimiter as GovLimiter, clock, state, middleware};
 use tokio::sync::{Mutex, RwLock};
 
 type GovernorLimiter = GovLimiter<
@@ -25,15 +25,8 @@ type GovernorLimiter = GovLimiter<
     middleware::NoOpMiddleware<clock::QuantaInstant>,
 >;
 
-
-
-
-
 /// Tracks 429 responses for dynamic backoff
 #[derive(Debug)]
-
-
-
 
 /// Thread-safe, global request rate limiter using the Token Bucket algorithm.
 ///
@@ -62,7 +55,10 @@ impl RateLimiter {
         assert!(config.base_rps > 0, "Base RPS must be > 0");
 
         let quota = Quota::per_second(NonZeroU32::new(config.base_rps).expect("RPS must be > 0"))
-            .allow_burst(NonZeroU32::new(config.burst_size.unwrap_or(config.base_rps)).expect("Burst size must be > 0"));
+            .allow_burst(
+                NonZeroU32::new(config.burst_size.unwrap_or(config.base_rps))
+                    .expect("Burst size must be > 0"),
+            );
 
         let limiter = Arc::new(GovLimiter::direct(quota));
 
@@ -117,7 +113,8 @@ impl RateLimiter {
         backoff.last_429 = Some(Instant::now());
 
         // Calculate backoff multiplier
-        let base_multiplier = (1.0f32 + config.backoff_factor * backoff.consecutive_429s as f32) as u32;
+        let base_multiplier =
+            (1.0f32 + config.backoff_factor * backoff.consecutive_429s as f32) as u32;
         backoff.backoff_multiplier = std::cmp::min(base_multiplier, config.max_backoff);
 
         // If we have a Retry-After value, use it as minimum backoff
@@ -134,7 +131,8 @@ impl RateLimiter {
         );
 
         // Update prometheus gauge
-        crate::metrics::RATE_LIMITER_PERMITS.set(config.base_rps as f64 / backoff.backoff_multiplier as f64);
+        crate::metrics::RATE_LIMITER_PERMITS
+            .set(config.base_rps as f64 / backoff.backoff_multiplier as f64);
     }
 
     /// Records a successful response, potentially reducing backoff.
@@ -155,8 +153,11 @@ impl RateLimiter {
                         backoff.backoff_multiplier = 1;
                     } else {
                         let config = self.config.read().await;
-                        let base_multiplier = (1.0f32 + config.backoff_factor * backoff.consecutive_429s as f32) as u32;
-                        backoff.backoff_multiplier = std::cmp::min(base_multiplier, config.max_backoff);
+                        let base_multiplier = (1.0f32
+                            + config.backoff_factor * backoff.consecutive_429s as f32)
+                            as u32;
+                        backoff.backoff_multiplier =
+                            std::cmp::min(base_multiplier, config.max_backoff);
                     }
                 }
             }
@@ -175,7 +176,8 @@ impl RateLimiter {
         // Snapshot effective RPS into prometheus gauge
         let multiplier = backoff.backoff_multiplier;
         drop(backoff);
-        crate::metrics::RATE_LIMITER_PERMITS.set(self.config().await.base_rps as f64 / multiplier as f64);
+        crate::metrics::RATE_LIMITER_PERMITS
+            .set(self.config().await.base_rps as f64 / multiplier as f64);
     }
 
     /// Get current configuration
@@ -187,8 +189,12 @@ impl RateLimiter {
     pub async fn update_config(&self, new_config: RateLimiterConfig) {
         *self.config.write().await = new_config.clone();
         // Rebuild the limiter with new quota
-        let quota = Quota::per_second(NonZeroU32::new(new_config.base_rps).expect("RPS must be > 0"))
-            .allow_burst(NonZeroU32::new(new_config.burst_size.unwrap_or(new_config.base_rps)).expect("Burst size must be > 0"));
+        let quota =
+            Quota::per_second(NonZeroU32::new(new_config.base_rps).expect("RPS must be > 0"))
+                .allow_burst(
+                    NonZeroU32::new(new_config.burst_size.unwrap_or(new_config.base_rps))
+                        .expect("Burst size must be > 0"),
+                );
         *self.limiter.write().await = Arc::new(GovLimiter::direct(quota));
         crate::metrics::RATE_LIMITER_PERMITS.set(new_config.base_rps as f64);
     }
@@ -404,10 +410,12 @@ mod tests {
         let limiter = RateLimiter::new_simple(10);
         assert_eq!(limiter.config().await.base_rps, 10);
 
-        limiter.update_config(RateLimiterConfig {
-            base_rps: 100,
-            ..Default::default()
-        }).await;
+        limiter
+            .update_config(RateLimiterConfig {
+                base_rps: 100,
+                ..Default::default()
+            })
+            .await;
         assert_eq!(limiter.config().await.base_rps, 100);
     }
 

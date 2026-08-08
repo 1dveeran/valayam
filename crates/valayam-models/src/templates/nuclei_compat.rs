@@ -130,7 +130,10 @@ requests:
         let tmpl: NucleiTemplate = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(tmpl.id, "full-template");
         assert_eq!(tmpl.info.author.unwrap(), "Test Author");
-        assert_eq!(tmpl.info.description.unwrap(), "A full-featured test template");
+        assert_eq!(
+            tmpl.info.description.unwrap(),
+            "A full-featured test template"
+        );
         assert_eq!(tmpl.requests.len(), 1);
         assert_eq!(tmpl.requests[0].method, "POST");
         assert_eq!(tmpl.requests[0].path.len(), 2);

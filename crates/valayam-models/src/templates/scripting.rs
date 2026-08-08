@@ -45,7 +45,12 @@ mod tests {
 
     #[test]
     fn test_script_template_serde_roundtrip() {
-        let tmpl = ScriptTemplate { engine: "rhai".into(), source: ScriptSource::Inline { code: "let x = 1;".into() } };
+        let tmpl = ScriptTemplate {
+            engine: "rhai".into(),
+            source: ScriptSource::Inline {
+                code: "let x = 1;".into(),
+            },
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: ScriptTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.engine, "rhai");

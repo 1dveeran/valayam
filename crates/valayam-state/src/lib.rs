@@ -28,7 +28,12 @@ impl StateDB {
         Ok(Self { base_dir: path })
     }
 
-    pub fn save_state(&self, state_id: &str, pending: &[String], completed: &[String]) -> std::io::Result<()> {
+    pub fn save_state(
+        &self,
+        state_id: &str,
+        pending: &[String],
+        completed: &[String],
+    ) -> std::io::Result<()> {
         let snapshot = ScanSnapshot {
             id: state_id.to_string(),
             pending_targets: pending.to_vec(),
@@ -51,7 +56,10 @@ impl StateDB {
         Ok(())
     }
 
-    pub fn load_state(&self, state_id: &str) -> std::io::Result<Option<(Vec<String>, Vec<String>)>> {
+    pub fn load_state(
+        &self,
+        state_id: &str,
+    ) -> std::io::Result<Option<(Vec<String>, Vec<String>)>> {
         let file_path = self.base_dir.join(format!("{}.json", state_id));
 
         if !file_path.exists() {
@@ -136,7 +144,11 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let db = StateDB::new(dir.path())?;
         db.save_state("s", &["https://old.com".into()], &[])?;
-        db.save_state("s", &["https://new.com".into()], &["https://old.com".into()])?;
+        db.save_state(
+            "s",
+            &["https://new.com".into()],
+            &["https://old.com".into()],
+        )?;
         let (p, c) = db.load_state("s")?.unwrap();
         assert_eq!(p, vec!["https://new.com"]);
         assert_eq!(c, vec!["https://old.com"]);

@@ -38,7 +38,9 @@ fn dns_resolve_fallback(domain: &str) -> Option<Vec<String>> {
 #[cfg(not(target_arch = "wasm32"))]
 fn dns_resolve_fallback(domain: &str) -> Option<Vec<String>> {
     let json = _stubs::dns_resolve(domain.to_string());
-    serde_json::from_str::<Vec<String>>(&json).ok().filter(|v| !v.is_empty())
+    serde_json::from_str::<Vec<String>>(&json)
+        .ok()
+        .filter(|v| !v.is_empty())
 }
 
 pub fn resolve_dns(domain: &str) -> Option<Vec<String>> {
@@ -141,6 +143,9 @@ mod tests {
     fn test_stub_dns_resolve_invalid_domain() {
         let json = _stubs::dns_resolve("invalid-domain-that-does-not-exist--.com".to_string());
         let ips: Vec<String> = serde_json::from_str(&json).expect("valid JSON array");
-        assert!(ips.is_empty(), "non-existent domain should return empty array");
+        assert!(
+            ips.is_empty(),
+            "non-existent domain should return empty array"
+        );
     }
 }

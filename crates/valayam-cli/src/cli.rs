@@ -28,7 +28,12 @@ use clap::Parser;
   HTTP → Network → Scripts. No separate flag is needed for scripts."
 )]
 pub struct Args {
-    #[arg(short = 'u', long, default_value = "https://httpbin.org", help = "Target Base URL")]
+    #[arg(
+        short = 'u',
+        long,
+        default_value = "https://httpbin.org",
+        help = "Target Base URL"
+    )]
     pub target: String,
 
     #[arg(
@@ -50,13 +55,25 @@ pub struct Args {
     #[arg(short = 'o', long, help = "Path to write output to")]
     pub output: Option<String>,
 
-    #[arg(long, default_value = "json", help = "Output format (json, sarif, pdf)")]
+    #[arg(
+        long,
+        default_value = "json",
+        help = "Output format (json, sarif, pdf)"
+    )]
     pub format: String,
 
-    #[arg(short = 'r', long, help = "Max requests per second (global rate limit)")]
+    #[arg(
+        short = 'r',
+        long,
+        help = "Max requests per second (global rate limit)"
+    )]
     pub rate_limit: Option<u32>,
 
-    #[arg(long, default_value = "500", help = "Max concurrent template executions")]
+    #[arg(
+        long,
+        default_value = "500",
+        help = "Max concurrent template executions"
+    )]
     pub concurrency: usize,
 
     #[arg(long, help = "Rotate User-Agent header randomly per request")]
@@ -65,13 +82,21 @@ pub struct Args {
     #[arg(long, help = "Path to proxy list file (one proxy per line)")]
     pub proxy_file: Option<String>,
 
-    #[arg(short = 'l', long, default_value = "info", help = "Log level (trace, debug, info, warn, error)")]
+    #[arg(
+        short = 'l',
+        long,
+        default_value = "info",
+        help = "Log level (trace, debug, info, warn, error)"
+    )]
     pub log_level: String,
 
     #[arg(short = 'f', long, help = "Path to output verbose logs to a JSON file")]
     pub log_file: Option<String>,
 
-    #[arg(long, help = "URI of a Valayam gRPC worker node (e.g. http://127.0.0.1:50051)")]
+    #[arg(
+        long,
+        help = "URI of a Valayam gRPC worker node (e.g. http://127.0.0.1:50051)"
+    )]
     pub worker: Option<String>,
 
     #[arg(long, help = "Crawl the target URL first to discover pages")]
@@ -80,13 +105,22 @@ pub struct Args {
     #[arg(long, default_value = "3", help = "Maximum depth for crawler")]
     pub crawl_depth: usize,
 
-    #[arg(long, help = "Custom headers for crawler requests (format: Key:Value,Key2:Value2)")]
+    #[arg(
+        long,
+        help = "Custom headers for crawler requests (format: Key:Value,Key2:Value2)"
+    )]
     pub crawl_headers: Option<String>,
 
-    #[arg(long, help = "Detect and fingerprint Web Application Firewalls (WAF) before scanning")]
+    #[arg(
+        long,
+        help = "Detect and fingerprint Web Application Firewalls (WAF) before scanning"
+    )]
     pub waf_detect: bool,
 
-    #[arg(long, help = "Start a local MITM proxy on the specified port to capture traffic and generate templates")]
+    #[arg(
+        long,
+        help = "Start a local MITM proxy on the specified port to capture traffic and generate templates"
+    )]
     pub mitm_proxy: Option<u16>,
 
     #[arg(long, help = "Resume a previously interrupted scan using its state ID")]
@@ -95,28 +129,54 @@ pub struct Args {
     #[arg(long, help = "Port to start the execution control API server on")]
     pub control_port: Option<u16>,
 
-    #[arg(long, help = "Path to TLS certificate file (PEM) for gRPC control plane encryption")]
+    #[arg(
+        long,
+        help = "Path to TLS certificate file (PEM) for gRPC control plane encryption"
+    )]
     pub tls_cert: Option<String>,
 
-    #[arg(long, help = "Path to TLS private key file (PEM) for gRPC control plane encryption")]
+    #[arg(
+        long,
+        help = "Path to TLS private key file (PEM) for gRPC control plane encryption"
+    )]
     pub tls_key: Option<String>,
 
-    #[arg(long, help = "Path to CA certificate (PEM) for mTLS client verification on the gRPC control plane")]
+    #[arg(
+        long,
+        help = "Path to CA certificate (PEM) for mTLS client verification on the gRPC control plane"
+    )]
     pub tls_ca: Option<String>,
 
-    #[arg(long, help = "Enforce plugin signature verification — reject unsigned WASM/VPA plugins at load time")]
+    #[arg(
+        long,
+        help = "Enforce plugin signature verification — reject unsigned WASM/VPA plugins at load time"
+    )]
     pub require_signed_plugins: bool,
 
-    #[arg(long, help = "Allow scanning internal/private IP ranges (disabled by default for SSRF protection)")]
+    #[arg(
+        long,
+        help = "Allow scanning internal/private IP ranges (disabled by default for SSRF protection)"
+    )]
     pub allow_internal: bool,
 
-    #[arg(long, default_value = "50", help = "Memory limit per WASM plugin execution in MB")]
+    #[arg(
+        long,
+        default_value = "50",
+        help = "Memory limit per WASM plugin execution in MB"
+    )]
     pub plugin_memory_limit: u32,
 
-    #[arg(long, default_value = "30", help = "Plugin execution timeout in seconds (default: 30)")]
+    #[arg(
+        long,
+        default_value = "30",
+        help = "Plugin execution timeout in seconds (default: 30)"
+    )]
     pub plugin_timeout: u64,
 
-    #[arg(long, help = "Repeatable: allow plugin egress to specific host (default: deny all). Can specify multiple times.")]
+    #[arg(
+        long,
+        help = "Repeatable: allow plugin egress to specific host (default: deny all). Can specify multiple times."
+    )]
     pub plugin_allow_host: Vec<String>,
 
     #[command(subcommand)]
@@ -294,7 +354,8 @@ mod tests {
 
     #[test]
     fn test_custom_target_and_template() {
-        let args = Args::parse_from(&["valayam", "-u", "https://example.com", "-t", "./templates/"]);
+        let args =
+            Args::parse_from(&["valayam", "-u", "https://example.com", "-t", "./templates/"]);
         assert_eq!(args.target, "https://example.com");
         assert_eq!(args.template, Some("./templates/".into()));
         assert!(args.nuclei_template.is_none());
@@ -303,8 +364,13 @@ mod tests {
     #[test]
     fn test_output_and_format() {
         let args = Args::parse_from(&[
-            "valayam", "-u", "https://test.com",
-            "-o", "results.jsonl", "--format", "sarif",
+            "valayam",
+            "-u",
+            "https://test.com",
+            "-o",
+            "results.jsonl",
+            "--format",
+            "sarif",
         ]);
         assert_eq!(args.output, Some("results.jsonl".into()));
         assert_eq!(args.format, "sarif");
@@ -320,7 +386,11 @@ mod tests {
     #[test]
     fn test_nuclei_template() {
         let args = Args::parse_from(&[
-            "valayam", "-u", "https://test.com", "-n", "./nuclei-templates/",
+            "valayam",
+            "-u",
+            "https://test.com",
+            "-n",
+            "./nuclei-templates/",
         ]);
         assert_eq!(args.nuclei_template, Some("./nuclei-templates/".into()));
         assert!(args.template.is_none());
@@ -328,7 +398,14 @@ mod tests {
 
     #[test]
     fn test_plugin_subcommand_package() {
-        let args = Args::parse_from(&["valayam", "plugin", "package", "./my-plugin", "-o", "out.vpa"]);
+        let args = Args::parse_from(&[
+            "valayam",
+            "plugin",
+            "package",
+            "./my-plugin",
+            "-o",
+            "out.vpa",
+        ]);
         match args.command {
             Some(Commands::Plugin { action }) => match action {
                 PluginCommands::Package { dir, output, sign } => {
@@ -348,7 +425,11 @@ mod tests {
         let args = Args::parse_from(&["valayam", "plugin", "init", "my-plugin"]);
         match args.command {
             Some(Commands::Plugin { action }) => match action {
-                PluginCommands::Init { name, lang, runtime } => {
+                PluginCommands::Init {
+                    name,
+                    lang,
+                    runtime,
+                } => {
                     assert_eq!(name, "my-plugin");
                     assert_eq!(lang, "python");
                     assert_eq!(runtime, "grpc");
@@ -362,10 +443,7 @@ mod tests {
 
     #[test]
     fn test_plugin_subcommand_init_custom_lang() {
-        let args = Args::parse_from(&[
-            "valayam", "plugin", "init", "my-go-plugin",
-            "--lang", "go",
-        ]);
+        let args = Args::parse_from(&["valayam", "plugin", "init", "my-go-plugin", "--lang", "go"]);
         match args.command {
             Some(Commands::Plugin { action }) => match action {
                 PluginCommands::Init { name, lang, .. } => {
@@ -382,8 +460,11 @@ mod tests {
     #[test]
     fn test_tls_args() {
         let args = Args::parse_from(&[
-            "valayam", "--tls-cert", "/etc/valayam/cert.pem",
-            "--tls-key", "/etc/valayam/key.pem",
+            "valayam",
+            "--tls-cert",
+            "/etc/valayam/cert.pem",
+            "--tls-key",
+            "/etc/valayam/key.pem",
         ]);
         assert_eq!(args.tls_cert, Some("/etc/valayam/cert.pem".into()));
         assert_eq!(args.tls_key, Some("/etc/valayam/key.pem".into()));
@@ -399,8 +480,13 @@ mod tests {
     #[test]
     fn test_tls_with_require_signed() {
         let args = Args::parse_from(&[
-            "valayam", "-u", "https://example.com",
-            "--tls-cert", "cert.pem", "--tls-key", "key.pem",
+            "valayam",
+            "-u",
+            "https://example.com",
+            "--tls-cert",
+            "cert.pem",
+            "--tls-key",
+            "key.pem",
             "--require-signed-plugins",
         ]);
         assert_eq!(args.tls_cert, Some("cert.pem".into()));

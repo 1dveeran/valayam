@@ -18,7 +18,9 @@ mod tests {
 
     #[test]
     fn test_pii_leak_serde_roundtrip() {
-        let tmpl = PiiLeakAuditTemplate { target: "https://api.example.com".into() };
+        let tmpl = PiiLeakAuditTemplate {
+            target: "https://api.example.com".into(),
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: PiiLeakAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target, "https://api.example.com");

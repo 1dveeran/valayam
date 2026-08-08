@@ -1,9 +1,9 @@
-use valayam_models::error::ScannerError;
 use crate::traits::{FindingOwned, PluginOutcome, ScanContext, ScanPlugin};
-use std::path::PathBuf;
 use extism::{Manifest, Wasm};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use valayam_models::error::ScannerError;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct WasmPluginFinding {
@@ -33,8 +33,8 @@ pub struct PluginConfig {
 impl Default for PluginConfig {
     fn default() -> Self {
         Self {
-            memory_max_pages: 2048,   // 128 MB
-            timeout_ms: 30000,        // 30 sec
+            memory_max_pages: 2048,               // 128 MB
+            timeout_ms: 30000,                    // 30 sec
             allowed_hosts: vec!["*".to_string()], // allow all hosts by default for security scanner plugins
         }
     }
@@ -86,7 +86,10 @@ impl ScanPlugin for WasmPluginBridge {
         &self.name
     }
 
-    fn validate_config(&self, _template: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> {
+    fn validate_config(
+        &self,
+        _template: &valayam_models::templates::schema::VulnerabilityTemplate,
+    ) -> Result<(), valayam_models::error::ScannerError> {
         Ok(())
     }
 
@@ -96,9 +99,13 @@ impl ScanPlugin for WasmPluginBridge {
     ///
     /// The match is done by normalising the plugin name (strip `.wasm`, replace `_` with `-`)
     /// and checking via the trait-based `has_section()` method.
-    fn is_applicable(&self, template: &valayam_models::templates::schema::VulnerabilityTemplate) -> bool {
+    fn is_applicable(
+        &self,
+        template: &valayam_models::templates::schema::VulnerabilityTemplate,
+    ) -> bool {
         // Normalise: "cors-audit.wasm" → "cors-audit", "cors_audit.wasm" → "cors-audit"
-        let normalised = self.name
+        let normalised = self
+            .name
             .trim_end_matches(".wasm")
             .replace('_', "-")
             .to_lowercase();
@@ -119,9 +126,27 @@ impl ScanPlugin for WasmPluginBridge {
     }
 
     async fn init(&self) -> Result<(), ScannerError> {
-        let f1 = extism::Function::new("dns_resolve", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::dns_resolve);
-        let f2 = extism::Function::new("kv_get", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_get);
-        let f3 = extism::Function::new("kv_set", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_set);
+        let f1 = extism::Function::new(
+            "dns_resolve",
+            [extism::ValType::I64],
+            [extism::ValType::I64],
+            extism::UserData::new(()),
+            crate::host_functions::dns_resolve,
+        );
+        let f2 = extism::Function::new(
+            "kv_get",
+            [extism::ValType::I64],
+            [extism::ValType::I64],
+            extism::UserData::new(()),
+            crate::host_functions::kv_get,
+        );
+        let f3 = extism::Function::new(
+            "kv_set",
+            [extism::ValType::I64],
+            [extism::ValType::I64],
+            extism::UserData::new(()),
+            crate::host_functions::kv_set,
+        );
 
         let manifest = self.build_manifest();
         if let Err(e) = extism::PluginBuilder::new(manifest)
@@ -129,9 +154,11 @@ impl ScanPlugin for WasmPluginBridge {
             .with_functions([f1, f2, f3])
             .build()
         {
-            return Err(ScannerError::PluginInitializationError(
-                format!("Failed to load Wasm via Extism '{}': {}", self.wasm_path.display(), e)
-            ));
+            return Err(ScannerError::PluginInitializationError(format!(
+                "Failed to load Wasm via Extism '{}': {}",
+                self.wasm_path.display(),
+                e
+            )));
         }
         Ok(())
     }
@@ -149,9 +176,27 @@ impl ScanPlugin for WasmPluginBridge {
             template_json, context_json
         );
 
-        let f1 = extism::Function::new("dns_resolve", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::dns_resolve);
-        let f2 = extism::Function::new("kv_get", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_get);
-        let f3 = extism::Function::new("kv_set", [extism::ValType::I64], [extism::ValType::I64], extism::UserData::new(()), crate::host_functions::kv_set);
+        let f1 = extism::Function::new(
+            "dns_resolve",
+            [extism::ValType::I64],
+            [extism::ValType::I64],
+            extism::UserData::new(()),
+            crate::host_functions::dns_resolve,
+        );
+        let f2 = extism::Function::new(
+            "kv_get",
+            [extism::ValType::I64],
+            [extism::ValType::I64],
+            extism::UserData::new(()),
+            crate::host_functions::kv_get,
+        );
+        let f3 = extism::Function::new(
+            "kv_set",
+            [extism::ValType::I64],
+            [extism::ValType::I64],
+            extism::UserData::new(()),
+            crate::host_functions::kv_set,
+        );
 
         let manifest = self.build_manifest();
         let mut plugin = match extism::PluginBuilder::new(manifest)
@@ -191,7 +236,7 @@ impl ScanPlugin for WasmPluginBridge {
                 } else {
                     err_str.clone()
                 };
-                
+
                 tracing::error!(plugin = %self.name, error = %clean_err, "wasm execution failed");
                 return PluginOutcome::Failed {
                     error: ScannerError::PluginExecutionError(clean_err),
@@ -208,7 +253,11 @@ impl ScanPlugin for WasmPluginBridge {
         match serde_json::from_str::<serde_json::Value>(result_str) {
             Ok(json) => {
                 tracing::debug!("WASM OUTPUT JSON: {}", result_str);
-                if json.get("matched").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if json
+                    .get("matched")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
                     let count = json.get("count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
                     if let Some(findings) = json.get("findings").and_then(|v| v.as_array()) {
@@ -217,8 +266,14 @@ impl ScanPlugin for WasmPluginBridge {
                                 Ok(f) => {
                                     let finding = FindingOwned {
                                         scan_id: ctx.scan_id,
-                                        template_id: format!("{}/{}", ctx.template.id, f.template_id),
-                                        template_name: format!("{} [{}]", ctx.template.info.name, f.template_name),
+                                        template_id: format!(
+                                            "{}/{}",
+                                            ctx.template.id, f.template_id
+                                        ),
+                                        template_name: format!(
+                                            "{} [{}]",
+                                            ctx.template.info.name, f.template_name
+                                        ),
                                         severity: f.severity.as_str().into(),
                                         target: f.target,
                                         matched_at: f.matched_at,
@@ -230,7 +285,11 @@ impl ScanPlugin for WasmPluginBridge {
                                     let _ = ctx.finding_tx.send(finding).await;
                                 }
                                 Err(e) => {
-                                    tracing::error!("Failed to deserialize finding {}: {:?}", e, finding_val);
+                                    tracing::error!(
+                                        "Failed to deserialize finding {}: {:?}",
+                                        e,
+                                        finding_val
+                                    );
                                 }
                             }
                         }

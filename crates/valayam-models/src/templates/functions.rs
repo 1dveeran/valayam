@@ -1,5 +1,5 @@
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use md5;
 use sha2::{Digest, Sha256};
 
@@ -42,8 +42,7 @@ fn helper_url_encode(input: &str) -> String {
 /// Percent-decode a URL-encoded string.
 fn helper_url_decode(input: &str) -> String {
     // Decode percent-encoded bytes back to UTF-8
-    let decoded_bytes: Vec<u8> = input
-        .as_bytes().to_vec();
+    let decoded_bytes: Vec<u8> = input.as_bytes().to_vec();
     // Use form_urlencoded to parse a single key which effectively decodes it
     url::form_urlencoded::parse(&decoded_bytes)
         .map(|(k, v)| {
@@ -112,10 +111,7 @@ mod tests {
 
     #[test]
     fn test_md5() {
-        assert_eq!(
-            helper_md5("hello"),
-            "5d41402abc4b2a76b9719d911017c592"
-        );
+        assert_eq!(helper_md5("hello"), "5d41402abc4b2a76b9719d911017c592");
     }
 
     #[test]

@@ -29,7 +29,11 @@ mod tests {
 
     #[test]
     fn test_graphql_serde_roundtrip() {
-        let tmpl = GraphqlAuditTemplate { target: "https://graphql.com".into(), introspection: true, mutate: true };
+        let tmpl = GraphqlAuditTemplate {
+            target: "https://graphql.com".into(),
+            introspection: true,
+            mutate: true,
+        };
         let json = serde_json::to_string(&tmpl).unwrap();
         let back: GraphqlAuditTemplate = serde_json::from_str(&json).unwrap();
         assert_eq!(back.target, "https://graphql.com");

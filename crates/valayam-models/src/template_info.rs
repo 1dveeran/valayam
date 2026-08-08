@@ -6,16 +6,16 @@ use std::fmt::Debug;
 pub struct TemplateInfo {
     pub name: String,
     pub severity: String,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
-    
+
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub compliance: HashMap<String, String>,
 }
@@ -35,10 +35,22 @@ pub trait TemplateMetadata: Debug + Sync + Send {
 }
 
 impl TemplateMetadata for TemplateInfo {
-    fn template_name(&self) -> &str { &self.name }
-    fn template_severity(&self) -> &str { &self.severity }
-    fn description(&self) -> Option<&str> { self.description.as_deref() }
-    fn author(&self) -> Option<&str> { self.author.as_deref() }
-    fn tags(&self) -> &[String] { &self.tags }
-    fn compliance(&self) -> &HashMap<String, String> { &self.compliance }
+    fn template_name(&self) -> &str {
+        &self.name
+    }
+    fn template_severity(&self) -> &str {
+        &self.severity
+    }
+    fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+    fn author(&self) -> Option<&str> {
+        self.author.as_deref()
+    }
+    fn tags(&self) -> &[String] {
+        &self.tags
+    }
+    fn compliance(&self) -> &HashMap<String, String> {
+        &self.compliance
+    }
 }

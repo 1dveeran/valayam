@@ -4,13 +4,13 @@ use super::schema::VulnerabilityTemplate;
 use crate::features::http_scan;
 use crate::network::http::StealthHttpClient;
 
+use std::fs;
+use std::path::Path;
 use valayam_engine::rate_limiter::RateLimiter;
 use valayam_engine::variables::build_initial_context;
+use valayam_models::error::ScannerError;
 use valayam_models::finding::FindingOwned;
 use valayam_models::TemplateMetadata;
-use valayam_models::error::ScannerError;
-use std::path::Path;
-use std::fs;
 
 /// Orchestrates the execution of a single template against a target.
 ///
@@ -53,9 +53,9 @@ pub async fn execute_template_inner(
             &mut variables,
         )
         .await;
-            if let Some(finding) = results.into_iter().next() {
-                return Some(finding);
-            }
+        if let Some(finding) = results.into_iter().next() {
+            return Some(finding);
+        }
     }
 
     // Phase 5: Script Execution & Fuzzing (Moved to Wasm plugin)
@@ -89,7 +89,7 @@ pub async fn execute_template_inner(
 
     // Phase 14: Browser Exploitation
     // Browser audit templates deferred to WASM plugin
-        let _ = template.browser_audit.is_empty();
+    let _ = template.browser_audit.is_empty();
 
     // Phase 15: Hardware & IoT Protocol Security (Moved to Wasm plugin)
 
@@ -169,9 +169,11 @@ impl TemplateLoader {
     }
 
     /// Recursively load all YAML templates from a directory path
-    pub async fn load_directory(path: impl AsRef<Path>) -> Result<Vec<VulnerabilityTemplate>, ScannerError> {
+    pub async fn load_directory(
+        path: impl AsRef<Path>,
+    ) -> Result<Vec<VulnerabilityTemplate>, ScannerError> {
         let path = path.as_ref().to_path_buf();
-        
+
         // Spawn blocking for file I/O and parsing
         tokio::task::spawn_blocking(move || {
             let mut templates = Vec::new();
@@ -186,13 +188,16 @@ impl TemplateLoader {
     pub fn load_file(path: impl AsRef<Path>) -> Result<VulnerabilityTemplate, ScannerError> {
         let path = path.as_ref();
         let content = fs::read_to_string(path).map_err(ScannerError::TemplateReadError)?;
-        
+
         let template: VulnerabilityTemplate = serde_yaml::from_str(&content)?;
-        
+
         Ok(template)
     }
 
-    fn load_dir_recursive(dir: &Path, templates: &mut Vec<VulnerabilityTemplate>) -> Result<(), ScannerError> {
+    fn load_dir_recursive(
+        dir: &Path,
+        templates: &mut Vec<VulnerabilityTemplate>,
+    ) -> Result<(), ScannerError> {
         if !dir.is_dir() {
             return Ok(());
         }

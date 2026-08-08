@@ -1,12 +1,12 @@
 pub mod agent_config;
 pub mod cli;
-pub mod orchestrator;
 pub mod config;
 pub mod notifications;
-pub mod reporting;
-pub mod state;
+pub mod orchestrator;
 pub mod plugin_cli;
+pub mod reporting;
 pub mod setup;
+pub mod state;
 // Telemetry moved to `valayam-telemetry` crate — see init_telemetry() call below.
 
 use clap::Parser;
@@ -15,7 +15,6 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-
 
 use setup::*;
 use valayam_engine::rate_limiter::RateLimiter;
@@ -32,33 +31,33 @@ fn print_banner() {
     println!("{}", banner.bright_cyan());
     println!(
         "{}",
-        "                    Modern Stealth Scanner v0.1.0\n"
-            .bright_black()
+        "                    Modern Stealth Scanner v0.1.0\n".bright_black()
     );
 }
 
 pub async fn run_cli() -> anyhow::Result<()> {
     let mut args = cli::Args::parse();
-    
+
     // Ensure target has a valid protocol to prevent URL parsing errors
     if !args.target.starts_with("http://") && !args.target.starts_with("https://") {
         args.target = format!("http://{}", args.target);
     }
-    
+
     let config = config::CliConfig::from_env();
     print_banner();
     // --- Telemetry setup (console + OTLP + optional file) ---
-    let console_level_str = config.valayam_log.clone()
-        .unwrap_or_else(|| {
-            if args.log_level.eq_ignore_ascii_case("info") {
-                "error".to_string()
-            } else {
-                args.log_level.clone()
-            }
-        });
-    let mut otlp_endpoint = config.otel_exporter_otlp_endpoint.clone()
+    let console_level_str = config.valayam_log.clone().unwrap_or_else(|| {
+        if args.log_level.eq_ignore_ascii_case("info") {
+            "error".to_string()
+        } else {
+            args.log_level.clone()
+        }
+    });
+    let mut otlp_endpoint = config
+        .otel_exporter_otlp_endpoint
+        .clone()
         .unwrap_or_else(|| "http://localhost:4317".to_string());
-        
+
     // ── Pre-flight OTLP Connectivity Check ──────────────────────────────
     let mut otlp_active = false;
     if let Ok(url) = reqwest::Url::parse(&otlp_endpoint) {
@@ -67,14 +66,19 @@ pub async fn run_cli() -> anyhow::Result<()> {
             let addr_str = format!("{}:{}", host, port);
             if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&addr_str) {
                 if let Some(addr) = addrs.next() {
-                    if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500)).is_ok() {
+                    if std::net::TcpStream::connect_timeout(
+                        &addr,
+                        std::time::Duration::from_millis(500),
+                    )
+                    .is_ok()
+                    {
                         otlp_active = true;
                     }
                 }
             }
         }
     }
-    
+
     if !otlp_active {
         otlp_endpoint = String::new(); // Disable OTLP to prevent spam
     }
@@ -97,7 +101,12 @@ pub async fn run_cli() -> anyhow::Result<()> {
         return Ok(());
     }
     // Handle control subcommand — early return
-    if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
+    if let Some(cli::Commands::Control {
+        action,
+        scan_id,
+        port,
+    }) = &args.command
+    {
         return handle_control_command(action, scan_id, port).await;
     }
     // Handle bundle subcommand — early return (air-gapped deployment)
@@ -113,12 +122,22 @@ pub async fn run_cli() -> anyhow::Result<()> {
     ensure_demo_template(&template_path);
 
     // ── Scan state channels ────────────────────────────────────────────────
-    let (state_tx, state_rx) = tokio::sync::watch::channel(valayam_engine::scan_state::ScanState::Running);
+    let (state_tx, state_rx) =
+        tokio::sync::watch::channel(valayam_engine::scan_state::ScanState::Running);
     let cancel_token = CancellationToken::new();
 
     // ── TLS config + Telemetry server ──────────────────────────────────────
-    let tls_config = load_tls_config(args.tls_cert.as_deref(), args.tls_key.as_deref(), args.tls_ca.as_deref())?;
-    spawn_telemetry_server(args.control_port, tls_config.clone(), state_tx.clone(), cancel_token.clone());
+    let tls_config = load_tls_config(
+        args.tls_cert.as_deref(),
+        args.tls_key.as_deref(),
+        args.tls_ca.as_deref(),
+    )?;
+    spawn_telemetry_server(
+        args.control_port,
+        tls_config.clone(),
+        state_tx.clone(),
+        cancel_token.clone(),
+    );
 
     // ── HTTP client + Proxy ────────────────────────────────────────────────
     let proxy_rotator = init_proxy_rotator(args.proxy_file.as_deref());
@@ -134,7 +153,11 @@ pub async fn run_cli() -> anyhow::Result<()> {
 
     // ── Rate limiter ───────────────────────────────────────────────────────
     let rate_limiter = args.rate_limit.map(|rps| {
-        println!("{} Rate limiting enabled: {} requests/second", "[+]".green().bold(), rps);
+        println!(
+            "{} Rate limiting enabled: {} requests/second",
+            "[+]".green().bold(),
+            rps
+        );
         Arc::new(RateLimiter::new_simple(rps))
     });
 
@@ -144,29 +167,50 @@ pub async fn run_cli() -> anyhow::Result<()> {
     // ── Template discovery ─────────────────────────────────────────────────
     let template_files = discover_templates(&template_path);
     if template_files.is_empty() {
-        println!("{} No valid YAML templates found in {}", "[!]".yellow().bold(), template_path);
+        println!(
+            "{} No valid YAML templates found in {}",
+            "[!]".yellow().bold(),
+            template_path
+        );
         return Ok(());
     }
 
     // ── Pre-flight OOB DNS Check ───────────────────────────────────────────
     let oob_dns_bind = valayam_oob::server::OobServer::config_from_env().dns_bind;
-    let oob_dns_active = if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&oob_dns_bind) {
-        if let Some(addr) = addrs.next() {
-            std::net::UdpSocket::bind(&addr).is_ok()
-        } else { false }
-    } else { false };
+    let oob_dns_active =
+        if let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(&oob_dns_bind) {
+            if let Some(addr) = addrs.next() {
+                std::net::UdpSocket::bind(&addr).is_ok()
+            } else {
+                false
+            }
+        } else {
+            false
+        };
 
     // ── Pre-flight Target Connectivity Check ───────────────────────────────
-    let target_online = match reqwest::Client::new().get(&args.target).timeout(std::time::Duration::from_secs(5)).send().await {
+    let target_online = match reqwest::Client::new()
+        .get(&args.target)
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+    {
         Ok(_) => true,
         Err(e) => {
-            println!("{} Target connectivity check failed: {}", "[-]".red().bold(), e);
+            println!(
+                "{} Target connectivity check failed: {}",
+                "[-]".red().bold(),
+                e
+            );
             false
         }
     };
 
     if !target_online {
-        println!("{} Scan aborted because target is unreachable.", "[-]".red().bold());
+        println!(
+            "{} Scan aborted because target is unreachable.",
+            "[-]".red().bold()
+        );
         return Ok(());
     }
 
@@ -193,7 +237,8 @@ pub async fn run_cli() -> anyhow::Result<()> {
             args.crawl_depth,
             rate_limiter.clone(),
             args.crawl_headers.as_deref(),
-        ).await;
+        )
+        .await;
         targets = discovered;
     }
 
@@ -208,7 +253,8 @@ pub async fn run_cli() -> anyhow::Result<()> {
         grpc_client,
         Some(state_rx),
         cancel_token,
-    ).await?;
+    )
+    .await?;
 
     // TelemetryGuard is dropped here → flushes + shuts down OTLP tracer provider
     drop(_telemetry);
@@ -224,17 +270,24 @@ fn spawn_telemetry_server(
 ) {
     tokio::spawn(async move {
         let port = control_port.unwrap_or(50051);
-        let addr = format!("127.0.0.1:{}", port).parse().expect("valid socket addr");
+        let addr = format!("127.0.0.1:{}", port)
+            .parse()
+            .expect("valid socket addr");
         if let Some(tls) = tls_config {
             if let Err(e) = valayam_api::start_telemetry_server_tls(
-                addr, Some(state_tx), Some(cancel_token), Some(tls),
-            ).await {
+                addr,
+                Some(state_tx),
+                Some(cancel_token),
+                Some(tls),
+            )
+            .await
+            {
                 tracing::error!("Telemetry/Control server (TLS) failed: {}", e);
             }
         } else {
-            if let Err(e) = valayam_api::start_telemetry_server(
-                addr, Some(state_tx), Some(cancel_token),
-            ).await {
+            if let Err(e) =
+                valayam_api::start_telemetry_server(addr, Some(state_tx), Some(cancel_token)).await
+            {
                 tracing::error!("Telemetry/Control server failed: {}", e);
             }
         }
@@ -248,7 +301,11 @@ async fn handle_plugin_command(action: &cli::PluginCommands) -> anyhow::Result<(
             crate::plugin_cli::package_plugin(dir, output.as_deref(), sign.as_deref())
                 .map_err(|e| anyhow::anyhow!("Failed to package plugin: {}", e))?;
         }
-        cli::PluginCommands::Init { name, lang, runtime } => {
+        cli::PluginCommands::Init {
+            name,
+            lang,
+            runtime,
+        } => {
             crate::plugin_cli::init_plugin(name, lang, runtime)
                 .map_err(|e| anyhow::anyhow!("Failed to init plugin: {}", e))?;
         }
@@ -257,11 +314,18 @@ async fn handle_plugin_command(action: &cli::PluginCommands) -> anyhow::Result<(
                 .map_err(|e| anyhow::anyhow!("Failed to generate plugin key: {}", e))?;
         }
         cli::PluginCommands::Install { name, url, pubkey } => {
-            crate::plugin_cli::install_plugin(name, url, pubkey.as_deref()).await
+            crate::plugin_cli::install_plugin(name, url, pubkey.as_deref())
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to install plugin: {}", e))?;
         }
-        cli::PluginCommands::Push { file, repo, tag, signature } => {
-            crate::plugin_cli::push_plugin(file, repo, tag, signature.as_deref()).await
+        cli::PluginCommands::Push {
+            file,
+            repo,
+            tag,
+            signature,
+        } => {
+            crate::plugin_cli::push_plugin(file, repo, tag, signature.as_deref())
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to push plugin to OCI registry: {}", e))?;
         }
         cli::PluginCommands::Uninstall { name } => {
@@ -277,7 +341,11 @@ async fn handle_plugin_command(action: &cli::PluginCommands) -> anyhow::Result<(
 }
 
 /// Handle the control subcommand (pause/resume/cancel).
-async fn handle_control_command(action: &str, scan_id: &Option<String>, port: &u16) -> anyhow::Result<()> {
+async fn handle_control_command(
+    action: &str,
+    scan_id: &Option<String>,
+    port: &u16,
+) -> anyhow::Result<()> {
     use valayam_engine::rpc::scanner_client::ScannerClient;
     use valayam_engine::rpc::ControlRequest;
 
@@ -294,34 +362,31 @@ async fn handle_control_command(action: &str, scan_id: &Option<String>, port: &u
     });
 
     match action {
-        "pause" => {
-            match client.pause_scan(req).await {
-                Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
-                Err(e) => tracing::error!("Failed to pause scan: {}", e),
-            }
-        }
-        "resume" => {
-            match client.resume_scan(req).await {
-                Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
-                Err(e) => tracing::error!("Failed to resume scan: {}", e),
-            }
-        }
-        "cancel" | "stop" => {
-            match client.cancel_scan(req).await {
-                Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
-                Err(e) => tracing::error!("Failed to cancel scan: {}", e),
-            }
-        }
-        _ => tracing::error!("Unknown control action '{}'. Valid actions: pause, resume, cancel", action),
+        "pause" => match client.pause_scan(req).await {
+            Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+            Err(e) => tracing::error!("Failed to pause scan: {}", e),
+        },
+        "resume" => match client.resume_scan(req).await {
+            Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+            Err(e) => tracing::error!("Failed to resume scan: {}", e),
+        },
+        "cancel" | "stop" => match client.cancel_scan(req).await {
+            Ok(resp) => println!("{} {}", "[+]".green().bold(), resp.into_inner().message),
+            Err(e) => tracing::error!("Failed to cancel scan: {}", e),
+        },
+        _ => tracing::error!(
+            "Unknown control action '{}'. Valid actions: pause, resume, cancel",
+            action
+        ),
     }
     Ok(())
 }
 
 /// Handle the bundle subcommand (create/verify) for air-gapped deployments.
 async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<()> {
-    use std::fs;
-    use sha2::{Digest, Sha256};
     use serde::{Deserialize, Serialize};
+    use sha2::{Digest, Sha256};
+    use std::fs;
 
     #[derive(Serialize, Deserialize)]
     struct BundleManifest {
@@ -345,8 +410,18 @@ async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<(
     }
 
     match action {
-        cli::BundleCommands::Create { plugins, templates, pubkey, output } => {
-            tracing::info!("Creating air-gapped bundle from {} + {} → {}", plugins, templates, output);
+        cli::BundleCommands::Create {
+            plugins,
+            templates,
+            pubkey,
+            output,
+        } => {
+            tracing::info!(
+                "Creating air-gapped bundle from {} + {} → {}",
+                plugins,
+                templates,
+                output
+            );
 
             let out_dir = std::path::Path::new(&output);
             fs::create_dir_all(out_dir.join("plugins"))?;
@@ -380,11 +455,17 @@ async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<(
                         if let Ok(mut yaml_file) = archive.by_name("plugin.yaml") {
                             let mut yaml_content = String::new();
                             yaml_file.read_to_string(&mut yaml_content)?;
-                            if let Ok(m) = serde_yaml::from_str::<valayam_engine::vpa::PluginManifest>(&yaml_content) {
+                            if let Ok(m) = serde_yaml::from_str::<valayam_engine::vpa::PluginManifest>(
+                                &yaml_content,
+                            ) {
                                 version = m.version;
                             }
                         }
-                        manifest.plugins.push(PluginEntry { name: name.clone(), version, sha256: hash });
+                        manifest.plugins.push(PluginEntry {
+                            name: name.clone(),
+                            version,
+                            sha256: hash,
+                        });
                         println!("  {} plugin: {}", "[+]".green().bold(), name);
                     }
                 }
@@ -402,7 +483,10 @@ async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<(
                         fs::copy(&path, &dest)?;
                         let bytes = fs::read(&path)?;
                         let hash = hex::encode(Sha256::digest(&bytes));
-                        manifest.templates.push(TemplateEntry { name: name.clone(), sha256: hash });
+                        manifest.templates.push(TemplateEntry {
+                            name: name.clone(),
+                            sha256: hash,
+                        });
                         println!("  {} template: {}", "[+]".green().bold(), name);
                     }
                 }
@@ -423,7 +507,11 @@ async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<(
             fs::write(out_dir.join("manifest.json"), manifest_json)?;
 
             println!("{} Bundle created at: {}", "[+]".green().bold(), output);
-            println!("  plugins: {}, templates: {}", manifest.plugins.len(), manifest.templates.len());
+            println!(
+                "  plugins: {}, templates: {}",
+                manifest.plugins.len(),
+                manifest.templates.len()
+            );
         }
         cli::BundleCommands::Verify { bundle } => {
             tracing::info!("Verifying bundle: {}", bundle);
@@ -447,10 +535,21 @@ async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<(
                     let bytes = fs::read(&path)?;
                     let hash = hex::encode(Sha256::digest(&bytes));
                     if hash == p.sha256 {
-                        println!("  {} plugin {} (v{})", "[+]".green().bold(), p.name, p.version);
+                        println!(
+                            "  {} plugin {} (v{})",
+                            "[+]".green().bold(),
+                            p.name,
+                            p.version
+                        );
                         ok += 1;
                     } else {
-                        println!("  {} plugin {} hash mismatch (expected {} got {})", "[✗]".red().bold(), p.name, p.sha256, hash);
+                        println!(
+                            "  {} plugin {} hash mismatch (expected {} got {})",
+                            "[✗]".red().bold(),
+                            p.name,
+                            p.sha256,
+                            hash
+                        );
                         failed += 1;
                     }
                 } else {
@@ -490,7 +589,10 @@ async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<(
 
             println!("\nSummary: {} verified, {} failed", ok, failed);
             if failed > 0 {
-                anyhow::bail!("Bundle verification failed: {} artifact(s) mismatched or missing", failed);
+                anyhow::bail!(
+                    "Bundle verification failed: {} artifact(s) mismatched or missing",
+                    failed
+                );
             }
         }
     }
@@ -511,7 +613,11 @@ async fn handle_template_command(action: &cli::TemplateCommands) -> anyhow::Resu
 
     match action {
         cli::TemplateCommands::Push { path, prefix } => {
-            tracing::info!("Pushing templates from {} to storage backend (prefix: {})", path, prefix);
+            tracing::info!(
+                "Pushing templates from {} to storage backend (prefix: {})",
+                path,
+                prefix
+            );
 
             let src_path = Path::new(&path);
             if !src_path.exists() {
@@ -548,7 +654,11 @@ async fn handle_template_command(action: &cli::TemplateCommands) -> anyhow::Resu
                         if let Some(ext) = entry_path.extension().and_then(|s| s.to_str()) {
                             if ext == "yaml" || ext == "yml" {
                                 let rel_path = entry_path.strip_prefix(src_path)?;
-                                let key = format!("{}{}", norm_prefix, rel_path.to_string_lossy().replace('\\', "/"));
+                                let key = format!(
+                                    "{}{}",
+                                    norm_prefix,
+                                    rel_path.to_string_lossy().replace('\\', "/")
+                                );
                                 let bytes = fs::read(entry_path)?;
                                 template_store.put(&key, &bytes).await?;
                                 println!("{} Pushed template: {}", "[+]".green().bold(), key);
@@ -561,7 +671,11 @@ async fn handle_template_command(action: &cli::TemplateCommands) -> anyhow::Resu
             println!("{} Pushed {} template(s)", "[+]".green().bold(), pushed);
         }
         cli::TemplateCommands::Pull { output, prefix } => {
-            tracing::info!("Pulling templates from storage backend (prefix: {}) to {}", prefix, output);
+            tracing::info!(
+                "Pulling templates from storage backend (prefix: {}) to {}",
+                prefix,
+                output
+            );
 
             let out_path = Path::new(&output);
             fs::create_dir_all(out_path)?;
@@ -587,7 +701,10 @@ async fn handle_template_command(action: &cli::TemplateCommands) -> anyhow::Resu
             println!("{} Pulled {} template(s)", "[+]".green().bold(), pulled);
         }
         cli::TemplateCommands::List { prefix } => {
-            tracing::info!("Listing templates from storage backend (prefix: {})", prefix);
+            tracing::info!(
+                "Listing templates from storage backend (prefix: {})",
+                prefix
+            );
 
             let keys = template_store.list(&prefix).await?;
             if keys.is_empty() {
@@ -609,16 +726,26 @@ async fn handle_template_command(action: &cli::TemplateCommands) -> anyhow::Resu
 }
 
 /// Connect to a remote gRPC worker node.
-async fn connect_worker(worker_url: Option<&str>) -> Option<valayam_core::rpc::scanner_client::ScannerClient<tonic::transport::Channel>> {
+async fn connect_worker(
+    worker_url: Option<&str>,
+) -> Option<valayam_core::rpc::scanner_client::ScannerClient<tonic::transport::Channel>> {
     use valayam_core::rpc::scanner_client::ScannerClient;
     match worker_url {
         Some(url) => match ScannerClient::connect(url.to_string()).await {
             Ok(client) => {
-                println!("{} Connected to Valayam worker node at {}", "[+]".green().bold(), url);
+                println!(
+                    "{} Connected to Valayam worker node at {}",
+                    "[+]".green().bold(),
+                    url
+                );
                 Some(client)
             }
             Err(e) => {
-                eprintln!("{} Failed to connect to Valayam worker node: {}", "[✗]".red().bold(), e);
+                eprintln!(
+                    "{} Failed to connect to Valayam worker node: {}",
+                    "[✗]".red().bold(),
+                    e
+                );
                 None
             }
         },

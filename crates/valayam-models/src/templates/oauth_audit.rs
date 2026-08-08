@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::templates::matcher::ResponseMatcher;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OauthAuditTemplate {

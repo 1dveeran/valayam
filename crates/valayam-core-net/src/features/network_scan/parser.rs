@@ -4,7 +4,7 @@ use std::collections::HashSet;
 /// Returns a sorted deduplicated list of u16 ports.
 pub fn parse_port_ranges(ports_str: &str) -> Result<Vec<u16>, String> {
     let mut ports = HashSet::new();
-    
+
     for part in ports_str.split(',') {
         let part = part.trim();
         if part.is_empty() {
@@ -16,26 +16,37 @@ pub fn parse_port_ranges(ports_str: &str) -> Result<Vec<u16>, String> {
             if bounds.len() != 2 {
                 return Err(format!("Invalid port range format: {}", part));
             }
-            
-            let start = bounds[0].trim().parse::<u16>().map_err(|_| format!("Invalid start port in range: {}", bounds[0]))?;
-            let end = bounds[1].trim().parse::<u16>().map_err(|_| format!("Invalid end port in range: {}", bounds[1]))?;
-            
+
+            let start = bounds[0]
+                .trim()
+                .parse::<u16>()
+                .map_err(|_| format!("Invalid start port in range: {}", bounds[0]))?;
+            let end = bounds[1]
+                .trim()
+                .parse::<u16>()
+                .map_err(|_| format!("Invalid end port in range: {}", bounds[1]))?;
+
             if start > end {
-                return Err(format!("Start port {} is greater than end port {}", start, end));
+                return Err(format!(
+                    "Start port {} is greater than end port {}",
+                    start, end
+                ));
             }
-            
+
             for p in start..=end {
                 ports.insert(p);
             }
         } else {
-            let port = part.parse::<u16>().map_err(|_| format!("Invalid port: {}", part))?;
+            let port = part
+                .parse::<u16>()
+                .map_err(|_| format!("Invalid port: {}", part))?;
             ports.insert(port);
         }
     }
-    
+
     let mut sorted_ports: Vec<u16> = ports.into_iter().collect();
     sorted_ports.sort_unstable();
-    
+
     Ok(sorted_ports)
 }
 
@@ -50,17 +61,26 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_ports() {
-        assert_eq!(parse_port_ranges("80,443, 8080").unwrap(), vec![80, 443, 8080]);
+        assert_eq!(
+            parse_port_ranges("80,443, 8080").unwrap(),
+            vec![80, 443, 8080]
+        );
     }
 
     #[test]
     fn test_parse_port_ranges() {
-        assert_eq!(parse_port_ranges("100-103").unwrap(), vec![100, 101, 102, 103]);
+        assert_eq!(
+            parse_port_ranges("100-103").unwrap(),
+            vec![100, 101, 102, 103]
+        );
     }
 
     #[test]
     fn test_parse_mixed_ports_and_ranges() {
-        assert_eq!(parse_port_ranges("22, 80, 100-102").unwrap(), vec![22, 80, 100, 101, 102]);
+        assert_eq!(
+            parse_port_ranges("22, 80, 100-102").unwrap(),
+            vec![22, 80, 100, 101, 102]
+        );
     }
 
     #[test]

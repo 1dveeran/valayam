@@ -4,22 +4,16 @@
 //! discover services and methods at runtime. Uses the compiled file descriptor
 //! set from `valayam-proto`.
 
-use valayam_proto::reflection::v1::{
-    server_reflection_server::ServerReflection,
-    ServerReflectionRequest, ServerReflectionResponse,
-    server_reflection_request::MessageRequest,
-    server_reflection_response::MessageResponse,
-    ListServicesResponse, ServiceResponse,
-    FileDescriptorResponse,
-};
-use tonic::{Request, Response, Status, Streaming};
 use tokio_stream::StreamExt;
+use tonic::{Request, Response, Status, Streaming};
+use valayam_proto::reflection::v1::{
+    server_reflection_request::MessageRequest, server_reflection_response::MessageResponse,
+    server_reflection_server::ServerReflection, FileDescriptorResponse, ListServicesResponse,
+    ServerReflectionRequest, ServerReflectionResponse, ServiceResponse,
+};
 
 /// Registered gRPC service names in this server.
-const SERVICES: &[&str] = &[
-    "valayam.Scanner",
-    "grpc.reflection.v1.ServerReflection",
-];
+const SERVICES: &[&str] = &["valayam.Scanner", "grpc.reflection.v1.ServerReflection"];
 
 /// Lightweight reflection service backed by `valayam_proto::FILE_DESCRIPTOR_SET`.
 #[derive(Clone, Default)]
@@ -51,26 +45,28 @@ impl ServerReflection for ValayamReflection {
                             original_request: Some(orig),
                             message_response: Some(MessageResponse::FileDescriptorResponse(
                                 FileDescriptorResponse {
-                                    file_descriptor_proto: vec![valayam_proto::FILE_DESCRIPTOR_SET.to_vec()],
+                                    file_descriptor_proto: vec![
+                                        valayam_proto::FILE_DESCRIPTOR_SET.to_vec()
+                                    ],
                                 },
                             )),
                         }
                     }
                     // No message_request → return list of services (grpcurl discovery).
-                    None => {
-                        ServerReflectionResponse {
-                            valid_host: host,
-                            original_request: Some(orig),
-                            message_response: Some(MessageResponse::ListServicesResponse(
-                                ListServicesResponse {
-                                    service: SERVICES
-                                        .iter()
-                                        .map(|s| ServiceResponse { name: s.to_string() })
-                                        .collect(),
-                                },
-                            )),
-                        }
-                    }
+                    None => ServerReflectionResponse {
+                        valid_host: host,
+                        original_request: Some(orig),
+                        message_response: Some(MessageResponse::ListServicesResponse(
+                            ListServicesResponse {
+                                service: SERVICES
+                                    .iter()
+                                    .map(|s| ServiceResponse {
+                                        name: s.to_string(),
+                                    })
+                                    .collect(),
+                            },
+                        )),
+                    },
                 };
                 if tx.send(Ok(resp)).await.is_err() {
                     break;
@@ -78,6 +74,8 @@ impl ServerReflection for ValayamReflection {
             }
         });
 
-        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(rx)))
+        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(
+            rx,
+        )))
     }
 }

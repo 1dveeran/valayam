@@ -15,11 +15,16 @@ impl RegexMatcher {
             .iter()
             .filter_map(|p| {
                 regex::bytes::Regex::new(p)
-                    .inspect_err(|e| tracing::warn!(pattern = %p, error = %e, "invalid regex, skipping"))
+                    .inspect_err(
+                        |e| tracing::warn!(pattern = %p, error = %e, "invalid regex, skipping"),
+                    )
                     .ok()
             })
             .collect();
-        Self { patterns: compiled, label: "regex".to_string() }
+        Self {
+            patterns: compiled,
+            label: "regex".to_string(),
+        }
     }
 }
 
@@ -27,7 +32,9 @@ impl Matcher for RegexMatcher {
     fn evaluate(&self, buf: &[u8]) -> bool {
         self.patterns.iter().any(|re| re.is_match(buf))
     }
-    fn name(&self) -> &str { &self.label }
+    fn name(&self) -> &str {
+        &self.label
+    }
 }
 
 /// HTTP status code matcher.
@@ -37,14 +44,22 @@ pub struct StatusMatcher {
 
 impl StatusMatcher {
     /// Documentation for this item.
-    pub fn new(statuses: Vec<u16>) -> Self { Self { allowed: statuses } }
+    pub fn new(statuses: Vec<u16>) -> Self {
+        Self { allowed: statuses }
+    }
     /// Documentation for this item.
-    pub fn matches_status(&self, status: u16) -> bool { self.allowed.contains(&status) }
+    pub fn matches_status(&self, status: u16) -> bool {
+        self.allowed.contains(&status)
+    }
 }
 
 impl Matcher for StatusMatcher {
-    fn evaluate(&self, _buf: &[u8]) -> bool { false } // Use matches_status() directly
-    fn name(&self) -> &str { "status" }
+    fn evaluate(&self, _buf: &[u8]) -> bool {
+        false
+    } // Use matches_status() directly
+    fn name(&self) -> &str {
+        "status"
+    }
 }
 
 /// Fast byte-level substring search.
@@ -55,15 +70,21 @@ pub struct WordMatcher {
 impl WordMatcher {
     /// Documentation for this item.
     pub fn new(words: Vec<String>) -> Self {
-        Self { words: words.into_iter().map(|w| w.into_bytes()).collect() }
+        Self {
+            words: words.into_iter().map(|w| w.into_bytes()).collect(),
+        }
     }
 }
 
 impl Matcher for WordMatcher {
     fn evaluate(&self, buf: &[u8]) -> bool {
-        self.words.iter().any(|w| buf.windows(w.len()).any(|win| win == w.as_slice()))
+        self.words
+            .iter()
+            .any(|w| buf.windows(w.len()).any(|win| win == w.as_slice()))
     }
-    fn name(&self) -> &str { "word" }
+    fn name(&self) -> &str {
+        "word"
+    }
 }
 
 /// AND/OR combinator.
@@ -84,7 +105,10 @@ pub struct CompositeMatcher {
 impl CompositeMatcher {
     /// Documentation for this item.
     pub fn new(matchers: Vec<Box<dyn Matcher>>, condition: MatchCondition) -> Self {
-        Self { matchers, condition }
+        Self {
+            matchers,
+            condition,
+        }
     }
 }
 
@@ -92,16 +116,18 @@ impl Matcher for CompositeMatcher {
     fn evaluate(&self, buf: &[u8]) -> bool {
         match self.condition {
             MatchCondition::And => self.matchers.iter().all(|m| m.evaluate(buf)),
-            MatchCondition::Or  => self.matchers.iter().any(|m| m.evaluate(buf)),
+            MatchCondition::Or => self.matchers.iter().any(|m| m.evaluate(buf)),
         }
     }
-    fn name(&self) -> &str { "composite" }
+    fn name(&self) -> &str {
+        "composite"
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::traits::Matcher as MatcherTrait;
+    use super::*;
 
     // ── RegexMatcher tests ─────────────────────────────────────────────────
 
@@ -128,10 +154,7 @@ mod tests {
 
     #[test]
     fn test_regex_matcher_mixed_valid_invalid() {
-        let matcher = RegexMatcher::new(&[
-            r"[invalid".to_string(),
-            "valid".to_string(),
-        ]);
+        let matcher = RegexMatcher::new(&[r"[invalid".to_string(), "valid".to_string()]);
         assert!(matcher.evaluate(b"this is valid"));
         assert!(!matcher.evaluate(b"nothing here"));
     }
@@ -255,10 +278,8 @@ mod tests {
     fn test_composite_and_mixed_types() {
         let word_matcher: Box<dyn Matcher> = Box::new(WordMatcher::new(vec!["secret".to_string()]));
         let regex_matcher: Box<dyn Matcher> = Box::new(RegexMatcher::new(&["key\\d+".to_string()]));
-        let composite = CompositeMatcher::new(
-            vec![word_matcher, regex_matcher],
-            MatchCondition::And,
-        );
+        let composite =
+            CompositeMatcher::new(vec![word_matcher, regex_matcher], MatchCondition::And);
         assert!(composite.evaluate(b"contains secret and key123"));
         assert!(!composite.evaluate(b"contains secret only")); // no key\d+ match
         assert!(!composite.evaluate(b"key456 without anything")); // no "secret" match
@@ -277,10 +298,7 @@ mod tests {
 
     #[test]
     fn test_composite_name() {
-        let composite = CompositeMatcher::new(
-            vec![regex_matcher("test")],
-            MatchCondition::And,
-        );
+        let composite = CompositeMatcher::new(vec![regex_matcher("test")], MatchCondition::And);
         assert_eq!(composite.name(), "composite");
     }
 
@@ -305,7 +323,10 @@ mod tests {
         let word = WordMatcher::new(vec!["simple".to_string()]);
         let regex = RegexMatcher::new(&["simple".to_string()]);
 
-        assert_eq!(word.evaluate(b"simple text"), regex.evaluate(b"simple text"));
+        assert_eq!(
+            word.evaluate(b"simple text"),
+            regex.evaluate(b"simple text")
+        );
         assert_eq!(word.evaluate(b"no match"), regex.evaluate(b"no match"));
     }
 }

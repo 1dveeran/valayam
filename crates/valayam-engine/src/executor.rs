@@ -5,10 +5,10 @@
 use crate::rate_limiter::RateLimiter;
 use crate::registry::PluginRegistry;
 use crate::traits::{FindingOwned, PluginMetrics};
-use valayam_models::templates::schema::VulnerabilityTemplate;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use valayam_models::templates::schema::VulnerabilityTemplate;
 
 use crate::scan_state::ScanState;
 
@@ -30,7 +30,13 @@ impl ScanExecutor {
         rate_limiter: Option<Arc<RateLimiter>>,
         cancellation: CancellationToken,
     ) -> Self {
-        Self { finding_tx, registry, rate_limiter, cancellation, state_rx: None }
+        Self {
+            finding_tx,
+            registry,
+            rate_limiter,
+            cancellation,
+            state_rx: None,
+        }
     }
 
     /// Documentation for this item.
@@ -54,13 +60,15 @@ impl ScanExecutor {
             }
         }
 
-        self.registry.execute_template(
-            target,
-            template,
-            &self.finding_tx,
-            self.rate_limiter.as_deref(),
-            self.cancellation.clone(),
-        ).await
+        self.registry
+            .execute_template(
+                target,
+                template,
+                &self.finding_tx,
+                self.rate_limiter.as_deref(),
+                self.cancellation.clone(),
+            )
+            .await
     }
 
     /// Access the underlying registry (for testing/inspection).
@@ -87,32 +95,48 @@ impl ScanExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::{ScanPlugin, PluginOutcome, ScanContext};
     use crate::registry::PluginRegistry;
+    use crate::traits::{PluginOutcome, ScanContext, ScanPlugin};
     use valayam_models::templates::schema::{TemplateInfo, VulnerabilityTemplate};
 
     struct MockPlugin;
 
     #[async_trait::async_trait]
     impl ScanPlugin for MockPlugin {
-        fn name(&self) -> &str { "mock" }
-        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool { true }
-        fn validate_config(&self, _: &valayam_models::templates::schema::VulnerabilityTemplate) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
-        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> { Ok(()) }
+        fn name(&self) -> &str {
+            "mock"
+        }
+        fn is_applicable(&self, _: &VulnerabilityTemplate) -> bool {
+            true
+        }
+        fn validate_config(
+            &self,
+            _: &valayam_models::templates::schema::VulnerabilityTemplate,
+        ) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn init(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<(), valayam_models::error::ScannerError> {
+            Ok(())
+        }
         async fn execute(&self, ctx: &ScanContext) -> PluginOutcome {
-            let _ = ctx.finding_tx.send(FindingOwned {
-            scan_id: uuid::Uuid::default(),
-                template_id: "mock-001".into(),
-                template_name: "Mock".into(),
-                severity: "info".into(),
-                target: ctx.target.clone(),
-                matched_at: "test".into(),
-                description: None,
-                solution: None,
-                extracted_data: None,
-                metadata: Default::default(),
-            }).await;
+            let _ = ctx
+                .finding_tx
+                .send(FindingOwned {
+                    scan_id: uuid::Uuid::default(),
+                    template_id: "mock-001".into(),
+                    template_name: "Mock".into(),
+                    severity: "info".into(),
+                    target: ctx.target.clone(),
+                    matched_at: "test".into(),
+                    description: None,
+                    solution: None,
+                    extracted_data: None,
+                    metadata: Default::default(),
+                })
+                .await;
             PluginOutcome::Matched { count: 1 }
         }
     }
@@ -165,10 +189,15 @@ mod tests {
         let cancel = CancellationToken::new();
         let executor = ScanExecutor::new(tx.clone(), registry.clone(), None, cancel.clone());
 
-        let metrics = executor.execute("https://example.com", dummy_template()).await;
+        let metrics = executor
+            .execute("https://example.com", dummy_template())
+            .await;
         assert_eq!(metrics.len(), 1);
         assert_eq!(metrics[0].plugin_name, "mock");
-        assert_eq!(metrics[0].outcome, crate::traits::PluginOutcomeKind::Matched);
+        assert_eq!(
+            metrics[0].outcome,
+            crate::traits::PluginOutcomeKind::Matched
+        );
     }
 
     #[tokio::test]
@@ -184,7 +213,9 @@ mod tests {
         assert!(executor.cancellation_token().is_cancelled());
 
         // Template still executes (cancellation is per-plugin, checked by individual plugins)
-        let metrics = executor.execute("https://example.com", dummy_template()).await;
+        let metrics = executor
+            .execute("https://example.com", dummy_template())
+            .await;
         assert_eq!(metrics.len(), 1);
     }
 
@@ -196,7 +227,9 @@ mod tests {
         let cancel = CancellationToken::new();
         let executor = ScanExecutor::new(tx.clone(), registry.clone(), None, cancel);
 
-        executor.execute("https://example.com", dummy_template()).await;
+        executor
+            .execute("https://example.com", dummy_template())
+            .await;
         let received = rx.try_recv();
         assert!(received.is_ok());
         let finding = received.unwrap();

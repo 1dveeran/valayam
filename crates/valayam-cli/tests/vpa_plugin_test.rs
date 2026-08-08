@@ -27,7 +27,7 @@ entrypoint: "run.bat"
 
     // 3. Package the plugin into a .vpa using the CLI
     let vpa_output = temp_dir.join("mock.vpa");
-    
+
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_valayam-cli"))
         .arg("plugin")
         .arg("package")
@@ -36,7 +36,7 @@ entrypoint: "run.bat"
         .arg(vpa_output.to_str().unwrap())
         .status()
         .expect("Failed to execute valayam-cli");
-        
+
     assert!(status.success(), "Packaging failed with status: {}", status);
 
     assert!(vpa_output.exists(), "VPA file was not created");
@@ -48,10 +48,16 @@ entrypoint: "run.bat"
 
     // 5. Initialize the PluginRegistry and verify it discovers and extracts the VPA
     let registry = PluginRegistry::new();
-    registry.load_external_plugins(&plugins_dir).expect("Registry should load VPA successfully");
+    registry
+        .load_external_plugins(&plugins_dir)
+        .expect("Registry should load VPA successfully");
 
     // We expect exactly 1 plugin to be loaded
-    assert_eq!(registry.len(), 1, "Expected exactly 1 plugin to be loaded from the VPA");
+    assert_eq!(
+        registry.len(),
+        1,
+        "Expected exactly 1 plugin to be loaded from the VPA"
+    );
 
     // We cannot fully test the gRPC lifecycle of a mock bat file in a simple test without hanging,
     // so we just verify that it parsed the manifest correctly and registered it.

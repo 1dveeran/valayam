@@ -38,25 +38,20 @@ async fn test_scan_pipeline_basic() -> Result<(), ScannerError> {
         plugin_allow_host: vec![],
         command: None,
     };
-    
+
     assert_eq!(args.target, mock_url);
-    
+
     // We don't need a real executor for this test if we just test args parsing.
     // However, to actually test scanning, we need a template and an executor.
-    use valayam_engine::registry::PluginRegistry;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
-    
+    use valayam_engine::registry::PluginRegistry;
+
     let (tx, _rx) = mpsc::channel(100);
     let registry = std::sync::Arc::new(PluginRegistry::new());
-    
-    let executor = ScanExecutor::new(
-        tx,
-        registry,
-        None,
-        CancellationToken::new(),
-    );
-    
+
+    let executor = ScanExecutor::new(tx, registry, None, CancellationToken::new());
+
     // We need a dummy template to execute
     let mut template_inner = valayam_models::templates::schema::VulnerabilityTemplate::empty();
     template_inner.id = "test-template".into();
@@ -67,4 +62,3 @@ async fn test_scan_pipeline_basic() -> Result<(), ScannerError> {
 
     Ok(())
 }
-

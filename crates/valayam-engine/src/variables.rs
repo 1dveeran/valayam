@@ -15,7 +15,10 @@ use valayam_models::error::ScannerError;
 /// Helper function evaluation (e.g., `{{base64(...)}}`) is handled
 /// separately by the `features::helpers` module and called after
 /// variable resolution.
-pub fn resolve_variables(template_str: &str, context: &HashMap<String, String>) -> Result<String, ScannerError> {
+pub fn resolve_variables(
+    template_str: &str,
+    context: &HashMap<String, String>,
+) -> Result<String, ScannerError> {
     let mut visited = HashSet::new();
     resolve_variables_with_detection(template_str, context, &mut visited)
 }
@@ -38,7 +41,7 @@ fn resolve_variables_with_detection(
 
         if let Some(end_idx) = after_start.find("}}") {
             let var_name = &after_start[..end_idx];
-            
+
             if !is_valid_var_name(var_name) {
                 // If it's not a valid variable name, leave it as is
                 result.push_str("{{");
@@ -81,11 +84,16 @@ fn is_valid_var_name(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    let first = s.chars().next().expect("s is non-empty after is_empty check");
+    let first = s
+        .chars()
+        .next()
+        .expect("s is non-empty after is_empty check");
     if !first.is_ascii_alphabetic() && first != '_' {
         return false;
     }
-    s.chars().skip(1).all(|c| c.is_ascii_alphanumeric() || c == '_')
+    s.chars()
+        .skip(1)
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Builds the initial variable context from the target URL.
@@ -146,7 +154,7 @@ fn resolve_variables_advanced_with_detection(
 
         if let Some(end_idx) = after_start.find("}}") {
             let inner = &after_start[..end_idx];
-            
+
             // Parse var_name and optional modifiers
             let (var_name, modifiers) = if let Some(pipe_idx) = inner.find('|') {
                 (&inner[..pipe_idx], Some(&inner[pipe_idx + 1..]))
@@ -288,7 +296,8 @@ mod tests {
         assert_eq!(result, "Hello John!");
 
         // Test default when variable missing
-        let result = resolve_variables_advanced("Hello {{missing|default:\"Guest\"}}!", &ctx).unwrap();
+        let result =
+            resolve_variables_advanced("Hello {{missing|default:\"Guest\"}}!", &ctx).unwrap();
         assert_eq!(result, "Hello Guest!");
 
         // Test modifiers
@@ -314,7 +323,9 @@ mod tests {
 
     #[test]
     fn test_extract_placeholder_names() {
-        let names = extract_placeholder_names("Bearer {{auth_token}} on {{BaseURL}} with {{timeout|default:\"30s\"}}");
+        let names = extract_placeholder_names(
+            "Bearer {{auth_token}} on {{BaseURL}} with {{timeout|default:\"30s\"}}",
+        );
         assert!(names.contains(&"auth_token".to_string()));
         assert!(names.contains(&"BaseURL".to_string()));
         // {{timeout|default:"30s"}} uses advanced syntax; basic extraction omits it
@@ -407,7 +418,10 @@ mod tests {
     #[test]
     fn test_advanced_no_placeholders() {
         let ctx = HashMap::new();
-        assert_eq!(resolve_variables_advanced("simple text", &ctx).unwrap(), "simple text");
+        assert_eq!(
+            resolve_variables_advanced("simple text", &ctx).unwrap(),
+            "simple text"
+        );
     }
 
     #[test]
@@ -422,9 +436,18 @@ mod tests {
     fn test_advanced_modifier_on_empty_string() {
         let mut ctx = HashMap::new();
         ctx.insert("empty".to_string(), "".to_string());
-        assert_eq!(resolve_variables_advanced("{{empty|len}}", &ctx).unwrap(), "0");
-        assert_eq!(resolve_variables_advanced("{{empty|upper}}", &ctx).unwrap(), "");
-        assert_eq!(resolve_variables_advanced("{{empty|reverse}}", &ctx).unwrap(), "");
+        assert_eq!(
+            resolve_variables_advanced("{{empty|len}}", &ctx).unwrap(),
+            "0"
+        );
+        assert_eq!(
+            resolve_variables_advanced("{{empty|upper}}", &ctx).unwrap(),
+            ""
+        );
+        assert_eq!(
+            resolve_variables_advanced("{{empty|reverse}}", &ctx).unwrap(),
+            ""
+        );
     }
 
     #[test]
@@ -453,10 +476,8 @@ mod tests {
     #[test]
     fn test_advanced_default_with_special_chars() {
         let ctx = HashMap::new();
-        let result = resolve_variables_advanced(
-            "{{missing|default:\"hello world! @#$%\"}}",
-            &ctx,
-        ).unwrap();
+        let result =
+            resolve_variables_advanced("{{missing|default:\"hello world! @#$%\"}}", &ctx).unwrap();
         assert_eq!(result, "hello world! @#$%");
     }
 
@@ -468,7 +489,8 @@ mod tests {
         let result = resolve_variables_advanced(
             "{{user|lower}}@{{domain}} via {{missing|default:\"default\"}}",
             &ctx,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(result, "alice@example.com via default");
     }
 
