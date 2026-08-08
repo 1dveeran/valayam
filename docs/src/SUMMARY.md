@@ -6,4 +6,5 @@
 - [Features](FEATURES.md)
 - [Helper Tools](HELPER.md)
 - [Storage Design](STORAGE.md)
+- [Roadmap (2026 → 2040)](ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
