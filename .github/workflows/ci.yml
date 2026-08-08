@@ -50,11 +50,11 @@ jobs:
     - name: Format check
       run: cargo fmt --all -- --check
 
-    - name: Clippy lints
-      run: cargo clippy --all-targets --all-features -- -D warnings
+    - name: Clippy lints (all features)
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
     - name: Build all crates (excluding WASM binary targets)
-      run: cargo build --workspace --exclude valayam-plugin-sdk --exclude csp-audit --exclude recon-audit --exclude reputation-audit
+      run: cargo build --workspace --exclude valayam-plugin-sdk --exclude csp-audit --exclude recon-audit --exclude reputation-audit --all-features
 
     - name: Build WASM plugins
       run: |
@@ -74,8 +74,13 @@ jobs:
           cp "target/wasm32-unknown-unknown/release/$wasm_name" plugins/ || true
         done
 
-    - name: Run tests (exclude PDK-dependent crates)
-      run: cargo test --workspace --exclude valayam-plugin-sdk --verbose
+    - name: Run tests (exclude PDK-dependent crates, all features)
+      run: cargo test --workspace --all-features --exclude valayam-plugin-sdk --verbose
+
+    - name: Run encryption tests with VALAYAM_PLUGIN_ENC_KEY
+      run: |
+        export VALAYAM_PLUGIN_ENC_KEY=$(openssl rand -base64 32)
+        cargo test --workspace --all-features --exclude valayam-plugin-sdk encrypted_store --verbose
 
   # ── WASM plugin release build ──────────────────────────────────────
   wasm_build:

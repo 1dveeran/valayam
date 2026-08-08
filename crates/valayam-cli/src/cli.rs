@@ -149,6 +149,16 @@ pub enum Commands {
         #[arg(long, default_value = "data/vuln-db.sqlite")]
         output: String,
     },
+    /// Air-gapped bundle management (offline environments)
+    Bundle {
+        #[command(subcommand)]
+        action: BundleCommands,
+    },
+    /// Template management (push/pull from configured storage backend)
+    Template {
+        #[command(subcommand)]
+        action: TemplateCommands,
+    },
 }
 
 #[derive(clap::Subcommand, Debug, Clone)]
@@ -211,6 +221,58 @@ pub enum PluginCommands {
     },
     /// List installed plugins
     List,
+}
+
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum BundleCommands {
+    /// Create an air-gapped bundle from local plugins + templates
+    Create {
+        /// Directory containing plugin .vpa files
+        #[arg(long, default_value = "plugins")]
+        plugins: String,
+        /// Directory containing .yaml template files
+        #[arg(long, default_value = "templates")]
+        templates: String,
+        /// Path to ED25519 public key (PEM) for manifest integrity verification
+        #[arg(long)]
+        pubkey: String,
+        /// Output bundle directory
+        #[arg(short, long, default_value = "./bundle")]
+        output: String,
+    },
+    /// Verify a bundle's manifest.json hashes + signatures
+    Verify {
+        /// Path to the bundle directory
+        bundle: String,
+    },
+}
+
+/// Template management commands (push/pull to/from artifact store)
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum TemplateCommands {
+    /// Push a template directory or file to the configured storage backend
+    Push {
+        /// Local directory or file containing templates to push
+        path: String,
+        /// Optional prefix/namespace for the template keys (default: templates/)
+        #[arg(long, default_value = "templates/")]
+        prefix: String,
+    },
+    /// Pull templates from the configured storage backend to local directory
+    Pull {
+        /// Local directory to pull templates into
+        #[arg(long, default_value = "templates")]
+        output: String,
+        /// Optional prefix/namespace to pull from (default: templates/)
+        #[arg(long, default_value = "templates/")]
+        prefix: String,
+    },
+    /// List templates in the configured storage backend
+    List {
+        /// Optional prefix/namespace to list (default: templates/)
+        #[arg(long, default_value = "templates/")]
+        prefix: String,
+    },
 }
 
 #[cfg(test)]

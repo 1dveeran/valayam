@@ -22,6 +22,32 @@ use valayam_core::core::plugins::*;
 use valayam_core::rpc::scanner_client::ScannerClient;
 use valayam_core::template::schema::VulnerabilityTemplate;
 
+/// Detect offline mode and resolve bundle directories for air-gapped deployments.
+fn resolve_bundle_dirs() -> Option<(PathBuf, PathBuf, PathBuf)> {
+    if std::env::var("VALAYAM_OFFLINE_MODE").is_ok() {
+        // Check for bundle directory in standard locations
+        let bundle_candidates = vec![
+            PathBuf::from("./bundle"),
+            PathBuf::from("/bundle"),
+            PathBuf::from("/opt/valayam/bundle"),
+            dirs::home_dir().unwrap_or_default().join(".valayam/bundle"),
+            dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/bundle"),
+        ];
+
+        for bundle in bundle_candidates {
+            let plugins_dir = bundle.join("plugins");
+            let _templates_dir = bundle.join("templates");
+            let wasm_cache_dir = bundle.join("wasm_cache");
+
+            if plugins_dir.exists() && wasm_cache_dir.exists() {
+                println!("{} Air-gapped mode: using bundle at {}", "[+]".green().bold(), bundle.display());
+                return Some((bundle, plugins_dir, wasm_cache_dir));
+            }
+        }
+    }
+    None
+}
+
 /// Tracks severity counts for the scan summary.
 #[derive(Default)]
 struct SeverityCounts {
@@ -298,6 +324,9 @@ pub async fn run_scan_with_job_id(
         }
     });
 
+    // Check for air-gapped bundle mode
+    let bundle_dirs = resolve_bundle_dirs();
+
     // ── 3. Build plugin registry ──
     let (registry, _watcher) = {
         // Resolve trusted public key for plugin signature verification
@@ -348,6 +377,12 @@ pub async fn run_scan_with_job_id(
             allowed_hosts,
         };
         reg.set_plugin_config(plugin_config);
+
+        // In offline mode, set the wasm_cache directory to the bundle's wasm_cache
+        if let Some((_, _, ref wasm_cache)) = bundle_dirs {
+            reg.set_cache_dir(wasm_cache.clone());
+        }
+
         // Core protocols
         reg.register(HttpScanPlugin::new(http_client.clone()));
     // Scripting and Fuzzer moved to Wasm
@@ -357,25 +392,30 @@ pub async fn run_scan_with_job_id(
         reg.register(DnsAuditPlugin);
         reg.register(PortScanPlugin);
         reg.register(ShellsPlugin);
-        
+
         // Dynamically load WebAssembly and gRPC plugins from disk
         let mut loaded_externals = 0;
-        
-        let plugin_dirs = vec![
-            std::path::Path::new("plugins"),
-            std::path::Path::new("plugins-wasm/bin"),
-        ];
-        
+
+        // In offline mode, load from bundle's plugins directory; otherwise use default locations
+        let plugin_dirs: Vec<PathBuf> = if let Some((_, ref plugins_dir, _)) = bundle_dirs {
+            vec![plugins_dir.clone()]
+        } else {
+            vec![
+                std::path::Path::new("plugins").to_path_buf(),
+                std::path::Path::new("plugins-wasm/bin").to_path_buf(),
+            ]
+        };
+
         for dir in plugin_dirs {
             if dir.exists() {
-                if let Err(e) = reg.load_external_plugins(dir) {
+                if let Err(e) = reg.load_external_plugins(&dir) {
                     tracing::warn!("Failed to load plugins from {}: {}", dir.display(), e);
                 } else {
                     loaded_externals += 1;
                 }
             }
         }
-        
+
         if loaded_externals > 0 {
             spinner.suspend(|| {
                 println!(
@@ -384,7 +424,7 @@ pub async fn run_scan_with_job_id(
                 );
             });
         }
-        
+
         // Initialize ThreatIntelMatcher and register
         let matcher = Arc::new(valayam_core::features::threat_intel::ioc_matcher::IocMatcher::new());
         reg.register(ThreatIntelPlugin { matcher });
@@ -393,22 +433,24 @@ pub async fn run_scan_with_job_id(
         let oob_server = Arc::new(valayam_oob::server::OobServer::new(valayam_oob::server::OobServer::config_from_env()));
         reg.register(OobPlugin { server: oob_server });
         // DependencyAudit moved to Wasm
-        
+
         let reg_arc = Arc::new(reg);
-        
-        // Dynamically load external plugins from ./plugins directory and watch for hot-reloads
-        let plugins_dir = std::path::Path::new("plugins");
+
+        // In offline mode, skip hot-reload watcher (no filesystem changes expected)
         let mut _watcher = None;
-        if plugins_dir.exists() {
-            match reg_arc.clone().start_hot_reload(plugins_dir.to_path_buf()) {
-                Ok(watcher) => {
-                    _watcher = Some(watcher);
-                    tracing::info!("Hot-reloading enabled for ./plugins");
+        if bundle_dirs.is_none() {
+            let plugins_dir = std::path::Path::new("plugins");
+            if plugins_dir.exists() {
+                match reg_arc.clone().start_hot_reload(plugins_dir.to_path_buf()) {
+                    Ok(watcher) => {
+                        _watcher = Some(watcher);
+                        tracing::info!("Hot-reloading enabled for ./plugins");
+                    }
+                    Err(e) => tracing::warn!("Failed to start hot-reload for ./plugins: {}", e),
                 }
-                Err(e) => tracing::warn!("Failed to start hot-reload for ./plugins: {}", e),
             }
         }
-        
+
         (reg_arc, _watcher)
     };
 

@@ -20,6 +20,7 @@ valayam-oob = { path = "../valayam-oob" }
 valayam-config = { path = "../valayam-config" }
 valayam-models = { workspace = true }
 valayam-network = { workspace = true }
+valayam-common = { path = "../valayam-common" }
 indicatif = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }

@@ -11,6 +11,7 @@ pub mod setup;
 
 use clap::Parser;
 use colored::*;
+use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -98,6 +99,14 @@ pub async fn run_cli() -> anyhow::Result<()> {
     // Handle control subcommand — early return
     if let Some(cli::Commands::Control { action, scan_id, port }) = &args.command {
         return handle_control_command(action, scan_id, port).await;
+    }
+    // Handle bundle subcommand — early return (air-gapped deployment)
+    if let Some(cli::Commands::Bundle { action }) = &args.command {
+        return handle_bundle_command(action).await;
+    }
+    // Handle template subcommand — early return (artifact store management)
+    if let Some(cli::Commands::Template { action }) = &args.command {
+        return handle_template_command(action).await;
     }
     // ── Template path resolution ──────────────────────────────────────────
     let (template_path, is_nuclei) = resolve_template(&args);
@@ -304,6 +313,297 @@ async fn handle_control_command(action: &str, scan_id: &Option<String>, port: &u
             }
         }
         _ => tracing::error!("Unknown control action '{}'. Valid actions: pause, resume, cancel", action),
+    }
+    Ok(())
+}
+
+/// Handle the bundle subcommand (create/verify) for air-gapped deployments.
+async fn handle_bundle_command(action: &cli::BundleCommands) -> anyhow::Result<()> {
+    use std::fs;
+    use sha2::{Digest, Sha256};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    struct BundleManifest {
+        version: String,
+        created: String,
+        plugins: Vec<PluginEntry>,
+        templates: Vec<TemplateEntry>,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct PluginEntry {
+        name: String,
+        version: String,
+        sha256: String,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct TemplateEntry {
+        name: String,
+        sha256: String,
+    }
+
+    match action {
+        cli::BundleCommands::Create { plugins, templates, pubkey, output } => {
+            tracing::info!("Creating air-gapped bundle from {} + {} → {}", plugins, templates, output);
+
+            let out_dir = std::path::Path::new(&output);
+            fs::create_dir_all(out_dir.join("plugins"))?;
+            fs::create_dir_all(out_dir.join("templates"))?;
+            fs::create_dir_all(out_dir.join("wasm_cache"))?;
+            fs::create_dir_all(out_dir.join("keys"))?;
+
+            let mut manifest = BundleManifest {
+                version: "1".to_string(),
+                created: chrono::Utc::now().to_rfc3339(),
+                plugins: Vec::new(),
+                templates: Vec::new(),
+            };
+
+            // Copy plugins (.vpa files)
+            let plugins_src = std::path::Path::new(&plugins);
+            if plugins_src.exists() {
+                for entry in fs::read_dir(plugins_src)? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("vpa") {
+                        let name = path.file_name().unwrap().to_string_lossy().to_string();
+                        let dest = out_dir.join("plugins").join(&name);
+                        fs::copy(&path, &dest)?;
+                        // Hash the .vpa
+                        let bytes = fs::read(&path)?;
+                        let hash = hex::encode(Sha256::digest(&bytes));
+                        // Extract version from plugin.yaml inside the VPA
+                        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+                        let mut version = "unknown".to_string();
+                        if let Ok(mut yaml_file) = archive.by_name("plugin.yaml") {
+                            let mut yaml_content = String::new();
+                            yaml_file.read_to_string(&mut yaml_content)?;
+                            if let Ok(m) = serde_yaml::from_str::<valayam_engine::vpa::PluginManifest>(&yaml_content) {
+                                version = m.version;
+                            }
+                        }
+                        manifest.plugins.push(PluginEntry { name: name.clone(), version, sha256: hash });
+                        println!("  {} plugin: {}", "[+]".green().bold(), name);
+                    }
+                }
+            }
+
+            // Copy templates
+            let templates_src = std::path::Path::new(&templates);
+            if templates_src.exists() {
+                for entry in fs::read_dir(templates_src)? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                        let name = path.file_name().unwrap().to_string_lossy().to_string();
+                        let dest = out_dir.join("templates").join(&name);
+                        fs::copy(&path, &dest)?;
+                        let bytes = fs::read(&path)?;
+                        let hash = hex::encode(Sha256::digest(&bytes));
+                        manifest.templates.push(TemplateEntry { name: name.clone(), sha256: hash });
+                        println!("  {} template: {}", "[+]".green().bold(), name);
+                    }
+                }
+            }
+
+            // Copy public key
+            fs::copy(&pubkey, out_dir.join("keys/public.ed25519"))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(out_dir.join("keys/public.ed25519"))?.permissions();
+                perms.set_mode(0o644);
+                fs::set_permissions(out_dir.join("keys/public.ed25519"), perms)?;
+            }
+
+            // Write manifest.json
+            let manifest_json = serde_json::to_string_pretty(&manifest)?;
+            fs::write(out_dir.join("manifest.json"), manifest_json)?;
+
+            println!("{} Bundle created at: {}", "[+]".green().bold(), output);
+            println!("  plugins: {}, templates: {}", manifest.plugins.len(), manifest.templates.len());
+        }
+        cli::BundleCommands::Verify { bundle } => {
+            tracing::info!("Verifying bundle: {}", bundle);
+
+            let bundle_dir = std::path::Path::new(&bundle);
+            let manifest_path = bundle_dir.join("manifest.json");
+            if !manifest_path.exists() {
+                anyhow::bail!("manifest.json not found in bundle directory");
+            }
+
+            let manifest_json = fs::read_to_string(&manifest_path)?;
+            let manifest: BundleManifest = serde_json::from_str(&manifest_json)?;
+
+            let mut ok = 0;
+            let mut failed = 0;
+
+            // Verify plugins
+            for p in &manifest.plugins {
+                let path = bundle_dir.join("plugins").join(&p.name);
+                if path.exists() {
+                    let bytes = fs::read(&path)?;
+                    let hash = hex::encode(Sha256::digest(&bytes));
+                    if hash == p.sha256 {
+                        println!("  {} plugin {} (v{})", "[+]".green().bold(), p.name, p.version);
+                        ok += 1;
+                    } else {
+                        println!("  {} plugin {} hash mismatch (expected {} got {})", "[✗]".red().bold(), p.name, p.sha256, hash);
+                        failed += 1;
+                    }
+                } else {
+                    println!("  {} plugin {} missing", "[✗]".red().bold(), p.name);
+                    failed += 1;
+                }
+            }
+
+            // Verify templates
+            for t in &manifest.templates {
+                let path = bundle_dir.join("templates").join(&t.name);
+                if path.exists() {
+                    let bytes = fs::read(&path)?;
+                    let hash = hex::encode(Sha256::digest(&bytes));
+                    if hash == t.sha256 {
+                        println!("  {} template {}", "[+]".green().bold(), t.name);
+                        ok += 1;
+                    } else {
+                        println!("  {} template {} hash mismatch", "[✗]".red().bold(), t.name);
+                        failed += 1;
+                    }
+                } else {
+                    println!("  {} template {} missing", "[✗]".red().bold(), t.name);
+                    failed += 1;
+                }
+            }
+
+            // Verify public key exists
+            let pubkey_path = bundle_dir.join("keys/public.ed25519");
+            if pubkey_path.exists() {
+                println!("  {} public key present", "[+]".green().bold());
+                ok += 1;
+            } else {
+                println!("  {} public key missing", "[✗]".red().bold());
+                failed += 1;
+            }
+
+            println!("\nSummary: {} verified, {} failed", ok, failed);
+            if failed > 0 {
+                anyhow::bail!("Bundle verification failed: {} artifact(s) mismatched or missing", failed);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Handle the template subcommand (push/pull/list) for artifact store management.
+async fn handle_template_command(action: &cli::TemplateCommands) -> anyhow::Result<()> {
+    use std::fs;
+    use std::path::Path;
+    use walkdir::WalkDir;
+
+    // Load storage config from env (same contract as platform)
+    let storage_config = valayam_common::storage::StorageConfig::from_env()?;
+
+    // Build the template store
+    let template_store = storage_config.build_template_store();
+
+    match action {
+        cli::TemplateCommands::Push { path, prefix } => {
+            tracing::info!("Pushing templates from {} to storage backend (prefix: {})", path, prefix);
+
+            let src_path = Path::new(&path);
+            if !src_path.exists() {
+                anyhow::bail!("Source path '{}' does not exist", path);
+            }
+
+            let mut pushed = 0;
+            if src_path.is_file() {
+                // Push single file
+                let name = src_path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| anyhow::anyhow!("Invalid file name"))?;
+                let norm_prefix = if prefix.is_empty() || prefix.ends_with('/') {
+                    prefix.to_string()
+                } else {
+                    format!("{}/", prefix)
+                };
+                let key = format!("{}{}", norm_prefix, name);
+                let bytes = fs::read(src_path)?;
+                template_store.put(&key, &bytes).await?;
+                println!("{} Pushed template: {}", "[+]".green().bold(), key);
+                pushed += 1;
+            } else {
+                // Push directory recursively
+                let norm_prefix = if prefix.is_empty() || prefix.ends_with('/') {
+                    prefix.to_string()
+                } else {
+                    format!("{}/", prefix)
+                };
+                for entry in WalkDir::new(src_path).into_iter().filter_map(|e| e.ok()) {
+                    let entry_path = entry.path();
+                    if entry_path.is_file() {
+                        if let Some(ext) = entry_path.extension().and_then(|s| s.to_str()) {
+                            if ext == "yaml" || ext == "yml" {
+                                let rel_path = entry_path.strip_prefix(src_path)?;
+                                let key = format!("{}{}", norm_prefix, rel_path.to_string_lossy().replace('\\', "/"));
+                                let bytes = fs::read(entry_path)?;
+                                template_store.put(&key, &bytes).await?;
+                                println!("{} Pushed template: {}", "[+]".green().bold(), key);
+                                pushed += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            println!("{} Pushed {} template(s)", "[+]".green().bold(), pushed);
+        }
+        cli::TemplateCommands::Pull { output, prefix } => {
+            tracing::info!("Pulling templates from storage backend (prefix: {}) to {}", prefix, output);
+
+            let out_path = Path::new(&output);
+            fs::create_dir_all(out_path)?;
+
+            let keys = template_store.list(&prefix).await?;
+            if keys.is_empty() {
+                println!("No templates found with prefix '{}'", prefix);
+                return Ok(());
+            }
+
+            let mut pulled = 0;
+            for key in keys {
+                let bytes = template_store.get(&key).await?;
+                let file_name = key.strip_prefix(&*prefix).unwrap_or(&key);
+                let file_path = out_path.join(file_name);
+                if let Some(parent) = file_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&file_path, &bytes)?;
+                println!("{} Pulled template: {}", "[+]".green().bold(), key);
+                pulled += 1;
+            }
+            println!("{} Pulled {} template(s)", "[+]".green().bold(), pulled);
+        }
+        cli::TemplateCommands::List { prefix } => {
+            tracing::info!("Listing templates from storage backend (prefix: {})", prefix);
+
+            let keys = template_store.list(&prefix).await?;
+            if keys.is_empty() {
+                println!("No templates found with prefix '{}'", prefix);
+                return Ok(());
+            }
+
+            for key in keys {
+                // Get metadata (size) for each template
+                if let Ok(meta) = template_store.stat(&key).await {
+                    println!("{}  {} ({} bytes)", "[•]".blue(), key, meta.size);
+                } else {
+                    println!("{}  {}", "[•]".blue(), key);
+                }
+            }
+        }
     }
     Ok(())
 }

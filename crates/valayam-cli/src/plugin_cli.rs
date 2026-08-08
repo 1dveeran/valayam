@@ -387,7 +387,11 @@ pub fn generate_key(output_prefix: &str) -> anyhow::Result<()> {
 
 pub async fn install_plugin(name: &str, url: &str, pubkey_hex: Option<&str>) -> anyhow::Result<()> {
     use valayam_core::distribution::puller::PluginPuller;
-    
+
+    // Air-gapped mode guard: block network operations
+    if std::env::var("VALAYAM_OFFLINE_MODE").is_ok() {
+        anyhow::bail!("Cannot install plugin: VALAYAM_OFFLINE_MODE is set. Use 'valayam bundle' to create/verify offline bundles.");
+    }
 
     let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
     
@@ -414,7 +418,12 @@ pub async fn install_plugin(name: &str, url: &str, pubkey_hex: Option<&str>) -> 
 
 pub async fn push_plugin(file: &str, repo: &str, tag: &str, signature: Option<&str>) -> anyhow::Result<()> {
     use valayam_core::distribution::publisher::PluginPublisher;
-    
+
+    // Air-gapped mode guard: block network operations
+    if std::env::var("VALAYAM_OFFLINE_MODE").is_ok() {
+        anyhow::bail!("Cannot push plugin: VALAYAM_OFFLINE_MODE is set. Use 'valayam bundle' to create/verify offline bundles.");
+    }
+
     let file_path = Path::new(file);
     if !file_path.exists() {
         anyhow::bail!("Plugin file '{}' does not exist.", file);

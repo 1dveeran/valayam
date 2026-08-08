@@ -62,6 +62,10 @@ pub struct PluginRegistry {
     pub_key: Option<[u8; 32]>,
     retry_config: RetryConfig,
     plugin_config: crate::wasm_plugin::PluginConfig,
+    /// Override for the VPA-extraction cache directory. When `None`, falls back
+    /// to the platform default (`$XDG_CACHE_HOME/valayam/plugins_cache` or
+    /// `$TMPDIR/valayam/plugins_cache`).
+    cache_dir: Option<std::path::PathBuf>,
 }
 
 impl PluginRegistry {
@@ -77,7 +81,23 @@ impl PluginRegistry {
             pub_key,
             retry_config: RetryConfig::default(),
             plugin_config: crate::wasm_plugin::PluginConfig::default(),
+            cache_dir: None,
         }
+    }
+
+    /// Configure a custom VPA-extraction cache directory (often `cfg.plugin_cache`).
+    ///
+    /// The supplied directory is created if missing. Subsequent calls to
+    /// [`PluginRegistry::load_external_plugins`] use this directory as the
+    /// destination for extracted `.wasm` plugins instead of the host default.
+    pub fn with_cache_dir(mut self, dir: std::path::PathBuf) -> Self {
+        self.cache_dir = Some(dir);
+        self
+    }
+
+    /// Mutable setter — same semantics as [`PluginRegistry::with_cache_dir`].
+    pub fn set_cache_dir(&mut self, dir: std::path::PathBuf) {
+        self.cache_dir = Some(dir);
     }
 
     /// Set the WASM plugin sandbox configuration.
@@ -128,7 +148,13 @@ impl PluginRegistry {
             return Ok(()); // No external plugins directory
         }
 
-        let cache_dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("valayam/plugins_cache");
+        // Honour a configured cache_dir (Phase 3 worker fetch-on-demand); else the
+        // platform default.
+        let cache_dir = self.cache_dir.clone().unwrap_or_else(|| {
+            dirs::cache_dir()
+                .unwrap_or_else(std::env::temp_dir)
+                .join("valayam/plugins_cache")
+        });
         let pk = self.pub_key; // Copy
 
         for entry in std::fs::read_dir(dir_path)? {
@@ -140,7 +166,9 @@ impl PluginRegistry {
                     
                     if ext == "vpa" {
                         tracing::info!(file = %path.display(), "Extracting VPA plugin archive");
-                        match crate::vpa::extract_vpa(&path, &cache_dir, pk.as_ref()) {
+                        // In offline mode, enable cache-hit extraction skip
+                        let skip_extract_if_cache_hit = std::env::var("VALAYAM_OFFLINE_MODE").is_ok();
+                        match crate::vpa::extract_vpa(&path, &cache_dir, pk.as_ref(), skip_extract_if_cache_hit) {
                             Ok((manifest, extract_dir)) => {
                                 let entrypoint_path = extract_dir.join(&manifest.entrypoint);
                                 if manifest.runtime == "wasm" {
